@@ -49,6 +49,27 @@ def test_api_core_workflows() -> None:
             assert open_res.status_code == 200
             assert open_res.json()["is_open"] is True
 
+            field_types = client.get("/api/v1/field-types")
+            assert field_types.status_code == 200
+            assert any(field["key"] == "TITLE" for field in field_types.json())
+
+            tags = client.get("/api/v1/tags")
+            assert tags.status_code == 200
+            assert any(tag["name"] == "foo" for tag in tags.json())
+
+            settings = client.get("/api/v1/settings")
+            assert settings.status_code == 200
+            assert settings.json()["page_size"] == 200
+
+            updated_settings = client.patch(
+                "/api/v1/settings",
+                json={"page_size": 100, "sorting_mode": "generic.filename", "ascending": False},
+            )
+            assert updated_settings.status_code == 200
+            assert updated_settings.json()["page_size"] == 100
+            assert updated_settings.json()["sorting_mode"] == "generic.filename"
+            assert updated_settings.json()["ascending"] is False
+
             search = client.post("/api/v1/search", json={"query": ""})
             assert search.status_code == 200
             payload = search.json()
@@ -57,6 +78,13 @@ def test_api_core_workflows() -> None:
 
             entry = client.get(f"/api/v1/entries/{entry_id}")
             assert entry.status_code == 200
+
+            preview = client.get(f"/api/v1/entries/{entry_id}/preview")
+            assert preview.status_code == 200
+            assert preview.json()["preview_kind"] in {"text", "image", "audio", "video", "binary"}
+
+            media = client.get(f"/api/v1/entries/{entry_id}/media")
+            assert media.status_code == 200
 
             update = client.patch(
                 f"/api/v1/entries/{entry_id}/fields/TITLE",

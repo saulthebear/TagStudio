@@ -5,6 +5,7 @@ declare global {
     tagstudioNative?: {
       apiBaseUrl: string;
       apiToken?: string;
+      pickDirectory?: () => Promise<string | null>;
     };
   }
 }

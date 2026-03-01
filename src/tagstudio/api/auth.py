@@ -20,6 +20,8 @@ class TokenAuthMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         provided = request.headers.get("x-tagstudio-token")
+        if provided is None:
+            provided = request.query_params.get("token")
         if provided != self.token:
             return JSONResponse(
                 status_code=401,

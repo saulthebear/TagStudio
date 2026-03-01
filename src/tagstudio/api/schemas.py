@@ -11,6 +11,15 @@ class SortingMode(str, Enum):
     RANDOM = "sorting.mode.random"
 
 
+class PreviewKind(str, Enum):
+    IMAGE = "image"
+    VIDEO = "video"
+    AUDIO = "audio"
+    TEXT = "text"
+    BINARY = "binary"
+    MISSING = "missing"
+
+
 class HealthResponse(BaseModel):
     status: str = "ok"
 
@@ -61,6 +70,14 @@ class FieldResponse(BaseModel):
     position: int
 
 
+class FieldTypeResponse(BaseModel):
+    key: str
+    name: str
+    kind: str
+    is_default: bool
+    position: int
+
+
 class EntrySummaryResponse(BaseModel):
     id: int
     path: str
@@ -82,6 +99,15 @@ class EntryResponse(BaseModel):
     fields: list[FieldResponse] = Field(default_factory=list)
     is_favorite: bool = False
     is_archived: bool = False
+
+
+class PreviewResponse(BaseModel):
+    entry_id: int
+    preview_kind: PreviewKind
+    media_type: str | None = None
+    media_url: str | None = None
+    text_excerpt: str | None = None
+    supports_media_controls: bool = False
 
 
 class SearchResponse(BaseModel):
@@ -142,6 +168,20 @@ class JobStatusResponse(BaseModel):
 class JobCreateResponse(BaseModel):
     job_id: str
     status: str
+
+
+class SettingsResponse(BaseModel):
+    sorting_mode: SortingMode = SortingMode.DATE_ADDED
+    ascending: bool = True
+    show_hidden_entries: bool = False
+    page_size: int = Field(default=200, ge=1, le=2000)
+
+
+class SettingsUpdateRequest(BaseModel):
+    sorting_mode: SortingMode | None = None
+    ascending: bool | None = None
+    show_hidden_entries: bool | None = None
+    page_size: int | None = Field(default=None, ge=1, le=2000)
 
 
 class SuccessResponse(BaseModel):

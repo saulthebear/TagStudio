@@ -212,3 +212,10 @@ To work on the web workspace (Bun):
 bun install
 bun run dev:web
 ```
+
+For browser-first development, run API + web together in two terminals:
+
+```sh
+PYTHONPATH=src .venv/bin/python -m tagstudio.api.main --host 127.0.0.1 --port 5987
+bun run dev:web
+```

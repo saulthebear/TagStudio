@@ -166,6 +166,9 @@ TagStudio now includes an in-repo foundation for a web-technology interface migr
 -   React + TypeScript + Vite renderer scaffold (`apps/web`)
 -   Shared UI/component and API client packages (`packages/ui`, `packages/api-client`)
 
+Current migration direction in this fork is **browser-first**. Electron remains optional packaging
+and is not required for day-to-day UI development.
+
 To run only the API from the existing launcher, use:
 
 ```sh

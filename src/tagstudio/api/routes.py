@@ -1,21 +1,27 @@
+import mimetypes
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from tagstudio.api.jobs import JobManager
 from tagstudio.api.schemas import (
     EntryResponse,
+    FieldTypeResponse,
     HealthResponse,
     JobCreateResponse,
     JobStatusResponse,
     LibraryCreateRequest,
     LibraryOpenRequest,
     LibraryStateResponse,
+    PreviewKind,
+    PreviewResponse,
     SearchRequest,
     SearchResponse,
+    SettingsResponse,
+    SettingsUpdateRequest,
     SuccessResponse,
     TagCreateRequest,
     TagMutationRequest,
@@ -30,6 +36,11 @@ from tagstudio.core.library.alchemy.enums import BrowsingState, SortingModeEnum
 from tagstudio.core.library.alchemy.joins import TagParent
 from tagstudio.core.library.alchemy.library import Library, LibraryStatus
 from tagstudio.core.library.alchemy.models import Tag, TagAlias
+
+TEXT_SUFFIXES = {"txt", "md", "json", "toml", "yaml", "yml", "csv", "log", "py", "ts", "tsx"}
+VIDEO_SUFFIXES = {"mp4", "mov", "mkv", "webm", "avi"}
+AUDIO_SUFFIXES = {"mp3", "wav", "ogg", "flac", "m4a"}
+IMAGE_SUFFIXES = {"jpg", "jpeg", "png", "gif", "webp", "bmp", "tif", "tiff", "jxl", "heic"}
 
 
 def create_router(*, state: ApiState, jobs: JobManager) -> APIRouter:
@@ -56,6 +67,21 @@ def create_router(*, state: ApiState, jobs: JobManager) -> APIRouter:
         if not status.success:
             raise HTTPException(status_code=400, detail=status.message or "Unable to open library.")
 
+    def resolve_entry_file(lib: Library, entry_id: int) -> tuple[Path, str]:
+        entry = lib.get_entry_full(entry_id, with_fields=False, with_tags=False)
+        if entry is None:
+            raise HTTPException(status_code=404, detail="Entry not found.")
+        if lib.library_dir is None:
+            raise HTTPException(status_code=409, detail="No library open.")
+
+        root = lib.library_dir.resolve()
+        entry_path = (root / entry.path).resolve()
+        try:
+            entry_path.relative_to(root)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="Entry path escapes library root.") from exc
+        return entry_path, str(entry.path)
+
     @router.get("/health", response_model=HealthResponse)
     def health() -> HealthResponse:
         return HealthResponse()
@@ -77,6 +103,52 @@ def create_router(*, state: ApiState, jobs: JobManager) -> APIRouter:
     @router.get("/libraries/state", response_model=LibraryStateResponse)
     def library_state() -> LibraryStateResponse:
         return state_response()
+
+    @router.get("/settings", response_model=SettingsResponse)
+    def get_settings() -> SettingsResponse:
+        return SettingsResponse.model_validate(state.get_web_settings())
+
+    @router.patch("/settings", response_model=SettingsResponse)
+    def update_settings(request: SettingsUpdateRequest) -> SettingsResponse:
+        updates: dict[str, str | int | bool] = {}
+        if request.sorting_mode is not None:
+            updates["sorting_mode"] = request.sorting_mode.value
+        if request.ascending is not None:
+            updates["ascending"] = request.ascending
+        if request.show_hidden_entries is not None:
+            updates["show_hidden_entries"] = request.show_hidden_entries
+        if request.page_size is not None:
+            updates["page_size"] = request.page_size
+        return SettingsResponse.model_validate(state.update_web_settings(updates))
+
+    @router.get("/field-types", response_model=list[FieldTypeResponse])
+    def list_field_types() -> list[FieldTypeResponse]:
+        lib = get_library_or_error()
+        field_types = sorted(lib.field_types.values(), key=lambda item: item.position)
+        return [
+            FieldTypeResponse(
+                key=field.key,
+                name=field.name,
+                kind=field.type.value,
+                is_default=field.is_default,
+                position=field.position,
+            )
+            for field in field_types
+        ]
+
+    @router.get("/tags", response_model=list[TagResponse])
+    def list_tags(query: str | None = None, limit: int = 200) -> list[TagResponse]:
+        lib = get_library_or_error()
+        if limit < 1:
+            raise HTTPException(status_code=400, detail="limit must be >= 1")
+
+        if query:
+            direct_tags, ancestor_tags = lib.search_tags(query, limit=limit)
+            tags = sorted(direct_tags | ancestor_tags)
+        else:
+            tags = sorted(lib.tags)[:limit]
+
+        return [TagResponse.model_validate(serialize_tag(tag)) for tag in tags]
 
     @router.post("/search", response_model=SearchResponse)
     def search_entries(request: SearchRequest) -> SearchResponse:
@@ -104,6 +176,71 @@ def create_router(*, state: ApiState, jobs: JobManager) -> APIRouter:
         if entry is None:
             raise HTTPException(status_code=404, detail="Entry not found.")
         return EntryResponse.model_validate(serialize_entry(entry, lib.library_dir))
+
+    @router.get("/entries/{entry_id}/preview", response_model=PreviewResponse)
+    def preview_entry(entry_id: int) -> PreviewResponse:
+        lib = get_library_or_error()
+        entry_path, entry_rel_path = resolve_entry_file(lib, entry_id)
+        if not entry_path.exists() or not entry_path.is_file():
+            return PreviewResponse(
+                entry_id=entry_id,
+                preview_kind=PreviewKind.MISSING,
+                text_excerpt=f"Missing file: {entry_rel_path}",
+            )
+
+        media_type, _ = mimetypes.guess_type(str(entry_path))
+        suffix = entry_path.suffix.lower().lstrip(".")
+        kind = PreviewKind.BINARY
+        supports_media_controls = False
+        text_excerpt: str | None = None
+
+        if media_type is not None:
+            if media_type.startswith("image/"):
+                kind = PreviewKind.IMAGE
+            elif media_type.startswith("video/"):
+                kind = PreviewKind.VIDEO
+                supports_media_controls = True
+            elif media_type.startswith("audio/"):
+                kind = PreviewKind.AUDIO
+                supports_media_controls = True
+            elif media_type.startswith("text/"):
+                kind = PreviewKind.TEXT
+        elif suffix in IMAGE_SUFFIXES:
+            kind = PreviewKind.IMAGE
+        elif suffix in VIDEO_SUFFIXES:
+            kind = PreviewKind.VIDEO
+            supports_media_controls = True
+        elif suffix in AUDIO_SUFFIXES:
+            kind = PreviewKind.AUDIO
+            supports_media_controls = True
+        elif suffix in TEXT_SUFFIXES:
+            kind = PreviewKind.TEXT
+            media_type = "text/plain; charset=utf-8"
+
+        if kind == PreviewKind.TEXT:
+            try:
+                text_excerpt = entry_path.read_text(encoding="utf-8", errors="replace")[:12000]
+            except Exception:
+                kind = PreviewKind.BINARY
+                text_excerpt = None
+
+        return PreviewResponse(
+            entry_id=entry_id,
+            preview_kind=kind,
+            media_type=media_type or "application/octet-stream",
+            media_url=f"/api/v1/entries/{entry_id}/media",
+            text_excerpt=text_excerpt,
+            supports_media_controls=supports_media_controls,
+        )
+
+    @router.get("/entries/{entry_id}/media")
+    def entry_media(entry_id: int) -> FileResponse:
+        lib = get_library_or_error()
+        entry_path, _ = resolve_entry_file(lib, entry_id)
+        if not entry_path.exists() or not entry_path.is_file():
+            raise HTTPException(status_code=404, detail="Entry file not found.")
+        media_type, _ = mimetypes.guess_type(str(entry_path))
+        return FileResponse(entry_path, media_type=media_type or "application/octet-stream")
 
     @router.patch("/entries/{entry_id}/fields/{field_key}", response_model=EntryResponse)
     def update_entry_field(

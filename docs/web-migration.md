@@ -2,9 +2,9 @@
 icon: material/web
 ---
 
-# :material-web: Web/Electron Migration Track
+# :material-web: Browser-First Migration Track
 
-This document tracks implementation progress for the Electron-first, browser-ready migration.
+This document tracks implementation progress for the browser-first migration with local Python API.
 
 ## Operational Parity Checklist
 
@@ -43,10 +43,16 @@ This document tracks implementation progress for the Electron-first, browser-rea
 ### Phase 3
 
 - Added Bun workspace with:
-  - `apps/web` (React + TypeScript + Vite + Tailwind v4)
-  - `apps/desktop` (Electron shell)
+  - `apps/web` (primary browser-first React + TypeScript + Vite + Tailwind v4 app)
+  - `apps/desktop` (optional Electron shell, deferred for parity-critical work)
   - `packages/api-client` (typed API client + OpenAPI contract file)
-  - `packages/ui` (Tailwind/shadcn-style component primitives)
+  - `packages/ui` (shared UI primitives)
+
+### Phase 4 (In Progress)
+
+- Web UI includes open/create library actions, search execution, sort controls, paging controls,
+  entry detail inspection, tag add/remove operations, field editing, refresh job trigger with SSE
+  status, and preview/media rendering for common text/image/audio/video formats.
 
 ## Bun Risk Checkpoint
 
