@@ -1,23 +1,19 @@
-import { type MutableRefObject, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import {
-  type EntryResponse,
-  type JobEventPayload,
-  type PreviewResponse,
-  type SearchResponse,
-  type SortingMode
-} from "@tagstudio/api-client";
-import { Button } from "@tagstudio/ui";
+import { type EntryResponse, type JobEventPayload, type PreviewResponse, type SearchResponse, type SortingMode } from "@tagstudio/api-client";
 
+import { EntryDetailPanel } from "@/components/EntryDetailPanel";
+import { ErrorPanel } from "@/components/ErrorPanel";
+import { HeaderPanel } from "@/components/HeaderPanel";
+import { LibraryPanel } from "@/components/LibraryPanel";
+import { LibraryStatusPanel } from "@/components/LibraryStatusPanel";
+import { PaginationPanel } from "@/components/PaginationPanel";
+import { PreviewPanel } from "@/components/PreviewPanel";
+import { RefreshStatusPanel } from "@/components/RefreshStatusPanel";
+import { ResultsPanel } from "@/components/ResultsPanel";
+import { SearchControlsPanel } from "@/components/SearchControlsPanel";
 import { api } from "@/lib/client";
-
-const SORTING_OPTIONS: Array<{ label: string; value: SortingMode }> = [
-  { label: "Date Added", value: "file.date_added" },
-  { label: "Filename", value: "generic.filename" },
-  { label: "Path", value: "file.path" },
-  { label: "Random", value: "sorting.mode.random" }
-];
 
 export function App() {
   const queryClient = useQueryClient();
@@ -36,7 +32,7 @@ export function App() {
   const [results, setResults] = useState<SearchResponse | null>(null);
   const [selectedEntry, setSelectedEntry] = useState<EntryResponse | null>(null);
   const [fieldDrafts, setFieldDrafts] = useState<Record<string, string>>({});
-  const [selectedTagId, setSelectedTagId] = useState<string>("");
+  const [selectedTagId, setSelectedTagId] = useState("");
   const [tagQuery, setTagQuery] = useState("");
   const [newFieldKey, setNewFieldKey] = useState("");
   const [newFieldValue, setNewFieldValue] = useState("");
@@ -313,7 +309,6 @@ export function App() {
   const totalPages = totalCount > 0 ? Math.ceil(totalCount / pageSize) : 0;
   const canPageBack = pageIndex > 0;
   const canPageForward = totalCount > 0 && pageIndex + 1 < totalPages;
-  const hasSelectedEntry = selectedEntry !== null;
 
   const tagsDisplay = useMemo(
     () =>
@@ -325,444 +320,129 @@ export function App() {
 
   return (
     <main className="app-shell">
-      <header className="panel mb-4">
-        <h1 className="m-0 text-3xl font-semibold tracking-tight">TagStudio Web Foundation</h1>
-        <p className="mb-0 mt-2 text-sm opacity-80">
-          Browser-first renderer with a local Python API backend.
-        </p>
-        <p className="mb-0 mt-2 text-xs">
-          API: {api.baseUrl} | Health: {health.data?.status ?? "checking..."}
-        </p>
-      </header>
+      <HeaderPanel apiBaseUrl={api.baseUrl} healthStatus={health.data?.status} />
 
-      <section className="panel mb-4 grid gap-3 md:grid-cols-[1fr_auto_auto_auto]">
-        <input
-          className="rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm"
-          placeholder="/path/to/library"
-          value={libraryPath}
-          onChange={(event) => setLibraryPath(event.target.value)}
-        />
-        <Button disabled={!canPickDirectory} variant="secondary" onClick={() => void browseDirectory()}>
-          Browse...
-        </Button>
-        <Button disabled={!libraryPath || openLibrary.isPending} onClick={() => openLibrary.mutate("open")}>
-          Open Library
-        </Button>
-        <Button
-          disabled={!libraryPath || openLibrary.isPending}
-          variant="secondary"
-          onClick={() => openLibrary.mutate("create")}
-        >
-          Create Library
-        </Button>
-      </section>
+      <LibraryPanel
+        libraryPath={libraryPath}
+        canPickDirectory={canPickDirectory}
+        openPending={openLibrary.isPending}
+        onLibraryPathChange={setLibraryPath}
+        onBrowse={() => void browseDirectory()}
+        onOpen={() => openLibrary.mutate("open")}
+        onCreate={() => openLibrary.mutate("create")}
+      />
 
-      <section className="panel mb-4">
-        <p className="m-0 text-sm">
-          Library status: {libraryState.data?.is_open ? "open" : "closed"} | Entries:{" "}
-          {libraryState.data?.entries_count ?? 0} | Tags: {libraryState.data?.tags_count ?? 0}
-        </p>
-      </section>
+      <LibraryStatusPanel
+        isOpen={libraryState.data?.is_open === true}
+        entriesCount={libraryState.data?.entries_count ?? 0}
+        tagsCount={libraryState.data?.tags_count ?? 0}
+      />
 
-      {uiError ? (
-        <section className="panel mb-4 border-red-300 bg-red-50">
-          <p className="m-0 text-sm text-red-700">{uiError}</p>
-        </section>
-      ) : null}
+      {uiError ? <ErrorPanel message={uiError} /> : null}
 
-      <section className="panel mb-4 grid gap-3 md:grid-cols-5">
-        <input
-          className="rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm md:col-span-3"
-          placeholder='Search query (e.g. tag:"foo" or path:"*.png")'
-          value={searchInput}
-          onChange={(event) => setSearchInput(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") {
-              triggerSearch(0);
-            }
-          }}
-        />
-        <select
-          className="rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm"
-          value={sortingMode}
-          onChange={(event) => setSortingMode(event.target.value as SortingMode)}
-        >
-          {SORTING_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-        <Button
-          disabled={!libraryState.data?.is_open || runSearch.isPending}
-          onClick={() => triggerSearch(0)}
-        >
-          Search
-        </Button>
-        <label className="inline-flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={ascending} onChange={(event) => setAscending(event.target.checked)} />
-          Ascending
-        </label>
-        <label className="inline-flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={showHiddenEntries}
-            onChange={(event) => setShowHiddenEntries(event.target.checked)}
-          />
-          Show hidden
-        </label>
-        <label className="inline-flex items-center gap-2 text-sm">
-          <span>Page size</span>
-          <input
-            className="w-24 rounded-md border border-[var(--border)] bg-white px-2 py-1 text-sm"
-            type="number"
-            min={1}
-            max={2000}
-            value={pageSize}
-            onChange={(event) => setPageSize(Math.max(1, Number(event.target.value) || 1))}
-          />
-        </label>
-        <Button variant="secondary" onClick={() => saveSettings.mutate()} disabled={saveSettings.isPending}>
-          Save Settings
-        </Button>
-        <Button
-          variant="secondary"
-          onClick={() => refreshLibrary.mutate()}
-          disabled={!libraryState.data?.is_open || refreshLibrary.isPending}
-        >
-          Refresh Library
-        </Button>
-      </section>
+      <SearchControlsPanel
+        searchInput={searchInput}
+        sortingMode={sortingMode}
+        ascending={ascending}
+        showHiddenEntries={showHiddenEntries}
+        pageSize={pageSize}
+        isLibraryOpen={libraryState.data?.is_open === true}
+        searchPending={runSearch.isPending}
+        saveSettingsPending={saveSettings.isPending}
+        refreshPending={refreshLibrary.isPending}
+        onSearchInputChange={setSearchInput}
+        onSortingModeChange={setSortingMode}
+        onAscendingChange={setAscending}
+        onShowHiddenChange={setShowHiddenEntries}
+        onPageSizeChange={setPageSize}
+        onSearch={() => triggerSearch(0)}
+        onSaveSettings={() => saveSettings.mutate()}
+        onRefresh={() => refreshLibrary.mutate()}
+      />
 
-      <section className="panel mb-4 flex items-center justify-between gap-2">
-        <div className="text-sm">
-          Query: <strong>{activeQuery || "(all entries)"}</strong> | Results: {totalCount} | Page:{" "}
-          {totalPages === 0 ? 0 : pageIndex + 1}/{totalPages}
-        </div>
-        <div className="flex gap-2">
-          <Button variant="secondary" disabled={!canPageBack} onClick={() => triggerSearch(pageIndex - 1, activeQuery)}>
-            Previous
-          </Button>
-          <Button variant="secondary" disabled={!canPageForward} onClick={() => triggerSearch(pageIndex + 1, activeQuery)}>
-            Next
-          </Button>
-        </div>
-      </section>
+      <PaginationPanel
+        activeQuery={activeQuery}
+        totalCount={totalCount}
+        pageIndex={pageIndex}
+        totalPages={totalPages}
+        canPageBack={canPageBack}
+        canPageForward={canPageForward}
+        onPrevious={() => triggerSearch(pageIndex - 1, activeQuery)}
+        onNext={() => triggerSearch(pageIndex + 1, activeQuery)}
+      />
 
-      {refreshStatus ? (
-        <section className="panel mb-4 text-sm">
-          <strong>Refresh:</strong> {refreshStatus.status}
-          {refreshStatus.message ? ` | ${refreshStatus.message}` : ""}
-          {refreshStatus.progress_total
-            ? ` | ${refreshStatus.progress_current}/${refreshStatus.progress_total}`
-            : ""}
-        </section>
-      ) : null}
+      {refreshStatus ? <RefreshStatusPanel refreshStatus={refreshStatus} /> : null}
 
       <section className="grid gap-4 md:grid-cols-3">
-        <div className="panel min-h-[280px]">
-          <h2 className="mt-0 text-lg">Results</h2>
-          {results ? (
-            <ul className="m-0 list-none space-y-1 p-0">
-              {results.entries.map((entry) => (
-                <li key={entry.id}>
-                  <button
-                    type="button"
-                    className="w-full rounded-md border border-transparent px-2 py-1 text-left text-sm hover:border-[var(--border)] hover:bg-white"
-                    onClick={() => loadEntry.mutate(entry.id)}
-                  >
-                    {entry.path} ({entry.id})
-                  </button>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-sm opacity-75">Run a search to view matching entries.</p>
-          )}
-        </div>
+        <ResultsPanel results={results} onSelectEntry={(entryId) => loadEntry.mutate(entryId)} />
 
-        <div className="panel min-h-[280px]">
-          <h2 className="mt-0 text-lg">Entry Detail</h2>
-          {selectedEntry ? (
-            <div className="space-y-2 text-sm">
-              <div>
-                <strong>Path:</strong> {selectedEntry.path}
-              </div>
-              <div>
-                <strong>Tags:</strong> {tagsDisplay || "none"}
-              </div>
-              <div className="space-y-2">
-                <strong>Tag Actions:</strong>
-                <div className="flex gap-2">
-                  <input
-                    className="w-full rounded-md border border-[var(--border)] bg-white px-2 py-1 text-sm"
-                    placeholder="Filter tags..."
-                    value={tagQuery}
-                    onChange={(event) => setTagQuery(event.target.value)}
-                  />
-                  <select
-                    className="max-w-56 rounded-md border border-[var(--border)] bg-white px-2 py-1 text-sm"
-                    value={selectedTagId}
-                    onChange={(event) => setSelectedTagId(event.target.value)}
-                  >
-                    <option value="">Select tag</option>
-                    {(tags.data ?? []).map((tag) => (
-                      <option key={tag.id} value={String(tag.id)}>
-                        {tag.name}
-                      </option>
-                    ))}
-                  </select>
-                  <Button
-                    variant="secondary"
-                    disabled={!selectedTagId || addTagToEntry.isPending}
-                    onClick={() =>
-                      addTagToEntry.mutate({
-                        entryId: selectedEntry.id,
-                        tagId: Number(selectedTagId)
-                      })
-                    }
-                  >
-                    Add
-                  </Button>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {selectedEntry.tags.map((tag) => (
-                    <button
-                      key={tag.id}
-                      type="button"
-                      className="rounded-md border border-[var(--border)] px-2 py-1 text-xs"
-                      onClick={() => removeTagFromEntry.mutate({ entryId: selectedEntry.id, tagId: tag.id })}
-                    >
-                      Remove {tag.name}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <strong>Fields:</strong>
-                <ul className="m-0 mt-1 list-none space-y-2 p-0">
-                  {selectedEntry.fields.map((field) => (
-                    <li key={field.id}>
-                      <div className="mb-1 font-medium">{field.type_name}</div>
-                      <div className="flex gap-2">
-                        <input
-                          className="w-full rounded-md border border-[var(--border)] bg-white px-2 py-1 text-sm"
-                          value={fieldDrafts[field.type_key] ?? ""}
-                          onChange={(event) =>
-                            setFieldDrafts((prev) => ({ ...prev, [field.type_key]: event.target.value }))
-                          }
-                        />
-                        <Button
-                          variant="secondary"
-                          disabled={updateEntryField.isPending}
-                          onClick={() =>
-                            updateEntryField.mutate({
-                              entryId: selectedEntry.id,
-                              fieldKey: field.type_key,
-                              value: fieldDrafts[field.type_key] ?? ""
-                            })
-                          }
-                        >
-                          Save
-                        </Button>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-              <div className="space-y-1">
-                <strong>Add/Update Field:</strong>
-                <div className="flex gap-2">
-                  <select
-                    className="rounded-md border border-[var(--border)] bg-white px-2 py-1 text-sm"
-                    value={newFieldKey}
-                    onChange={(event) => setNewFieldKey(event.target.value)}
-                  >
-                    <option value="">Select field type</option>
-                    {(fieldTypes.data ?? []).map((fieldType) => (
-                      <option key={fieldType.key} value={fieldType.key}>
-                        {fieldType.name}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    className="w-full rounded-md border border-[var(--border)] bg-white px-2 py-1 text-sm"
-                    value={newFieldValue}
-                    onChange={(event) => setNewFieldValue(event.target.value)}
-                    placeholder="Field value"
-                  />
-                  <Button
-                    variant="secondary"
-                    disabled={!newFieldKey || updateEntryField.isPending}
-                    onClick={() =>
-                      updateEntryField.mutate({
-                        entryId: selectedEntry.id,
-                        fieldKey: newFieldKey,
-                        value: newFieldValue
-                      })
-                    }
-                  >
-                    Apply
-                  </Button>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <p className="text-sm opacity-75">Select a result to inspect tags and fields.</p>
-          )}
-        </div>
+        <EntryDetailPanel
+          selectedEntry={selectedEntry}
+          tagsDisplay={tagsDisplay}
+          tagQuery={tagQuery}
+          selectedTagId={selectedTagId}
+          fieldDrafts={fieldDrafts}
+          newFieldKey={newFieldKey}
+          newFieldValue={newFieldValue}
+          availableTags={tags.data ?? []}
+          fieldTypes={fieldTypes.data ?? []}
+          addTagPending={addTagToEntry.isPending}
+          updateFieldPending={updateEntryField.isPending}
+          onTagQueryChange={setTagQuery}
+          onSelectedTagChange={setSelectedTagId}
+          onAddTag={() => {
+            if (!selectedEntry || !selectedTagId) {
+              return;
+            }
+            addTagToEntry.mutate({ entryId: selectedEntry.id, tagId: Number(selectedTagId) });
+          }}
+          onRemoveTag={(tagId) => {
+            if (!selectedEntry) {
+              return;
+            }
+            removeTagFromEntry.mutate({ entryId: selectedEntry.id, tagId });
+          }}
+          onFieldDraftChange={(fieldKey, value) =>
+            setFieldDrafts((prev) => ({
+              ...prev,
+              [fieldKey]: value
+            }))
+          }
+          onSaveField={(fieldKey, value) => {
+            if (!selectedEntry) {
+              return;
+            }
+            updateEntryField.mutate({ entryId: selectedEntry.id, fieldKey, value });
+          }}
+          onNewFieldKeyChange={setNewFieldKey}
+          onNewFieldValueChange={setNewFieldValue}
+          onApplyField={() => {
+            if (!selectedEntry || !newFieldKey) {
+              return;
+            }
+            updateEntryField.mutate({
+              entryId: selectedEntry.id,
+              fieldKey: newFieldKey,
+              value: newFieldValue
+            });
+          }}
+        />
 
-        <div className="panel min-h-[280px]">
-          <h2 className="mt-0 text-lg">Preview</h2>
-          {!hasSelectedEntry ? <p className="text-sm opacity-75">Select an entry to render preview.</p> : null}
-          {hasSelectedEntry && preview.data?.preview_kind === "image" ? (
-            <img
-              src={api.getMediaUrl(selectedEntry!.id)}
-              alt={selectedEntry!.filename}
-              className="max-h-[420px] max-w-full rounded-md border border-[var(--border)] object-contain"
-            />
-          ) : null}
-          {hasSelectedEntry && preview.data?.preview_kind === "video" ? (
-            <div className="space-y-2">
-              <video
-                ref={(element) => {
-                  mediaRef.current = element;
-                }}
-                src={api.getMediaUrl(selectedEntry!.id)}
-                controls
-                className="max-h-[280px] w-full rounded-md border border-[var(--border)]"
-              />
-              <MediaControls
-                mediaRef={mediaRef}
-                autoplay={autoplay}
-                loop={loop}
-                muted={muted}
-                volume={volume}
-                setAutoplay={setAutoplay}
-                setLoop={setLoop}
-                setMuted={setMuted}
-                setVolume={setVolume}
-              />
-            </div>
-          ) : null}
-          {hasSelectedEntry && preview.data?.preview_kind === "audio" ? (
-            <div className="space-y-2">
-              <audio
-                ref={(element) => {
-                  mediaRef.current = element;
-                }}
-                src={api.getMediaUrl(selectedEntry!.id)}
-                controls
-                className="w-full"
-              />
-              <MediaControls
-                mediaRef={mediaRef}
-                autoplay={autoplay}
-                loop={loop}
-                muted={muted}
-                volume={volume}
-                setAutoplay={setAutoplay}
-                setLoop={setLoop}
-                setMuted={setMuted}
-                setVolume={setVolume}
-              />
-            </div>
-          ) : null}
-          {hasSelectedEntry && preview.data?.preview_kind === "text" ? (
-            <pre className="max-h-[320px] overflow-auto rounded-md border border-[var(--border)] bg-white p-2 text-xs">
-              {preview.data.text_excerpt || "(empty text)"}
-            </pre>
-          ) : null}
-          {hasSelectedEntry &&
-          preview.data &&
-          (preview.data.preview_kind === "binary" || preview.data.preview_kind === "missing") ? (
-            <p className="text-sm opacity-75">
-              {preview.data.preview_kind === "missing"
-                ? preview.data.text_excerpt
-                : "Preview not available for this file type."}
-            </p>
-          ) : null}
-        </div>
+        <PreviewPanel
+          selectedEntry={selectedEntry}
+          preview={preview.data}
+          mediaRef={mediaRef}
+          autoplay={autoplay}
+          loop={loop}
+          muted={muted}
+          volume={volume}
+          onAutoplayChange={setAutoplay}
+          onLoopChange={setLoop}
+          onMutedChange={setMuted}
+          onVolumeChange={setVolume}
+          getMediaUrl={(entryId) => api.getMediaUrl(entryId)}
+        />
       </section>
     </main>
-  );
-}
-
-type MediaControlsProps = {
-  mediaRef: MutableRefObject<HTMLMediaElement | null>;
-  autoplay: boolean;
-  loop: boolean;
-  muted: boolean;
-  volume: number;
-  setAutoplay: (value: boolean) => void;
-  setLoop: (value: boolean) => void;
-  setMuted: (value: boolean) => void;
-  setVolume: (value: number) => void;
-};
-
-function MediaControls({
-  mediaRef,
-  autoplay,
-  loop,
-  muted,
-  volume,
-  setAutoplay,
-  setLoop,
-  setMuted,
-  setVolume
-}: MediaControlsProps) {
-  const play = () => {
-    void mediaRef.current?.play();
-  };
-  const pause = () => {
-    mediaRef.current?.pause();
-  };
-  const seekBy = (seconds: number) => {
-    if (!mediaRef.current) {
-      return;
-    }
-    mediaRef.current.currentTime = Math.max(0, mediaRef.current.currentTime + seconds);
-  };
-
-  return (
-    <div className="space-y-2 text-xs">
-      <div className="flex gap-2">
-        <Button variant="secondary" onClick={play}>
-          Play
-        </Button>
-        <Button variant="secondary" onClick={pause}>
-          Pause
-        </Button>
-        <Button variant="secondary" onClick={() => seekBy(-5)}>
-          -5s
-        </Button>
-        <Button variant="secondary" onClick={() => seekBy(5)}>
-          +5s
-        </Button>
-      </div>
-      <label className="inline-flex items-center gap-2">
-        <input type="checkbox" checked={autoplay} onChange={(event) => setAutoplay(event.target.checked)} />
-        Autoplay
-      </label>
-      <label className="ml-3 inline-flex items-center gap-2">
-        <input type="checkbox" checked={loop} onChange={(event) => setLoop(event.target.checked)} />
-        Loop
-      </label>
-      <label className="ml-3 inline-flex items-center gap-2">
-        <input type="checkbox" checked={muted} onChange={(event) => setMuted(event.target.checked)} />
-        Muted
-      </label>
-      <label className="ml-3 inline-flex items-center gap-2">
-        Volume
-        <input
-          type="range"
-          min={0}
-          max={1}
-          step={0.05}
-          value={volume}
-          onChange={(event) => setVolume(Number(event.target.value))}
-        />
-      </label>
-    </div>
   );
 }
