@@ -22,7 +22,7 @@ export function LibraryPanel({
   return (
     <section className="panel mb-4 grid gap-3 md:grid-cols-[1fr_auto_auto_auto]">
       <input
-        className="rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm"
+        className="input-base"
         placeholder="/path/to/library"
         value={libraryPath}
         onChange={(event) => onLibraryPathChange(event.target.value)}

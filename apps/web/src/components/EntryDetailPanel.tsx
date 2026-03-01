@@ -47,8 +47,8 @@ export function EntryDetailPanel({
   onApplyField
 }: EntryDetailPanelProps) {
   return (
-    <div className="panel min-h-[280px]">
-      <h2 className="mt-0 text-lg">Entry Detail</h2>
+    <div className="panel min-h-[360px]">
+      <h2 className="panel-title mt-0">Entry Detail</h2>
       {selectedEntry ? (
         <div className="space-y-2 text-sm">
           <div>
@@ -61,13 +61,13 @@ export function EntryDetailPanel({
             <strong>Tag Actions:</strong>
             <div className="flex gap-2">
               <input
-                className="w-full rounded-md border border-[var(--border)] bg-white px-2 py-1 text-sm"
+                className="w-full rounded-xl border border-[var(--color-border-soft)] bg-white/95 px-2 py-1 text-sm"
                 placeholder="Filter tags..."
                 value={tagQuery}
                 onChange={(event) => onTagQueryChange(event.target.value)}
               />
               <select
-                className="max-w-56 rounded-md border border-[var(--border)] bg-white px-2 py-1 text-sm"
+                className="max-w-56 rounded-xl border border-[var(--color-border-soft)] bg-white/95 px-2 py-1 text-sm"
                 value={selectedTagId}
                 onChange={(event) => onSelectedTagChange(event.target.value)}
               >
@@ -87,7 +87,7 @@ export function EntryDetailPanel({
                 <button
                   key={tag.id}
                   type="button"
-                  className="rounded-md border border-[var(--border)] px-2 py-1 text-xs"
+                  className="rounded-xl border border-[var(--color-border-soft)] px-2 py-1 text-xs"
                   onClick={() => onRemoveTag(tag.id)}
                 >
                   Remove {tag.name}
@@ -103,7 +103,7 @@ export function EntryDetailPanel({
                   <div className="mb-1 font-medium">{field.type_name}</div>
                   <div className="flex gap-2">
                     <input
-                      className="w-full rounded-md border border-[var(--border)] bg-white px-2 py-1 text-sm"
+                      className="w-full rounded-xl border border-[var(--color-border-soft)] bg-white/95 px-2 py-1 text-sm"
                       value={fieldDrafts[field.type_key] ?? ""}
                       onChange={(event) => onFieldDraftChange(field.type_key, event.target.value)}
                     />
@@ -123,7 +123,7 @@ export function EntryDetailPanel({
             <strong>Add/Update Field:</strong>
             <div className="flex gap-2">
               <select
-                className="rounded-md border border-[var(--border)] bg-white px-2 py-1 text-sm"
+                className="rounded-xl border border-[var(--color-border-soft)] bg-white/95 px-2 py-1 text-sm"
                 value={newFieldKey}
                 onChange={(event) => onNewFieldKeyChange(event.target.value)}
               >
@@ -135,7 +135,7 @@ export function EntryDetailPanel({
                 ))}
               </select>
               <input
-                className="w-full rounded-md border border-[var(--border)] bg-white px-2 py-1 text-sm"
+                className="w-full rounded-xl border border-[var(--color-border-soft)] bg-white/95 px-2 py-1 text-sm"
                 value={newFieldValue}
                 onChange={(event) => onNewFieldValueChange(event.target.value)}
                 placeholder="Field value"
@@ -147,7 +147,7 @@ export function EntryDetailPanel({
           </div>
         </div>
       ) : (
-        <p className="text-sm opacity-75">Select a result to inspect tags and fields.</p>
+        <p className="text-sm text-slate-500">Select a result to inspect tags and fields.</p>
       )}
     </div>
   );

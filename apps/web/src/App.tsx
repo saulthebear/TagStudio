@@ -373,10 +373,10 @@ export function App() {
 
       {refreshStatus ? <RefreshStatusPanel refreshStatus={refreshStatus} /> : null}
 
-      <section className="grid gap-4 md:grid-cols-3">
-        <ResultsPanel results={results} onSelectEntry={(entryId) => loadEntry.mutate(entryId)} />
+      <section className="grid gap-4 lg:grid-cols-12">
+        <div className="lg:col-span-4"><ResultsPanel results={results} onSelectEntry={(entryId) => loadEntry.mutate(entryId)} /></div>
 
-        <EntryDetailPanel
+        <div className="lg:col-span-4"><EntryDetailPanel
           selectedEntry={selectedEntry}
           tagsDisplay={tagsDisplay}
           tagQuery={tagQuery}
@@ -427,8 +427,9 @@ export function App() {
             });
           }}
         />
+        </div>
 
-        <PreviewPanel
+        <div className="lg:col-span-4"><PreviewPanel
           selectedEntry={selectedEntry}
           preview={preview.data}
           mediaRef={mediaRef}
@@ -442,6 +443,7 @@ export function App() {
           onVolumeChange={setVolume}
           getMediaUrl={(entryId) => api.getMediaUrl(entryId)}
         />
+        </div>
       </section>
     </main>
   );

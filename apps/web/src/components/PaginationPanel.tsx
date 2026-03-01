@@ -22,8 +22,8 @@ export function PaginationPanel({
   onNext
 }: PaginationPanelProps) {
   return (
-    <section className="panel mb-4 flex items-center justify-between gap-2">
-      <div className="text-sm">
+    <section className="panel mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+      <div className="text-sm text-slate-600">
         Query: <strong>{activeQuery || "(all entries)"}</strong> | Results: {totalCount} | Page:{" "}
         {totalPages === 0 ? 0 : pageIndex + 1}/{totalPages}
       </div>

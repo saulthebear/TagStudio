@@ -34,14 +34,14 @@ export function PreviewPanel({
   const hasSelectedEntry = selectedEntry !== null;
 
   return (
-    <div className="panel min-h-[280px]">
-      <h2 className="mt-0 text-lg">Preview</h2>
-      {!hasSelectedEntry ? <p className="text-sm opacity-75">Select an entry to render preview.</p> : null}
+    <div className="panel min-h-[360px]">
+      <h2 className="panel-title mt-0">Preview</h2>
+      {!hasSelectedEntry ? <p className="text-sm text-slate-500">Select an entry to render preview.</p> : null}
       {hasSelectedEntry && preview?.preview_kind === "image" ? (
         <img
           src={getMediaUrl(selectedEntry.id)}
           alt={selectedEntry.filename}
-          className="max-h-[420px] max-w-full rounded-md border border-[var(--border)] object-contain"
+          className="max-h-[420px] max-w-full rounded-xl border border-[var(--color-border-soft)] object-contain"
         />
       ) : null}
       {hasSelectedEntry && preview?.preview_kind === "video" ? (
@@ -52,7 +52,7 @@ export function PreviewPanel({
             }}
             src={getMediaUrl(selectedEntry.id)}
             controls
-            className="max-h-[280px] w-full rounded-md border border-[var(--border)]"
+            className="max-h-[280px] w-full rounded-xl border border-[var(--color-border-soft)]"
           />
           <MediaControls
             mediaRef={mediaRef}
@@ -91,12 +91,12 @@ export function PreviewPanel({
         </div>
       ) : null}
       {hasSelectedEntry && preview?.preview_kind === "text" ? (
-        <pre className="max-h-[320px] overflow-auto rounded-md border border-[var(--border)] bg-white p-2 text-xs">
+        <pre className="max-h-[320px] overflow-auto rounded-xl border border-[var(--color-border-soft)] bg-white/95 p-2 text-xs">
           {preview.text_excerpt || "(empty text)"}
         </pre>
       ) : null}
       {hasSelectedEntry && preview && (preview.preview_kind === "binary" || preview.preview_kind === "missing") ? (
-        <p className="text-sm opacity-75">
+        <p className="text-sm text-slate-500">
           {preview.preview_kind === "missing"
             ? preview.text_excerpt
             : "Preview not available for this file type."}

@@ -50,7 +50,7 @@ export function SearchControlsPanel({
   return (
     <section className="panel mb-4 grid gap-3 md:grid-cols-5">
       <input
-        className="rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm md:col-span-3"
+        className="input-base md:col-span-3"
         placeholder='Search query (e.g. tag:"foo" or path:"*.png")'
         value={searchInput}
         onChange={(event) => onSearchInputChange(event.target.value)}
@@ -61,7 +61,7 @@ export function SearchControlsPanel({
         }}
       />
       <select
-        className="rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm"
+        className="input-base"
         value={sortingMode}
         onChange={(event) => onSortingModeChange(event.target.value as SortingMode)}
       >
@@ -74,22 +74,23 @@ export function SearchControlsPanel({
       <Button disabled={!isLibraryOpen || searchPending} onClick={onSearch}>
         Search
       </Button>
-      <label className="inline-flex items-center gap-2 text-sm">
-        <input type="checkbox" checked={ascending} onChange={(event) => onAscendingChange(event.target.checked)} />
+      <label className="inline-flex items-center gap-2 rounded-lg bg-white/80 px-3 py-2 text-sm text-slate-700">
+        <input className="toggle-base" type="checkbox" checked={ascending} onChange={(event) => onAscendingChange(event.target.checked)} />
         Ascending
       </label>
-      <label className="inline-flex items-center gap-2 text-sm">
+      <label className="inline-flex items-center gap-2 rounded-lg bg-white/80 px-3 py-2 text-sm text-slate-700">
         <input
+          className="toggle-base"
           type="checkbox"
           checked={showHiddenEntries}
           onChange={(event) => onShowHiddenChange(event.target.checked)}
         />
         Show hidden
       </label>
-      <label className="inline-flex items-center gap-2 text-sm">
+      <label className="inline-flex items-center gap-2 rounded-lg bg-white/80 px-3 py-2 text-sm text-slate-700">
         <span>Page size</span>
         <input
-          className="w-24 rounded-md border border-[var(--border)] bg-white px-2 py-1 text-sm"
+          className="input-base w-24 px-2 py-1"
           type="number"
           min={1}
           max={2000}
