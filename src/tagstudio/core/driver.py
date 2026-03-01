@@ -1,21 +1,34 @@
 from pathlib import Path
+from typing import Any, Protocol
 
 import structlog
-from PySide6.QtCore import QSettings
 
 from tagstudio.core.constants import TS_FOLDER_NAME
 from tagstudio.core.enums import SettingItems
 from tagstudio.core.library.alchemy.library import LibraryStatus
-from tagstudio.qt.global_settings import GlobalSettings
 
 logger = structlog.get_logger(__name__)
 
 
+class CacheStore(Protocol):
+    """Minimal cache interface required by DriverMixin."""
+
+    def value(self, key: str) -> Any:
+        """Get a value from cache."""
+
+    def setValue(self, key: str, value: Any) -> None:
+        """Set a value in cache."""
+
+
+class DriverSettings(Protocol):
+    """Minimal settings interface required by DriverMixin."""
+
+    open_last_loaded_on_startup: bool
+
+
 class DriverMixin:
-    cached_values: QSettings
-    # TODO: GlobalSettings has become closely tied to Qt.
-    # Should there be a base Settings class?
-    settings: GlobalSettings
+    cached_values: CacheStore
+    settings: DriverSettings
 
     def evaluate_path(self, open_path: str | None) -> LibraryStatus:
         """Check if the path of library is valid."""

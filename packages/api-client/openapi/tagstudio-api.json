@@ -1,0 +1,52 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "TagStudio API Contract",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/v1/health": {
+      "get": {}
+    },
+    "/api/v1/libraries/open": {
+      "post": {}
+    },
+    "/api/v1/libraries/create": {
+      "post": {}
+    },
+    "/api/v1/libraries/state": {
+      "get": {}
+    },
+    "/api/v1/search": {
+      "post": {}
+    },
+    "/api/v1/entries/{entry_id}": {
+      "get": {}
+    },
+    "/api/v1/entries/{entry_id}/fields/{field_key}": {
+      "patch": {}
+    },
+    "/api/v1/entries/tags:add": {
+      "post": {}
+    },
+    "/api/v1/entries/tags:remove": {
+      "post": {}
+    },
+    "/api/v1/tags": {
+      "post": {}
+    },
+    "/api/v1/tags/{tag_id}": {
+      "patch": {},
+      "delete": {}
+    },
+    "/api/v1/jobs/refresh": {
+      "post": {}
+    },
+    "/api/v1/jobs/{job_id}": {
+      "get": {}
+    },
+    "/api/v1/jobs/{job_id}/events": {
+      "get": {}
+    }
+  }
+}

@@ -190,3 +190,25 @@ pyinstaller tagstudio.spec -- --portable
 ```
 
 The resulting executable file(s) will be located in a new folder named "dist".
+
+## Web/Electron Foundation (Experimental)
+
+An experimental web-tech migration foundation is available in this repository:
+
+-   `apps/web` for the React + Vite renderer
+-   `apps/desktop` for the Electron shell
+-   `packages/api-client` and `packages/ui` for shared frontend modules
+-   `src/tagstudio/api` for the local FastAPI backend
+
+To run the backend locally:
+
+```sh
+tagstudio-api --host 127.0.0.1 --port 5987
+```
+
+To work on the web workspace (Bun):
+
+```sh
+bun install
+bun run dev:web
+```

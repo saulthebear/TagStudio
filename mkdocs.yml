@@ -53,6 +53,8 @@ nav:
   - Updates:
       - changelog.md
       - roadmap.md
+      - web-migration.md
+      - web-parity-baseline.md
       - Schema History:
         - library-changes.md
 

@@ -50,6 +50,7 @@ import tagstudio.qt.resources_rc  # noqa: F401
 from tagstudio.core.constants import TAG_ARCHIVED, TAG_FAVORITE, VERSION, VERSION_BRANCH
 from tagstudio.core.driver import DriverMixin
 from tagstudio.core.enums import MacroID, SettingItems, ShowFilepathOption
+from tagstudio.core.i18n import set_translation_getter
 from tagstudio.core.library.alchemy.enums import (
     BrowsingState,
     FieldTypeEnum,
@@ -257,6 +258,7 @@ class QtDriver(DriverMixin, QObject):
             )
 
         Translations.change_language(self.settings.language)
+        set_translation_getter(lambda key: Translations[key])
 
     @property
     def selected(self) -> list[int]:

@@ -1,0 +1,40 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f7f5ef;
+  --foreground: #1a1a18;
+  --panel: #fffdf8;
+  --border: #d8d2c6;
+  --accent: #2f6d57;
+  --accent-foreground: #ffffff;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+  background:
+    radial-gradient(circle at top left, #fff3da 0, transparent 38%),
+    radial-gradient(circle at bottom right, #d7efe5 0, transparent 42%),
+    var(--background);
+  color: var(--foreground);
+}
+
+.app-shell {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+.panel {
+  background: color-mix(in oklab, var(--panel) 92%, white 8%);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  padding: 0.9rem;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.06);
+}

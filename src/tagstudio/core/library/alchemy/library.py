@@ -103,9 +103,9 @@ from tagstudio.core.library.alchemy.models import (
     Version,
 )
 from tagstudio.core.library.alchemy.visitors import SQLBoolExpressionBuilder
+from tagstudio.core.i18n import tr
 from tagstudio.core.library.json.library import Library as JsonLibrary
 from tagstudio.core.utils.types import unwrap
-from tagstudio.qt.translations import Translations
 
 if TYPE_CHECKING:
     from sqlalchemy import Select
@@ -406,9 +406,11 @@ class Library:
                 if loaded_db_version < 6 or (
                     loaded_db_version >= 100 and loaded_db_version // 100 > DB_VERSION // 100
                 ):
-                    mismatch_text = Translations["status.library_version_mismatch"]
-                    found_text = Translations["status.library_version_found"]
-                    expected_text = Translations["status.library_version_expected"]
+                    mismatch_text = tr(
+                        "status.library_version_mismatch", "Library version mismatch."
+                    )
+                    found_text = tr("status.library_version_found", "Found")
+                    expected_text = tr("status.library_version_expected", "Expected")
                     return LibraryStatus(
                         success=False,
                         message=(
