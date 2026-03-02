@@ -101,15 +101,27 @@ export function TopFilterBar({
         Hidden
       </label>
 
-      <Button variant="secondary" disabled={searchPending} onClick={onSearch}>
+      <Button
+        variant="secondary"
+        size="md"
+        className="top-filter-action"
+        disabled={searchPending}
+        onClick={onSearch}
+      >
         Search
       </Button>
 
-      <Button variant="secondary" disabled={refreshPending} onClick={onRefresh}>
+      <Button
+        variant="secondary"
+        size="md"
+        className="top-filter-action"
+        disabled={refreshPending}
+        onClick={onRefresh}
+      >
         Refresh
       </Button>
 
-      <Button variant="secondary" onClick={onOpenSettings}>
+      <Button variant="secondary" size="md" className="top-filter-action" onClick={onOpenSettings}>
         Settings
       </Button>
 
