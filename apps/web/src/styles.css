@@ -250,12 +250,18 @@ body {
   min-height: 0;
   flex: 1;
   overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
 }
 
 .inspector-image {
   width: 100%;
-  max-height: 420px;
+  max-width: 100%;
+  max-height: 100%;
+  height: auto;
   object-fit: contain;
+  align-self: center;
   border-radius: 0.75rem;
   border: 1px solid var(--color-border-soft);
   background: #0f172a;
@@ -263,7 +269,11 @@ body {
 
 .inspector-video {
   width: 100%;
-  max-height: 300px;
+  max-width: 100%;
+  max-height: 100%;
+  height: auto;
+  object-fit: contain;
+  align-self: center;
   border-radius: 0.75rem;
   border: 1px solid var(--color-border-soft);
   background: #0f172a;
@@ -312,6 +322,12 @@ body {
   overflow: hidden;
 }
 
+.split-pane-single-open > .split-pane-region {
+  flex: 1 1 auto;
+  width: auto;
+  height: auto;
+}
+
 .split-pane-handle {
   flex: 0 0 var(--split-handle-size);
   background: color-mix(in oklab, var(--color-border-soft) 65%, white 35%);
@@ -332,7 +348,7 @@ body {
 }
 
 .collapsed-rail {
-  flex: 0 0 var(--split-rail-size);
+  flex: 0 0 auto;
   display: grid;
   place-items: center;
   border: 1px solid var(--color-border-soft);
@@ -340,6 +356,19 @@ body {
   border-radius: 0.75rem;
   min-width: 24px;
   min-height: 24px;
+}
+
+.split-pane-horizontal > .collapsed-rail-horizontal {
+  flex-basis: var(--split-rail-size);
+  width: var(--split-rail-size);
+  height: 100%;
+  align-self: stretch;
+}
+
+.split-pane-vertical > .collapsed-rail-vertical {
+  flex-basis: var(--split-rail-size);
+  height: var(--split-rail-size);
+  width: 100%;
 }
 
 .collapsed-rail-toggle {

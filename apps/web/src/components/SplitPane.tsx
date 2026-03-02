@@ -85,6 +85,12 @@ export function SplitPane({
   const bothOpen = !state.primaryCollapsed && !state.secondaryCollapsed;
 
   const directionClass = orientation === "horizontal" ? "split-pane-horizontal" : "split-pane-vertical";
+  const collapseClass = state.primaryCollapsed
+    ? "split-pane-primary-collapsed"
+    : state.secondaryCollapsed
+      ? "split-pane-secondary-collapsed"
+      : "split-pane-both-open";
+  const singleOpenClass = bothOpen ? "" : "split-pane-single-open";
 
   const ratioPercent = state.ratio * 100;
 
@@ -271,7 +277,7 @@ export function SplitPane({
   return (
     <div
       ref={rootRef}
-      className={`split-pane ${directionClass} ${className ?? ""}`.trim()}
+      className={`split-pane ${directionClass} ${collapseClass} ${singleOpenClass} ${className ?? ""}`.trim()}
       style={
         {
           "--split-rail-size": `${railSize}px`,
@@ -288,7 +294,7 @@ export function SplitPane({
           onDragStart={(event) => runPointerDrag("rail-primary", event)}
         />
       ) : (
-        <div className="split-pane-region" style={bothOpen ? primaryStyle : undefined}>
+        <div className="split-pane-region split-pane-region-primary" style={bothOpen ? primaryStyle : undefined}>
           {primary}
         </div>
       )}
@@ -322,7 +328,7 @@ export function SplitPane({
           onDragStart={(event) => runPointerDrag("rail-secondary", event)}
         />
       ) : (
-        <div className="split-pane-region" style={bothOpen ? secondaryStyle : undefined}>
+        <div className="split-pane-region split-pane-region-secondary" style={bothOpen ? secondaryStyle : undefined}>
           {secondary}
         </div>
       )}

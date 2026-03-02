@@ -115,7 +115,6 @@ function buildLayoutUpdate(
 
 export function App() {
   const queryClient = useQueryClient();
-  const mediaRef = useRef<HTMLMediaElement | null>(null);
   const eventStreamRef = useRef<EventSource | null>(null);
   const searchRequestIdRef = useRef(0);
   const lastLibraryModalTriggerRef = useRef<HTMLElement | null>(null);
@@ -146,10 +145,6 @@ export function App() {
 
   const [refreshStatus, setRefreshStatus] = useState<JobEventPayload | null>(null);
   const [uiError, setUiError] = useState<string | null>(null);
-  const [autoplay, setAutoplay] = useState(false);
-  const [loop, setLoop] = useState(false);
-  const [muted, setMuted] = useState(false);
-  const [volume, setVolume] = useState(1);
 
   const [mainSplitState, setMainSplitState] = useState<SplitPaneState>(DEFAULT_MAIN_SPLIT);
   const [inspectorSplitState, setInspectorSplitState] = useState<SplitPaneState>(
@@ -519,17 +514,6 @@ export function App() {
     settingsHydrated
   ]);
 
-  useEffect(() => {
-    const media = mediaRef.current;
-    if (!media) {
-      return;
-    }
-    media.autoplay = autoplay;
-    media.loop = loop;
-    media.muted = muted;
-    media.volume = volume;
-  }, [autoplay, loop, muted, volume, preview.data?.media_url]);
-
   const layoutUpdate = useMemo(
     () => buildLayoutUpdate(mainSplitState, inspectorSplitState, mobileActivePane),
     [inspectorSplitState, mainSplitState, mobileActivePane]
@@ -630,15 +614,6 @@ export function App() {
     <InspectorPane
       selectedEntry={selectedEntry}
       preview={preview.data}
-      mediaRef={mediaRef}
-      autoplay={autoplay}
-      loop={loop}
-      muted={muted}
-      volume={volume}
-      onAutoplayChange={setAutoplay}
-      onLoopChange={setLoop}
-      onMutedChange={setMuted}
-      onVolumeChange={setVolume}
       getMediaUrl={(entryId) => api.getMediaUrl(entryId)}
       tagsDisplay={tagsDisplay}
       tagQuery={tagQuery}
@@ -807,7 +782,7 @@ export function App() {
                 secondaryLabel="Inspector"
                 minPrimarySize={320}
                 minSecondarySize={300}
-                collapseThreshold={220}
+                collapseThreshold={120}
                 resetRatio={0.78}
                 railSize={28}
                 handleSize={12}

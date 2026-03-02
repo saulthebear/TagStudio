@@ -1,4 +1,3 @@
-import { type MutableRefObject } from "react";
 import {
   type EntryResponse,
   type FieldTypeResponse,
@@ -12,15 +11,6 @@ import { SplitPane, type SplitPaneState } from "@/components/SplitPane";
 type InspectorPaneProps = {
   selectedEntry: EntryResponse | null;
   preview: PreviewResponse | undefined;
-  mediaRef: MutableRefObject<HTMLMediaElement | null>;
-  autoplay: boolean;
-  loop: boolean;
-  muted: boolean;
-  volume: number;
-  onAutoplayChange: (value: boolean) => void;
-  onLoopChange: (value: boolean) => void;
-  onMutedChange: (value: boolean) => void;
-  onVolumeChange: (value: number) => void;
   getMediaUrl: (entryId: number) => string;
   tagsDisplay: string;
   tagQuery: string;
@@ -50,15 +40,6 @@ type InspectorPaneProps = {
 export function InspectorPane({
   selectedEntry,
   preview,
-  mediaRef,
-  autoplay,
-  loop,
-  muted,
-  volume,
-  onAutoplayChange,
-  onLoopChange,
-  onMutedChange,
-  onVolumeChange,
   getMediaUrl,
   tagsDisplay,
   tagQuery,
@@ -90,15 +71,6 @@ export function InspectorPane({
       <PreviewContent
         selectedEntry={selectedEntry}
         preview={preview}
-        mediaRef={mediaRef}
-        autoplay={autoplay}
-        loop={loop}
-        muted={muted}
-        volume={volume}
-        onAutoplayChange={onAutoplayChange}
-        onLoopChange={onLoopChange}
-        onMutedChange={onMutedChange}
-        onVolumeChange={onVolumeChange}
         getMediaUrl={getMediaUrl}
       />
     </div>
@@ -152,7 +124,7 @@ export function InspectorPane({
         secondaryLabel="Metadata"
         minPrimarySize={220}
         minSecondarySize={220}
-        collapseThreshold={150}
+        collapseThreshold={90}
         resetRatio={0.52}
         railSize={26}
         handleSize={12}
@@ -165,30 +137,12 @@ export function InspectorPane({
 type PreviewContentProps = {
   selectedEntry: EntryResponse | null;
   preview: PreviewResponse | undefined;
-  mediaRef: MutableRefObject<HTMLMediaElement | null>;
-  autoplay: boolean;
-  loop: boolean;
-  muted: boolean;
-  volume: number;
-  onAutoplayChange: (value: boolean) => void;
-  onLoopChange: (value: boolean) => void;
-  onMutedChange: (value: boolean) => void;
-  onVolumeChange: (value: number) => void;
   getMediaUrl: (entryId: number) => string;
 };
 
 function PreviewContent({
   selectedEntry,
   preview,
-  mediaRef,
-  autoplay,
-  loop,
-  muted,
-  volume,
-  onAutoplayChange,
-  onLoopChange,
-  onMutedChange,
-  onVolumeChange,
   getMediaUrl
 }: PreviewContentProps) {
   const hasSelectedEntry = selectedEntry !== null;
@@ -204,50 +158,10 @@ function PreviewContent({
         />
       ) : null}
       {hasSelectedEntry && preview?.preview_kind === "video" ? (
-        <div className="space-y-2">
-          <video
-            ref={(element) => {
-              mediaRef.current = element;
-            }}
-            src={getMediaUrl(selectedEntry.id)}
-            controls
-            className="inspector-video"
-          />
-          <MediaControls
-            mediaRef={mediaRef}
-            autoplay={autoplay}
-            loop={loop}
-            muted={muted}
-            volume={volume}
-            onAutoplayChange={onAutoplayChange}
-            onLoopChange={onLoopChange}
-            onMutedChange={onMutedChange}
-            onVolumeChange={onVolumeChange}
-          />
-        </div>
+        <video src={getMediaUrl(selectedEntry.id)} controls className="inspector-video" />
       ) : null}
       {hasSelectedEntry && preview?.preview_kind === "audio" ? (
-        <div className="space-y-2">
-          <audio
-            ref={(element) => {
-              mediaRef.current = element;
-            }}
-            src={getMediaUrl(selectedEntry.id)}
-            controls
-            className="w-full"
-          />
-          <MediaControls
-            mediaRef={mediaRef}
-            autoplay={autoplay}
-            loop={loop}
-            muted={muted}
-            volume={volume}
-            onAutoplayChange={onAutoplayChange}
-            onLoopChange={onLoopChange}
-            onMutedChange={onMutedChange}
-            onVolumeChange={onVolumeChange}
-          />
-        </div>
+        <audio src={getMediaUrl(selectedEntry.id)} controls className="w-full" />
       ) : null}
       {hasSelectedEntry && preview?.preview_kind === "text" ? (
         <pre className="inspector-text-preview">{preview.text_excerpt || "(empty text)"}</pre>
@@ -257,87 +171,6 @@ function PreviewContent({
           {preview.preview_kind === "missing" ? preview.text_excerpt : "Preview not available for this file type."}
         </p>
       ) : null}
-    </div>
-  );
-}
-
-type MediaControlsProps = {
-  mediaRef: MutableRefObject<HTMLMediaElement | null>;
-  autoplay: boolean;
-  loop: boolean;
-  muted: boolean;
-  volume: number;
-  onAutoplayChange: (value: boolean) => void;
-  onLoopChange: (value: boolean) => void;
-  onMutedChange: (value: boolean) => void;
-  onVolumeChange: (value: number) => void;
-};
-
-function MediaControls({
-  mediaRef,
-  autoplay,
-  loop,
-  muted,
-  volume,
-  onAutoplayChange,
-  onLoopChange,
-  onMutedChange,
-  onVolumeChange
-}: MediaControlsProps) {
-  const play = () => {
-    void mediaRef.current?.play();
-  };
-
-  const pause = () => {
-    mediaRef.current?.pause();
-  };
-
-  const seekBy = (seconds: number) => {
-    if (!mediaRef.current) {
-      return;
-    }
-    mediaRef.current.currentTime = Math.max(0, mediaRef.current.currentTime + seconds);
-  };
-
-  return (
-    <div className="media-controls text-xs">
-      <div className="flex gap-2">
-        <Button variant="secondary" onClick={play}>
-          Play
-        </Button>
-        <Button variant="secondary" onClick={pause}>
-          Pause
-        </Button>
-        <Button variant="secondary" onClick={() => seekBy(-5)}>
-          -5s
-        </Button>
-        <Button variant="secondary" onClick={() => seekBy(5)}>
-          +5s
-        </Button>
-      </div>
-      <label className="inline-flex items-center gap-2">
-        <input type="checkbox" checked={autoplay} onChange={(event) => onAutoplayChange(event.target.checked)} />
-        Autoplay
-      </label>
-      <label className="ml-3 inline-flex items-center gap-2">
-        <input type="checkbox" checked={loop} onChange={(event) => onLoopChange(event.target.checked)} />
-        Loop
-      </label>
-      <label className="ml-3 inline-flex items-center gap-2">
-        <input type="checkbox" checked={muted} onChange={(event) => onMutedChange(event.target.checked)} />
-        Muted
-      </label>
-      <label className="ml-3 inline-flex items-center gap-2">
-        Volume
-        <input
-          type="range"
-          min={0}
-          max={1}
-          step={0.05}
-          value={volume}
-          onChange={(event) => onVolumeChange(Number(event.target.value))}
-        />
-      </label>
     </div>
   );
 }
