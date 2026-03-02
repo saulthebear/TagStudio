@@ -20,7 +20,7 @@ import { SettingsModal } from "@/components/SettingsModal";
 import { SplitPane, type SplitPaneState } from "@/components/SplitPane";
 import { ThumbnailGridPane } from "@/components/ThumbnailGridPane";
 import { TopFilterBar } from "@/components/TopFilterBar";
-import { api } from "@/lib/client";
+import { api } from "@/api/client";
 
 type MobilePane = "grid" | "preview" | "metadata";
 

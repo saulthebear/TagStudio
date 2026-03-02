@@ -217,10 +217,15 @@ body {
   overflow: hidden;
 }
 
-.thumb-media-image {
+.thumb-media-image,
+.thumb-media-video {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+.thumb-media-video {
+  pointer-events: none;
 }
 
 .thumb-media-icon {

@@ -1,5 +1,5 @@
 import { type EntrySummaryResponse } from "@tagstudio/api-client";
-import { useEffect, useMemo, useRef } from "react";
+import { type SyntheticEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type ThumbnailGridPaneProps = {
   entries: EntrySummaryResponse[];
@@ -14,40 +14,58 @@ type ThumbnailGridPaneProps = {
   getMediaUrl: (entryId: number) => string;
 };
 
+type MediaKind = "image" | "video" | "other";
+
 const IMAGE_SUFFIXES = new Set([
-  ".jpg",
-  ".jpeg",
-  ".png",
-  ".gif",
-  ".webp",
-  ".bmp",
-  ".tif",
-  ".tiff",
-  ".jxl",
-  ".heic",
-  ".avif",
-  ".svg"
+  "jpg",
+  "jpeg",
+  "png",
+  "gif",
+  "webp",
+  "bmp",
+  "tif",
+  "tiff",
+  "jxl",
+  "heic",
+  "avif",
+  "svg"
 ]);
 
-function isImageEntry(entry: EntrySummaryResponse): boolean {
-  return IMAGE_SUFFIXES.has(entry.suffix.toLowerCase());
+const VIDEO_SUFFIXES = new Set(["mp4", "mov", "mkv", "webm", "avi"]);
+const AUDIO_SUFFIXES = new Set(["mp3", "wav", "ogg", "flac", "m4a"]);
+const PDF_SUFFIXES = new Set(["pdf"]);
+const ARCHIVE_SUFFIXES = new Set(["zip", "rar", "7z", "tar", "gz"]);
+
+function normalizeSuffix(rawSuffix: string): string {
+  return rawSuffix.trim().toLowerCase().replace(/^\./, "");
 }
 
-function iconForSuffix(suffix: string): string {
-  const lower = suffix.toLowerCase();
-  if ([".mp4", ".mov", ".mkv", ".webm", ".avi"].includes(lower)) {
+function getMediaKind(rawSuffix: string): MediaKind {
+  const suffix = normalizeSuffix(rawSuffix);
+  if (IMAGE_SUFFIXES.has(suffix)) {
+    return "image";
+  }
+  if (VIDEO_SUFFIXES.has(suffix)) {
+    return "video";
+  }
+  return "other";
+}
+
+function iconForSuffix(rawSuffix: string): string {
+  const suffix = normalizeSuffix(rawSuffix);
+  if (VIDEO_SUFFIXES.has(suffix)) {
     return "VIDEO";
   }
-  if ([".mp3", ".wav", ".ogg", ".flac", ".m4a"].includes(lower)) {
+  if (AUDIO_SUFFIXES.has(suffix)) {
     return "AUDIO";
   }
-  if ([".pdf"].includes(lower)) {
+  if (PDF_SUFFIXES.has(suffix)) {
     return "PDF";
   }
-  if ([".zip", ".rar", ".7z", ".tar", ".gz"].includes(lower)) {
+  if (ARCHIVE_SUFFIXES.has(suffix)) {
     return "ARCHIVE";
   }
-  return lower.replace(".", "").toUpperCase() || "FILE";
+  return suffix.toUpperCase() || "FILE";
 }
 
 export function ThumbnailGridPane({
@@ -63,6 +81,36 @@ export function ThumbnailGridPane({
   getMediaUrl
 }: ThumbnailGridPaneProps) {
   const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const [failedMediaIds, setFailedMediaIds] = useState<Set<number>>(() => new Set());
+
+  const markMediaFailed = useCallback((entryId: number) => {
+    setFailedMediaIds((prev) => {
+      if (prev.has(entryId)) {
+        return prev;
+      }
+      const next = new Set(prev);
+      next.add(entryId);
+      return next;
+    });
+  }, []);
+
+  const seekVideoToPreviewFrame = useCallback((event: SyntheticEvent<HTMLVideoElement>) => {
+    const video = event.currentTarget;
+    video.pause();
+    if (!Number.isFinite(video.duration) || video.duration <= 0) {
+      return;
+    }
+    const safeMax = Math.max(video.duration - 0.01, 0);
+    const previewTime = Math.min(0.1, safeMax);
+    if (previewTime <= 0) {
+      return;
+    }
+    try {
+      video.currentTime = previewTime;
+    } catch {
+      // Ignore seek failures and keep the default first frame.
+    }
+  }, []);
 
   useEffect(() => {
     if (!hasMore || searchPending || loadingMore) {
@@ -89,6 +137,25 @@ export function ThumbnailGridPane({
     return () => observer.disconnect();
   }, [hasMore, loadingMore, onLoadMore, searchPending]);
 
+  useEffect(() => {
+    setFailedMediaIds((prev) => {
+      if (prev.size === 0) {
+        return prev;
+      }
+      const currentIds = new Set(entries.map((entry) => entry.id));
+      const next = new Set<number>();
+      let changed = false;
+      for (const entryId of prev) {
+        if (currentIds.has(entryId)) {
+          next.add(entryId);
+        } else {
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [entries]);
+
   const subtitle = useMemo(() => {
     if (!activeQuery) {
       return `${totalCount} entries`;
@@ -111,7 +178,8 @@ export function ThumbnailGridPane({
         <div className="thumb-grid" role="listbox" aria-label="Library entries">
           {entries.map((entry) => {
             const selected = selectedEntryId === entry.id;
-            const imageEntry = isImageEntry(entry);
+            const mediaKind = getMediaKind(entry.suffix);
+            const showMedia = mediaKind !== "other" && !failedMediaIds.has(entry.id);
             return (
               <button
                 key={entry.id}
@@ -121,16 +189,27 @@ export function ThumbnailGridPane({
                 aria-selected={selected}
               >
                 <div className="thumb-media">
-                  {imageEntry ? (
+                  {showMedia && mediaKind === "image" ? (
                     <img
                       src={getMediaUrl(entry.id)}
                       alt={entry.filename}
                       loading="lazy"
                       className="thumb-media-image"
+                      onError={() => markMediaFailed(entry.id)}
                     />
-                  ) : (
-                    <span className="thumb-media-icon">{iconForSuffix(entry.suffix)}</span>
-                  )}
+                  ) : null}
+                  {showMedia && mediaKind === "video" ? (
+                    <video
+                      src={getMediaUrl(entry.id)}
+                      muted
+                      playsInline
+                      preload="metadata"
+                      className="thumb-media-video"
+                      onLoadedMetadata={seekVideoToPreviewFrame}
+                      onError={() => markMediaFailed(entry.id)}
+                    />
+                  ) : null}
+                  {!showMedia ? <span className="thumb-media-icon">{iconForSuffix(entry.suffix)}</span> : null}
                 </div>
                 <span className="thumb-label" title={entry.path}>
                   {entry.filename}
