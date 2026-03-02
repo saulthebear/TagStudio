@@ -142,6 +142,22 @@ def test_get_entry(library: Library, entry_min: Entry):
     assert len(result.tags) == 1
 
 
+def test_tags_property_includes_aliases_after_detach(library: Library):
+    tags = library.tags
+
+    for tag in tags:
+        _ = tag.alias_strings
+        _ = tag.parent_ids
+
+
+def test_get_entry_full_includes_tag_aliases_after_detach(library: Library, entry_min: Entry):
+    result = unwrap(library.get_entry_full(unwrap(entry_min.id), with_fields=True, with_tags=True))
+
+    for tag in result.tags:
+        _ = tag.alias_strings
+        _ = tag.parent_ids
+
+
 def test_entries_count(library: Library):
     folder = unwrap(library.folder)
     entries = [Entry(path=Path(f"{x}.txt"), folder=folder, fields=[]) for x in range(10)]

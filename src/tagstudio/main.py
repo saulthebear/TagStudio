@@ -12,7 +12,6 @@ import traceback
 import structlog
 
 from tagstudio.core.constants import VERSION, VERSION_BRANCH
-from tagstudio.qt.ts_qt import QtDriver
 
 logger = structlog.get_logger(__name__)
 
@@ -100,6 +99,8 @@ def main():
         app = create_app(api_token=args.api_token)
         uvicorn.run(app, host=args.api_host, port=args.api_port, log_level="info")
         return
+
+    from tagstudio.qt.ts_qt import QtDriver
 
     driver = QtDriver(args)
     ui_name = "Qt"

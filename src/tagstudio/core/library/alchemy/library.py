@@ -808,10 +808,17 @@ class Library:
             # if with_tags:
             #     entry_stmt = entry_stmt.outerjoin(Entry.tags).options(selectinload(Entry.tags))
             if with_tags:
-                tag_stmt = select(Tag).where(
-                    and_(
-                        TagEntry.tag_id == Tag.id,
-                        TagEntry.entry_id == entry_id,
+                tag_stmt = (
+                    select(Tag)
+                    .where(
+                        and_(
+                            TagEntry.tag_id == Tag.id,
+                            TagEntry.entry_id == entry_id,
+                        )
+                    )
+                    .options(
+                        selectinload(Tag.aliases),
+                        selectinload(Tag.parent_tags),
                     )
                 )
 
@@ -944,8 +951,8 @@ class Library:
     @property
     def tags(self) -> list[Tag]:
         with Session(self.engine) as session:
-            # load all tags and join parent tags
-            tags_query = select(Tag).options(selectinload(Tag.parent_tags))
+            # load all tag relationships used by API serialization before detaching
+            tags_query = select(Tag).options(selectinload(Tag.parent_tags), selectinload(Tag.aliases))
             tags = session.scalars(tags_query).unique()
             tags_list = list(tags)
 
