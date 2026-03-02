@@ -1,5 +1,6 @@
 from enum import Enum
 from typing import Any
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -170,11 +171,36 @@ class JobCreateResponse(BaseModel):
     status: str
 
 
+class LayoutSettings(BaseModel):
+    main_split_ratio: float = Field(default=0.78, ge=0.0, le=1.0)
+    main_left_collapsed: bool = False
+    main_right_collapsed: bool = False
+    main_last_open_ratio: float = Field(default=0.78, ge=0.0, le=1.0)
+    inspector_split_ratio: float = Field(default=0.52, ge=0.0, le=1.0)
+    preview_collapsed: bool = False
+    metadata_collapsed: bool = False
+    inspector_last_open_ratio: float = Field(default=0.52, ge=0.0, le=1.0)
+    mobile_active_pane: Literal["grid", "preview", "metadata"] = "grid"
+
+
+class LayoutSettingsUpdateRequest(BaseModel):
+    main_split_ratio: float | None = Field(default=None, ge=0.0, le=1.0)
+    main_left_collapsed: bool | None = None
+    main_right_collapsed: bool | None = None
+    main_last_open_ratio: float | None = Field(default=None, ge=0.0, le=1.0)
+    inspector_split_ratio: float | None = Field(default=None, ge=0.0, le=1.0)
+    preview_collapsed: bool | None = None
+    metadata_collapsed: bool | None = None
+    inspector_last_open_ratio: float | None = Field(default=None, ge=0.0, le=1.0)
+    mobile_active_pane: Literal["grid", "preview", "metadata"] | None = None
+
+
 class SettingsResponse(BaseModel):
     sorting_mode: SortingMode = SortingMode.DATE_ADDED
     ascending: bool = True
     show_hidden_entries: bool = False
     page_size: int = Field(default=200, ge=1, le=2000)
+    layout: LayoutSettings = Field(default_factory=LayoutSettings)
 
 
 class SettingsUpdateRequest(BaseModel):
@@ -182,6 +208,7 @@ class SettingsUpdateRequest(BaseModel):
     ascending: bool | None = None
     show_hidden_entries: bool | None = None
     page_size: int | None = Field(default=None, ge=1, le=2000)
+    layout: LayoutSettingsUpdateRequest | None = None
 
 
 class SuccessResponse(BaseModel):

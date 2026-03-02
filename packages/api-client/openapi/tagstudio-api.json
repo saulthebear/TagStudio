@@ -1068,6 +1068,188 @@
         ],
         "title": "JobStatusResponse"
       },
+      "LayoutSettings": {
+        "properties": {
+          "main_split_ratio": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Main Split Ratio",
+            "default": 0.78
+          },
+          "main_left_collapsed": {
+            "type": "boolean",
+            "title": "Main Left Collapsed",
+            "default": false
+          },
+          "main_right_collapsed": {
+            "type": "boolean",
+            "title": "Main Right Collapsed",
+            "default": false
+          },
+          "main_last_open_ratio": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Main Last Open Ratio",
+            "default": 0.78
+          },
+          "inspector_split_ratio": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Inspector Split Ratio",
+            "default": 0.52
+          },
+          "preview_collapsed": {
+            "type": "boolean",
+            "title": "Preview Collapsed",
+            "default": false
+          },
+          "metadata_collapsed": {
+            "type": "boolean",
+            "title": "Metadata Collapsed",
+            "default": false
+          },
+          "inspector_last_open_ratio": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Inspector Last Open Ratio",
+            "default": 0.52
+          },
+          "mobile_active_pane": {
+            "type": "string",
+            "enum": [
+              "grid",
+              "preview",
+              "metadata"
+            ],
+            "title": "Mobile Active Pane",
+            "default": "grid"
+          }
+        },
+        "type": "object",
+        "title": "LayoutSettings"
+      },
+      "LayoutSettingsUpdateRequest": {
+        "properties": {
+          "main_split_ratio": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Main Split Ratio"
+          },
+          "main_left_collapsed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Main Left Collapsed"
+          },
+          "main_right_collapsed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Main Right Collapsed"
+          },
+          "main_last_open_ratio": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Main Last Open Ratio"
+          },
+          "inspector_split_ratio": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inspector Split Ratio"
+          },
+          "preview_collapsed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preview Collapsed"
+          },
+          "metadata_collapsed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metadata Collapsed"
+          },
+          "inspector_last_open_ratio": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inspector Last Open Ratio"
+          },
+          "mobile_active_pane": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "grid",
+                  "preview",
+                  "metadata"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mobile Active Pane"
+          }
+        },
+        "type": "object",
+        "title": "LayoutSettingsUpdateRequest"
+      },
       "LibraryCreateRequest": {
         "properties": {
           "path": {
@@ -1289,6 +1471,9 @@
             "minimum": 1.0,
             "title": "Page Size",
             "default": 200
+          },
+          "layout": {
+            "$ref": "#/components/schemas/LayoutSettings"
           }
         },
         "type": "object",
@@ -1340,6 +1525,16 @@
               }
             ],
             "title": "Page Size"
+          },
+          "layout": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LayoutSettingsUpdateRequest"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",

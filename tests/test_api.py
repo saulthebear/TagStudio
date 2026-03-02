@@ -60,15 +60,37 @@ def test_api_core_workflows() -> None:
             settings = client.get("/api/v1/settings")
             assert settings.status_code == 200
             assert settings.json()["page_size"] == 200
+            assert settings.json()["layout"]["main_split_ratio"] == 0.78
+            assert settings.json()["layout"]["mobile_active_pane"] == "grid"
 
             updated_settings = client.patch(
                 "/api/v1/settings",
-                json={"page_size": 100, "sorting_mode": "generic.filename", "ascending": False},
+                json={
+                    "page_size": 100,
+                    "sorting_mode": "file.path",
+                    "ascending": False,
+                    "layout": {
+                        "main_split_ratio": 0.66,
+                        "mobile_active_pane": "metadata",
+                    },
+                },
             )
             assert updated_settings.status_code == 200
             assert updated_settings.json()["page_size"] == 100
-            assert updated_settings.json()["sorting_mode"] == "generic.filename"
+            assert updated_settings.json()["sorting_mode"] == "file.path"
             assert updated_settings.json()["ascending"] is False
+            assert updated_settings.json()["layout"]["main_split_ratio"] == 0.66
+            assert updated_settings.json()["layout"]["mobile_active_pane"] == "metadata"
+
+            partial_layout_update = client.patch(
+                "/api/v1/settings",
+                json={"layout": {"preview_collapsed": True}},
+            )
+            assert partial_layout_update.status_code == 200
+            assert partial_layout_update.json()["layout"]["preview_collapsed"] is True
+            # Ensure deep merge keeps sibling layout keys.
+            assert partial_layout_update.json()["layout"]["main_split_ratio"] == 0.66
+            assert partial_layout_update.json()["layout"]["mobile_active_pane"] == "metadata"
 
             search = client.post("/api/v1/search", json={"query": ""})
             assert search.status_code == 200

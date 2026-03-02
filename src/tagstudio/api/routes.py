@@ -1,5 +1,6 @@
 import mimetypes
 from pathlib import Path
+from typing import Any
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse, StreamingResponse
@@ -110,7 +111,7 @@ def create_router(*, state: ApiState, jobs: JobManager) -> APIRouter:
 
     @router.patch("/settings", response_model=SettingsResponse)
     def update_settings(request: SettingsUpdateRequest) -> SettingsResponse:
-        updates: dict[str, str | int | bool] = {}
+        updates: dict[str, Any] = {}
         if request.sorting_mode is not None:
             updates["sorting_mode"] = request.sorting_mode.value
         if request.ascending is not None:
@@ -119,6 +120,8 @@ def create_router(*, state: ApiState, jobs: JobManager) -> APIRouter:
             updates["show_hidden_entries"] = request.show_hidden_entries
         if request.page_size is not None:
             updates["page_size"] = request.page_size
+        if request.layout is not None:
+            updates["layout"] = request.layout.model_dump(exclude_none=True)
         return SettingsResponse.model_validate(state.update_web_settings(updates))
 
     @router.get("/field-types", response_model=list[FieldTypeResponse])

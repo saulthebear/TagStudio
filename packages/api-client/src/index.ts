@@ -116,6 +116,31 @@ export type SettingsResponse = {
   ascending: boolean;
   show_hidden_entries: boolean;
   page_size: number;
+  layout: LayoutSettings;
+};
+
+export type LayoutSettings = {
+  main_split_ratio: number;
+  main_left_collapsed: boolean;
+  main_right_collapsed: boolean;
+  main_last_open_ratio: number;
+  inspector_split_ratio: number;
+  preview_collapsed: boolean;
+  metadata_collapsed: boolean;
+  inspector_last_open_ratio: number;
+  mobile_active_pane: "grid" | "preview" | "metadata";
+};
+
+export type LayoutSettingsUpdateRequest = {
+  main_split_ratio?: number;
+  main_left_collapsed?: boolean;
+  main_right_collapsed?: boolean;
+  main_last_open_ratio?: number;
+  inspector_split_ratio?: number;
+  preview_collapsed?: boolean;
+  metadata_collapsed?: boolean;
+  inspector_last_open_ratio?: number;
+  mobile_active_pane?: "grid" | "preview" | "metadata";
 };
 
 export type SettingsUpdateRequest = {
@@ -123,6 +148,7 @@ export type SettingsUpdateRequest = {
   ascending?: boolean;
   show_hidden_entries?: boolean;
   page_size?: number;
+  layout?: LayoutSettingsUpdateRequest;
 };
 
 export type ApiConfig = {
