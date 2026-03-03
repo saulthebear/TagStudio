@@ -31,6 +31,16 @@ export function LibraryGate({
           placeholder="/path/to/library"
           value={libraryPath}
           onChange={(event) => onLibraryPathChange(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key !== "Enter") {
+              return;
+            }
+            event.preventDefault();
+            if (!libraryPath || openPending) {
+              return;
+            }
+            onOpen();
+          }}
         />
         <Button variant="secondary" disabled={!canPickDirectory} onClick={onBrowse}>
           Browse...

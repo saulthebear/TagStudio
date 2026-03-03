@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { existsSync } from "node:fs";
 
-import { app, BrowserWindow } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, type OpenDialogOptions } from "electron";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -15,8 +15,25 @@ const apiToken = process.env.TAGSTUDIO_API_TOKEN ?? randomBytes(24).toString("he
 const apiBaseUrl = `http://${apiHost}:${apiPort}`;
 const webUrl = process.env.TAGSTUDIO_WEB_URL;
 const bundledIndexPath = path.resolve(__dirname, "../../web/dist/index.html");
+const PICK_DIRECTORY_CHANNEL = "tagstudio:pick-directory";
 
 let apiProcess: ChildProcess | undefined;
+
+function registerIpcHandlers(): void {
+  ipcMain.handle(PICK_DIRECTORY_CHANNEL, async () => {
+    const focusedWindow = BrowserWindow.getFocusedWindow();
+    const options: OpenDialogOptions = { properties: ["openDirectory", "createDirectory"] };
+    const result = focusedWindow
+      ? await dialog.showOpenDialog(focusedWindow, options)
+      : await dialog.showOpenDialog(options);
+
+    if (result.canceled || result.filePaths.length < 1) {
+      return null;
+    }
+
+    return result.filePaths[0] ?? null;
+  });
+}
 
 function startBackend(): void {
   const command = process.env.TAGSTUDIO_API_CMD ?? "tagstudio-api";
@@ -71,8 +88,12 @@ app.on("window-all-closed", () => {
   stopBackend();
   app.quit();
 });
+app.on("will-quit", () => {
+  ipcMain.removeHandler(PICK_DIRECTORY_CHANNEL);
+});
 
 app.whenReady().then(() => {
   startBackend();
+  registerIpcHandlers();
   createWindow();
 });

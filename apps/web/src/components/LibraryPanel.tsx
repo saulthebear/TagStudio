@@ -26,6 +26,16 @@ export function LibraryPanel({
         placeholder="/path/to/library"
         value={libraryPath}
         onChange={(event) => onLibraryPathChange(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key !== "Enter") {
+            return;
+          }
+          event.preventDefault();
+          if (!libraryPath || openPending) {
+            return;
+          }
+          onOpen();
+        }}
       />
       <Button disabled={!canPickDirectory} variant="secondary" onClick={onBrowse}>
         Browse...
