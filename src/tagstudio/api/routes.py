@@ -45,7 +45,7 @@ from tagstudio.core.library.alchemy.models import Tag, TagAlias
 from tagstudio.core.media.thumbnail_pipeline import ThumbnailUnsupportedError
 
 TEXT_SUFFIXES = {"txt", "md", "json", "toml", "yaml", "yml", "csv", "log", "py", "ts", "tsx"}
-VIDEO_SUFFIXES = {"mp4", "mov", "mkv", "webm", "avi"}
+VIDEO_SUFFIXES = {"mp4", "mov", "mkv", "webm", "avi", "m4v"}
 AUDIO_SUFFIXES = {"mp3", "wav", "ogg", "flac", "m4a"}
 IMAGE_SUFFIXES = {"jpg", "jpeg", "png", "gif", "webp", "bmp", "tif", "tiff", "jxl", "heic"}
 

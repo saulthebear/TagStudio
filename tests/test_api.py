@@ -4,11 +4,13 @@ import base64
 import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
+from PIL import Image
 
 from tagstudio.api.app import create_app
-from tagstudio.core.media.thumbnail_pipeline import ThumbnailUnsupportedError
+from tagstudio.core.media.thumbnail_pipeline import ThumbnailPipeline, ThumbnailUnsupportedError
 from tagstudio.core.library.alchemy.library import Library
 from tagstudio.core.library.alchemy.models import Entry, Tag
 from tagstudio.core.utils.types import unwrap
@@ -319,3 +321,31 @@ def test_thumbnail_lock_is_released_after_generation_failure() -> None:
 
             assert first.status_code == 415
             assert second.status_code == 415
+
+
+def test_thumbnail_pipeline_video_falls_back_to_ffmpeg_when_opencv_fails() -> None:
+    with TemporaryDirectory() as tmp:
+        library_path = Path(tmp)
+        pipeline = ThumbnailPipeline(library_path)
+        try:
+            video_path = library_path / "fallback.mp4"
+            video_path.write_bytes(b"not-a-real-video")
+
+            options = pipeline._resolve_options(size=128, fit="cover", kind="grid")
+            frame = Image.new("RGB", (48, 32), (255, 0, 0))
+
+            with (
+                patch.object(pipeline, "_render_video_with_opencv", return_value=None),
+                patch.object(pipeline, "_probe_duration_seconds", return_value=10.0),
+                patch.object(
+                    pipeline,
+                    "_extract_video_frame_with_ffmpeg",
+                    side_effect=[frame, None],
+                ),
+            ):
+                result = pipeline._render_video(video_path, options)
+
+            assert result is not None
+            assert result.size == (128, 128)
+        finally:
+            pipeline.close()

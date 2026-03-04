@@ -23,6 +23,7 @@ test("renders normalized image/video media tiles and falls back on media errors"
     { id: 201, path: "images/sample-webp.webp", filename: "sample-webp.webp", suffix: "webp", tag_ids: [] },
     { id: 202, path: "images/dotted-png.png", filename: "dotted-png.png", suffix: ".png", tag_ids: [] },
     { id: 203, path: "videos/clip.mp4", filename: "clip.mp4", suffix: "mp4", tag_ids: [] },
+    { id: 206, path: "videos/clip-two.m4v", filename: "clip-two.m4v", suffix: "m4v", tag_ids: [] },
     { id: 204, path: "docs/notes.txt", filename: "notes.txt", suffix: "txt", tag_ids: [] },
     {
       id: 205,
@@ -102,7 +103,7 @@ test("renders normalized image/video media tiles and falls back on media errors"
     const match = /\/entries\/(\d+)\/thumbnail$/.exec(new URL(route.request().url()).pathname);
     const entryId = Number(match?.[1] ?? -1);
 
-    if (entryId === 201 || entryId === 202 || entryId === 203) {
+    if (entryId === 201 || entryId === 202 || entryId === 203 || entryId === 206) {
       await route.fulfill({ status: 200, contentType: "image/png", body: tinyPng });
       return;
     }
@@ -127,6 +128,10 @@ test("renders normalized image/video media tiles and falls back on media errors"
   const videoCard = page.locator(".thumb-card").filter({ hasText: "clip.mp4" });
   await expect(videoCard.locator("img.thumb-media-image")).toHaveCount(1);
   await expect(videoCard.locator(".thumb-video-badge")).toHaveCount(1);
+
+  const m4vCard = page.locator(".thumb-card").filter({ hasText: "clip-two.m4v" });
+  await expect(m4vCard.locator("img.thumb-media-image")).toHaveCount(1);
+  await expect(m4vCard.locator(".thumb-video-badge")).toHaveCount(1);
 
   const textCard = page.locator(".thumb-card").filter({ hasText: "notes.txt" });
   await expect(textCard.locator(".thumb-media-icon")).toHaveText("TXT");

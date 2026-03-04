@@ -38,7 +38,7 @@ const IMAGE_SUFFIXES = new Set([
   "svg"
 ]);
 
-const VIDEO_SUFFIXES = new Set(["mp4", "mov", "mkv", "webm", "avi"]);
+const VIDEO_SUFFIXES = new Set(["mp4", "mov", "mkv", "webm", "avi", "m4v"]);
 const AUDIO_SUFFIXES = new Set(["mp3", "wav", "ogg", "flac", "m4a"]);
 const PDF_SUFFIXES = new Set(["pdf"]);
 const ARCHIVE_SUFFIXES = new Set(["zip", "rar", "7z", "tar", "gz"]);

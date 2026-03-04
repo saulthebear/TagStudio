@@ -1,7 +1,11 @@
 import hashlib
+import io
 import json
 import mimetypes
 import os
+import platform
+import shutil
+import subprocess
 import threading
 from dataclasses import dataclass
 from pathlib import Path
@@ -84,6 +88,11 @@ class ThumbnailPipeline:
         ".avi",
         ".m4v",
     }
+    _FFMPEG_MACOS_LOCATIONS = (
+        "",
+        "/opt/homebrew/bin/",
+        "/usr/local/bin/",
+    )
 
     def __init__(
         self,
@@ -106,6 +115,8 @@ class ThumbnailPipeline:
         self._grid_size = grid_size
         self._preview_size = preview_size
         self._quality = quality
+        self._ffmpeg_cmd = self._find_tool("ffmpeg")
+        self._ffprobe_cmd = self._find_tool("ffprobe")
         self.update_config(
             cache_max_mib=cache_max_mib,
             grid_size=grid_size,
@@ -247,6 +258,9 @@ class ThumbnailPipeline:
                     fit=task.options.fit,
                     kind=task.options.kind,
                 )
+            except ThumbnailUnsupportedError:
+                # Unsupported/corrupt files are expected for some libraries.
+                pass
             except Exception as exc:
                 logger.debug(
                     "Thumbnail prewarm skipped.",
@@ -365,6 +379,15 @@ class ThumbnailPipeline:
             return None
 
     def _render_video(self, entry_path: Path, options: ThumbnailOptions) -> Image.Image | None:
+        image = self._render_video_with_opencv(entry_path, options)
+        if image is not None:
+            return image
+
+        return self._render_video_with_ffmpeg(entry_path, options)
+
+    def _render_video_with_opencv(
+        self, entry_path: Path, options: ThumbnailOptions
+    ) -> Image.Image | None:
         if cv2 is None:
             return None
 
@@ -372,9 +395,10 @@ class ThumbnailPipeline:
         if not capture.isOpened():
             capture.release()
             return None
-
         try:
             frame = self._extract_video_frame(capture)
+        except Exception:
+            frame = None
         finally:
             capture.release()
 
@@ -385,16 +409,145 @@ class ThumbnailPipeline:
         image = Image.fromarray(rgb_frame, mode="RGB")
         return self._fit_image(image, options)
 
+    def _render_video_with_ffmpeg(
+        self, entry_path: Path, options: ThumbnailOptions
+    ) -> Image.Image | None:
+        if self._ffmpeg_cmd is None:
+            return None
+
+        duration = self._probe_duration_seconds(entry_path)
+        candidate_offsets = self._build_candidate_offsets(duration)
+
+        for offset in candidate_offsets:
+            image = self._extract_video_frame_with_ffmpeg(entry_path, offset)
+            if image is not None:
+                return self._fit_image(image, options)
+
+        return None
+
     def _extract_video_frame(self, capture):  # type: ignore[no-untyped-def]
         frame_count = float(capture.get(cv2.CAP_PROP_FRAME_COUNT))
         fps = float(capture.get(cv2.CAP_PROP_FPS))
 
-        duration = 0.0
+        duration: float | None = None
         if frame_count > 0 and fps > 0:
             duration = frame_count / fps
 
+        for offset in self._build_candidate_offsets(duration):
+            frame = self._read_frame_at(capture, offset)
+            if frame is not None:
+                return frame
+
+        capture.set(cv2.CAP_PROP_POS_FRAMES, 0)
+        for _ in range(10):
+            success, frame = capture.read()
+            if success and frame is not None:
+                return frame
+
+        return None
+
+    def _read_frame_at(self, capture, seconds: float):  # type: ignore[no-untyped-def]
+        capture.set(cv2.CAP_PROP_POS_MSEC, max(0.0, seconds) * 1000.0)
+        success, frame = capture.read()
+        if not success:
+            return None
+        return frame
+
+    def _extract_video_frame_with_ffmpeg(self, entry_path: Path, seconds: float) -> Image.Image | None:
+        if self._ffmpeg_cmd is None:
+            return None
+
+        normalized_seconds = max(0.0, seconds)
+        ffmpeg_prefix = [
+            self._ffmpeg_cmd,
+            "-hide_banner",
+            "-loglevel",
+            "error",
+        ]
+        ffmpeg_suffix = [
+            "-frames:v",
+            "1",
+            "-f",
+            "image2pipe",
+            "-vcodec",
+            "png",
+            "pipe:1",
+        ]
+
+        commands: list[list[str]] = [
+            [*ffmpeg_prefix, "-ss", f"{normalized_seconds:.3f}", "-i", str(entry_path), *ffmpeg_suffix],
+            [*ffmpeg_prefix, "-i", str(entry_path), "-ss", f"{normalized_seconds:.3f}", *ffmpeg_suffix],
+            [*ffmpeg_prefix, "-i", str(entry_path), *ffmpeg_suffix],
+        ]
+
+        seen_commands: set[tuple[str, ...]] = set()
+        for cmd in commands:
+            signature = tuple(cmd)
+            if signature in seen_commands:
+                continue
+            seen_commands.add(signature)
+
+            try:
+                result = subprocess.run(  # noqa: S603
+                    cmd,
+                    check=False,
+                    capture_output=True,
+                )
+            except OSError:
+                continue
+
+            if result.returncode != 0 or not result.stdout:
+                continue
+
+            try:
+                with Image.open(io.BytesIO(result.stdout)) as source:
+                    return source.copy()
+            except (UnidentifiedImageError, OSError, ValueError):
+                continue
+        return None
+
+    def _probe_duration_seconds(self, entry_path: Path) -> float | None:
+        if self._ffprobe_cmd is None:
+            return None
+
+        cmd = [
+            self._ffprobe_cmd,
+            "-v",
+            "error",
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "json",
+            str(entry_path),
+        ]
+        try:
+            result = subprocess.run(  # noqa: S603
+                cmd,
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+        except OSError:
+            return None
+
+        if result.returncode != 0 or not result.stdout:
+            return None
+
+        try:
+            payload = json.loads(result.stdout)
+            raw_duration = payload.get("format", {}).get("duration")
+            if raw_duration is None:
+                return None
+            duration = float(raw_duration)
+            if duration <= 0:
+                return None
+            return duration
+        except (ValueError, TypeError, json.JSONDecodeError):
+            return None
+
+    def _build_candidate_offsets(self, duration: float | None) -> list[float]:
         candidate_offsets: list[float] = []
-        if duration > 0:
+        if duration and duration > 0:
             max_offset = max(duration - 0.01, 0.0)
             candidate_offsets.extend(
                 [
@@ -414,26 +567,21 @@ class ThumbnailPipeline:
                 continue
             seen.add(marker)
             unique_offsets.append(offset)
+        return unique_offsets
 
-        for offset in unique_offsets:
-            frame = self._read_frame_at(capture, offset)
-            if frame is not None:
-                return frame
+    def _find_tool(self, name: str) -> str | None:
+        command = shutil.which(name)
+        if command is not None:
+            return command
 
-        capture.set(cv2.CAP_PROP_POS_FRAMES, 0)
-        for _ in range(10):
-            success, frame = capture.read()
-            if success and frame is not None:
-                return frame
-
-        return None
-
-    def _read_frame_at(self, capture, seconds: float):  # type: ignore[no-untyped-def]
-        capture.set(cv2.CAP_PROP_POS_MSEC, max(0.0, seconds) * 1000.0)
-        success, frame = capture.read()
-        if not success:
+        if platform.system() != "Darwin":
             return None
-        return frame
+
+        for prefix in self._FFMPEG_MACOS_LOCATIONS:
+            candidate = shutil.which(f"{prefix}{name}")
+            if candidate is not None:
+                return candidate
+        return None
 
     def _fit_image(self, image: Image.Image, options: ThumbnailOptions) -> Image.Image:
         target = (options.size, options.size)
