@@ -9,10 +9,8 @@
   "scripts": {
     "dev": "bun run dev:web",
     "dev:web": "bun run --cwd apps/web dev",
-    "dev:desktop": "bun run --cwd apps/desktop dev",
-    "build": "bun run build:web && bun run build:desktop",
+    "build": "bun run build:web",
     "build:web": "bun run --cwd apps/web build",
-    "build:desktop": "bun run --cwd apps/desktop build",
     "lint": "bun run --cwd apps/web lint",
     "test:web": "bun run --cwd apps/web test",
     "generate:openapi": "python -m tagstudio.api.openapi --output packages/api-client/openapi/tagstudio-api.json"

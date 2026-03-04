@@ -4,10 +4,8 @@ import { Button } from "@tagstudio/ui";
 type LibrarySwitcherModalProps = {
   open: boolean;
   libraryPath: string;
-  canPickDirectory: boolean;
   openPending: boolean;
   onLibraryPathChange: (value: string) => void;
-  onBrowse: () => void;
   onOpen: () => void;
   onCreate: () => void;
   onClose: () => void;
@@ -16,10 +14,8 @@ type LibrarySwitcherModalProps = {
 export function LibrarySwitcherModal({
   open,
   libraryPath,
-  canPickDirectory,
   openPending,
   onLibraryPathChange,
-  onBrowse,
   onOpen,
   onCreate,
   onClose
@@ -82,9 +78,6 @@ export function LibrarySwitcherModal({
           }}
         />
         <div className="overlay-panel-actions">
-          <Button variant="secondary" disabled={!canPickDirectory} onClick={onBrowse}>
-            Browse...
-          </Button>
           <Button disabled={!libraryPath || openPending} onClick={onOpen}>
             Open Library
           </Button>

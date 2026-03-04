@@ -44,7 +44,6 @@ This document tracks implementation progress for the browser-first migration wit
 
 - Added Bun workspace with:
   - `apps/web` (primary browser-first React + TypeScript + Vite + Tailwind v4 app)
-  - `apps/desktop` (optional Electron shell, deferred for parity-critical work)
   - `packages/api-client` (typed API client + OpenAPI contract file)
   - `packages/ui` (shared UI primitives)
 
@@ -56,6 +55,5 @@ This document tracks implementation progress for the browser-first migration wit
 
 ## Bun Risk Checkpoint
 
-If Electron build/runtime blockers persist for more than two working days because of Bun-specific
-tooling friction, switch official CI/build package manager to `pnpm` while keeping Bun-compatible
-scripts for local development.
+If Bun-specific workspace/tooling blockers persist for more than two working days, switch official
+CI/build package manager to `pnpm` while keeping Bun-compatible scripts for local development.

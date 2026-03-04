@@ -44,5 +44,5 @@ This baseline maps the current Qt implementation to migration target workflows.
 
 ## Migration Acceptance Snapshot
 
-Daily workflow parity is considered met when the web/Electron frontend implements equivalent
+Daily workflow parity is considered met when the web frontend implements equivalent
 user outcomes for all sections above using the API-driven architecture.

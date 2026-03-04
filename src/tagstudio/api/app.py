@@ -13,7 +13,7 @@ def create_app(*, api_token: str | None = None) -> FastAPI:
 
     app = FastAPI(
         title="TagStudio API",
-        description="Local API for TagStudio desktop/web frontends.",
+        description="Local API for TagStudio web frontend.",
         version="0.1.0",
     )
     app.add_middleware(

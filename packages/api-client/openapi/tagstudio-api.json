@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "TagStudio API",
-    "description": "Local API for TagStudio desktop/web frontends.",
+    "description": "Local API for TagStudio web frontend.",
     "version": "0.1.0"
   },
   "paths": {

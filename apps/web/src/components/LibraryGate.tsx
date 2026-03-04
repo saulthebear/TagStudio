@@ -2,20 +2,16 @@ import { Button } from "@tagstudio/ui";
 
 type LibraryGateProps = {
   libraryPath: string;
-  canPickDirectory: boolean;
   openPending: boolean;
   onLibraryPathChange: (value: string) => void;
-  onBrowse: () => void;
   onOpen: () => void;
   onCreate: () => void;
 };
 
 export function LibraryGate({
   libraryPath,
-  canPickDirectory,
   openPending,
   onLibraryPathChange,
-  onBrowse,
   onOpen,
   onCreate
 }: LibraryGateProps) {
@@ -42,9 +38,6 @@ export function LibraryGate({
             onOpen();
           }}
         />
-        <Button variant="secondary" disabled={!canPickDirectory} onClick={onBrowse}>
-          Browse...
-        </Button>
         <Button disabled={!libraryPath || openPending} onClick={onOpen}>
           Open Library
         </Button>

@@ -57,10 +57,6 @@ test("renders normalized image/video media tiles and falls back on media errors"
   const tinyPng = Buffer.from(TINY_PNG_BASE64, "base64");
   const tinyMp4 = Buffer.from(TINY_MP4_BASE64, "base64");
 
-  await page.addInitScript((apiBaseUrl) => {
-    (window as { tagstudioNative?: { apiBaseUrl: string } }).tagstudioNative = { apiBaseUrl };
-  }, API_BASE_URL);
-
   await page.route(`${API_BASE_URL}/api/v1/entries/*/media`, async (route) => {
     const match = /\/entries\/(\d+)\/media$/.exec(new URL(route.request().url()).pathname);
     const entryId = Number(match?.[1] ?? -1);
@@ -167,10 +163,6 @@ test("applies top-bar filter menu toggles with live query sync and request flags
       mobile_active_pane: "grid"
     }
   };
-
-  await page.addInitScript((apiBaseUrl) => {
-    (window as { tagstudioNative?: { apiBaseUrl: string } }).tagstudioNative = { apiBaseUrl };
-  }, API_BASE_URL);
 
   await page.route(`${API_BASE_URL}/api/v1/**`, async (route) => {
     const request = route.request();

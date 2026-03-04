@@ -157,17 +157,13 @@ For video thumbnails and playback, you'll also need [FFmpeg](https://ffmpeg.org/
 >
 > Installation support will not be given to users installing from unofficial sources. Use these versions at your own risk!
 
-## Experimental Web/Electron Foundation
+## Experimental Web Foundation
 
 TagStudio now includes an in-repo foundation for a web-technology interface migration:
 
 -   Python local API server (`src/tagstudio/api`, `tagstudio-api` entry script)
--   Electron shell scaffold (`apps/desktop`)
 -   React + TypeScript + Vite renderer scaffold (`apps/web`)
 -   Shared UI/component and API client packages (`packages/ui`, `packages/api-client`)
-
-Current migration direction in this fork is **browser-first**. Electron remains optional packaging
-and is not required for day-to-day UI development.
 
 To run only the API from the existing launcher, use:
 

@@ -59,7 +59,7 @@ def main():
         dest="frontend",
         choices=["qt", "api"],
         default="qt",
-        help="Frontend to run. 'api' starts the local backend for web/Electron clients.",
+        help="Frontend to run. 'api' starts the local backend for web clients.",
     )
     parser.add_argument(
         "--api-host",

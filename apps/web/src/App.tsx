@@ -127,8 +127,6 @@ export function App() {
   const searchRequestIdRef = useRef(0);
   const lastLibraryModalTriggerRef = useRef<HTMLElement | null>(null);
 
-  const canPickDirectory = typeof window.tagstudioNative?.pickDirectory === "function";
-
   const [libraryPath, setLibraryPath] = useState("");
   const [activeLibraryPath, setActiveLibraryPath] = useState<string | null>(null);
   const [searchInput, setSearchInput] = useState("");
@@ -564,17 +562,6 @@ export function App() {
     settingsHydrated
   ]);
 
-  const browseDirectory = async () => {
-    const picker = window.tagstudioNative?.pickDirectory;
-    if (!picker) {
-      return;
-    }
-    const selected = await picker();
-    if (selected) {
-      setLibraryPath(selected);
-    }
-  };
-
   const openLibraryModal = () => {
     lastLibraryModalTriggerRef.current =
       document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -705,10 +692,8 @@ export function App() {
       {!isLibraryOpen ? (
         <LibraryGate
           libraryPath={libraryPath}
-          canPickDirectory={canPickDirectory}
           openPending={openLibrary.isPending}
           onLibraryPathChange={setLibraryPath}
-          onBrowse={() => void browseDirectory()}
           onOpen={() => openLibrary.mutate("open")}
           onCreate={() => openLibrary.mutate("create")}
         />
@@ -837,10 +822,8 @@ export function App() {
       <LibrarySwitcherModal
         open={libraryModalOpen}
         libraryPath={libraryPath}
-        canPickDirectory={canPickDirectory}
         openPending={openLibrary.isPending}
         onLibraryPathChange={setLibraryPath}
-        onBrowse={() => void browseDirectory()}
         onOpen={() => openLibrary.mutate("open")}
         onCreate={() => openLibrary.mutate("create")}
         onClose={closeLibraryModal}
