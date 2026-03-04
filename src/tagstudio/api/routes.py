@@ -25,15 +25,15 @@ from tagstudio.api.schemas import (
     SettingsResponse,
     SettingsUpdateRequest,
     SuccessResponse,
-    ThumbnailFit,
-    ThumbnailKind,
-    ThumbnailPrewarmRequest,
-    ThumbnailPrewarmResponse,
     TagCreateRequest,
     TagMutationRequest,
     TagMutationResponse,
     TagResponse,
     TagUpdateRequest,
+    ThumbnailFit,
+    ThumbnailKind,
+    ThumbnailPrewarmRequest,
+    ThumbnailPrewarmResponse,
     UpdateFieldRequest,
 )
 from tagstudio.api.serializers import serialize_entry, serialize_entry_summary, serialize_tag
@@ -312,7 +312,10 @@ def create_router(*, state: ApiState, jobs: JobManager) -> APIRouter:
         except FileNotFoundError as exc:
             raise HTTPException(status_code=404, detail="Entry file not found.") from exc
         except ThumbnailUnsupportedError as exc:
-            raise HTTPException(status_code=415, detail="Thumbnail unsupported for this file.") from exc
+            raise HTTPException(
+                status_code=415,
+                detail="Thumbnail unsupported for this file.",
+            ) from exc
 
         return FileResponse(
             thumbnail_path,

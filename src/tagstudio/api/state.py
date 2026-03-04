@@ -1,13 +1,13 @@
 import json
+import os
 from copy import deepcopy
 from dataclasses import dataclass, field
-import os
 from pathlib import Path
 from threading import RLock
 from typing import Any
 
-from tagstudio.core.media.thumbnail_pipeline import ThumbnailPipeline
 from tagstudio.core.library.alchemy.library import Library, LibraryStatus
+from tagstudio.core.media.thumbnail_pipeline import ThumbnailPipeline
 
 
 def _env_int(name: str, default: int) -> int:
@@ -192,7 +192,10 @@ class ApiState:
         layout["inspector_split_ratio"] = _clamp_ratio(layout.get("inspector_split_ratio"), 0.52)
         layout["preview_collapsed"] = bool(layout.get("preview_collapsed", False))
         layout["metadata_collapsed"] = bool(layout.get("metadata_collapsed", False))
-        layout["inspector_last_open_ratio"] = _clamp_ratio(layout.get("inspector_last_open_ratio"), 0.52)
+        layout["inspector_last_open_ratio"] = _clamp_ratio(
+            layout.get("inspector_last_open_ratio"),
+            0.52,
+        )
         mobile_active_pane = str(layout.get("mobile_active_pane", "grid"))
         if mobile_active_pane not in {"grid", "preview", "metadata"}:
             mobile_active_pane = "grid"

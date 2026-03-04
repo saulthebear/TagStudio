@@ -10,9 +10,9 @@ from fastapi.testclient import TestClient
 from PIL import Image
 
 from tagstudio.api.app import create_app
-from tagstudio.core.media.thumbnail_pipeline import ThumbnailPipeline, ThumbnailUnsupportedError
 from tagstudio.core.library.alchemy.library import Library
 from tagstudio.core.library.alchemy.models import Entry, Tag
+from tagstudio.core.media.thumbnail_pipeline import ThumbnailPipeline, ThumbnailUnsupportedError
 from tagstudio.core.utils.types import unwrap
 
 TINY_PNG_BASE64 = (
@@ -307,17 +307,14 @@ def test_thumbnail_lock_is_released_after_generation_failure() -> None:
 
             pipeline = app.state.tagstudio.get_thumbnail_pipeline()
             assert pipeline is not None
-            original_render = pipeline._render_thumbnail
 
-            def fail_render(*_args, **_kwargs):
-                raise ThumbnailUnsupportedError("simulated failure")
-
-            pipeline._render_thumbnail = fail_render  # type: ignore[method-assign]
-            try:
+            with patch.object(
+                pipeline,
+                "_render_thumbnail",
+                side_effect=ThumbnailUnsupportedError("simulated failure"),
+            ):
                 first = client.get(f"/api/v1/entries/{image_entry_id}/thumbnail")
                 second = client.get(f"/api/v1/entries/{image_entry_id}/thumbnail")
-            finally:
-                pipeline._render_thumbnail = original_render  # type: ignore[method-assign]
 
             assert first.status_code == 415
             assert second.status_code == 415
@@ -333,6 +330,7 @@ def test_thumbnail_pipeline_video_falls_back_to_ffmpeg_when_opencv_fails() -> No
 
             options = pipeline._resolve_options(size=128, fit="cover", kind="grid")
             frame = Image.new("RGB", (48, 32), (255, 0, 0))
+            original_ffmpeg_cmd = pipeline._ffmpeg_cmd
 
             with (
                 patch.object(pipeline, "_render_video_with_opencv", return_value=None),
@@ -340,10 +338,14 @@ def test_thumbnail_pipeline_video_falls_back_to_ffmpeg_when_opencv_fails() -> No
                 patch.object(
                     pipeline,
                     "_extract_video_frame_with_ffmpeg",
-                    side_effect=[frame, None],
+                    side_effect=[frame],
                 ),
             ):
-                result = pipeline._render_video(video_path, options)
+                pipeline._ffmpeg_cmd = "ffmpeg"
+                try:
+                    result = pipeline._render_video(video_path, options)
+                finally:
+                    pipeline._ffmpeg_cmd = original_ffmpeg_cmd
 
             assert result is not None
             assert result.size == (128, 128)

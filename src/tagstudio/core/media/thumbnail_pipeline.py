@@ -10,7 +10,7 @@ import threading
 from dataclasses import dataclass
 from pathlib import Path
 from queue import Empty, PriorityQueue
-from typing import Literal
+from typing import Any, Literal
 
 import structlog
 from PIL import Image, ImageOps, UnidentifiedImageError
@@ -334,9 +334,7 @@ class ThumbnailPipeline:
             max_bytes = self._cache_max_bytes
 
         files = [
-            cache_file
-            for cache_file in self.cache_root.rglob("*.webp")
-            if cache_file.is_file()
+            cache_file for cache_file in self.cache_root.rglob("*.webp") if cache_file.is_file()
         ]
         if not files:
             return
@@ -425,7 +423,7 @@ class ThumbnailPipeline:
 
         return None
 
-    def _extract_video_frame(self, capture):  # type: ignore[no-untyped-def]
+    def _extract_video_frame(self, capture: Any) -> Any | None:
         frame_count = float(capture.get(cv2.CAP_PROP_FRAME_COUNT))
         fps = float(capture.get(cv2.CAP_PROP_FPS))
 
@@ -446,14 +444,16 @@ class ThumbnailPipeline:
 
         return None
 
-    def _read_frame_at(self, capture, seconds: float):  # type: ignore[no-untyped-def]
+    def _read_frame_at(self, capture: Any, seconds: float) -> Any | None:
         capture.set(cv2.CAP_PROP_POS_MSEC, max(0.0, seconds) * 1000.0)
         success, frame = capture.read()
         if not success:
             return None
         return frame
 
-    def _extract_video_frame_with_ffmpeg(self, entry_path: Path, seconds: float) -> Image.Image | None:
+    def _extract_video_frame_with_ffmpeg(
+        self, entry_path: Path, seconds: float
+    ) -> Image.Image | None:
         if self._ffmpeg_cmd is None:
             return None
 
@@ -475,8 +475,22 @@ class ThumbnailPipeline:
         ]
 
         commands: list[list[str]] = [
-            [*ffmpeg_prefix, "-ss", f"{normalized_seconds:.3f}", "-i", str(entry_path), *ffmpeg_suffix],
-            [*ffmpeg_prefix, "-i", str(entry_path), "-ss", f"{normalized_seconds:.3f}", *ffmpeg_suffix],
+            [
+                *ffmpeg_prefix,
+                "-ss",
+                f"{normalized_seconds:.3f}",
+                "-i",
+                str(entry_path),
+                *ffmpeg_suffix,
+            ],
+            [
+                *ffmpeg_prefix,
+                "-i",
+                str(entry_path),
+                "-ss",
+                f"{normalized_seconds:.3f}",
+                *ffmpeg_suffix,
+            ],
             [*ffmpeg_prefix, "-i", str(entry_path), *ffmpeg_suffix],
         ]
 
