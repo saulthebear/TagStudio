@@ -157,6 +157,22 @@ For video thumbnails and playback, you'll also need [FFmpeg](https://ffmpeg.org/
 >
 > Installation support will not be given to users installing from unofficial sources. Use these versions at your own risk!
 
+## Experimental Web Foundation
+
+TagStudio now includes an in-repo foundation for a web-technology interface migration:
+
+-   Python local API server (`src/tagstudio/api`, `tagstudio-api` entry script)
+-   React + TypeScript + Vite renderer scaffold (`apps/web`)
+-   Shared UI/component and API client packages (`packages/ui`, `packages/api-client`)
+
+To run only the API from the existing launcher, use:
+
+```sh
+python src/tagstudio/main.py --frontend api --api-port 5987
+```
+
+Migration tracking and parity checklist live at [`docs/web-migration.md`](docs/web-migration.md).
+
 ## Goals & Priorities
 
 TagStudio aims to create an **open** and **robust** format for file tagging that isn't burdened by the limitations of traditional tagging and file metadata systems. **TagStudio** is the first proof-of-concept implementation of this system.

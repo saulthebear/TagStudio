@@ -103,9 +103,9 @@ from tagstudio.core.library.alchemy.models import (
     Version,
 )
 from tagstudio.core.library.alchemy.visitors import SQLBoolExpressionBuilder
+from tagstudio.core.i18n import tr
 from tagstudio.core.library.json.library import Library as JsonLibrary
 from tagstudio.core.utils.types import unwrap
-from tagstudio.qt.translations import Translations
 
 if TYPE_CHECKING:
     from sqlalchemy import Select
@@ -406,9 +406,11 @@ class Library:
                 if loaded_db_version < 6 or (
                     loaded_db_version >= 100 and loaded_db_version // 100 > DB_VERSION // 100
                 ):
-                    mismatch_text = Translations["status.library_version_mismatch"]
-                    found_text = Translations["status.library_version_found"]
-                    expected_text = Translations["status.library_version_expected"]
+                    mismatch_text = tr(
+                        "status.library_version_mismatch", "Library version mismatch."
+                    )
+                    found_text = tr("status.library_version_found", "Found")
+                    expected_text = tr("status.library_version_expected", "Expected")
                     return LibraryStatus(
                         success=False,
                         message=(
@@ -806,10 +808,17 @@ class Library:
             # if with_tags:
             #     entry_stmt = entry_stmt.outerjoin(Entry.tags).options(selectinload(Entry.tags))
             if with_tags:
-                tag_stmt = select(Tag).where(
-                    and_(
-                        TagEntry.tag_id == Tag.id,
-                        TagEntry.entry_id == entry_id,
+                tag_stmt = (
+                    select(Tag)
+                    .where(
+                        and_(
+                            TagEntry.tag_id == Tag.id,
+                            TagEntry.entry_id == entry_id,
+                        )
+                    )
+                    .options(
+                        selectinload(Tag.aliases),
+                        selectinload(Tag.parent_tags),
                     )
                 )
 
@@ -942,8 +951,8 @@ class Library:
     @property
     def tags(self) -> list[Tag]:
         with Session(self.engine) as session:
-            # load all tags and join parent tags
-            tags_query = select(Tag).options(selectinload(Tag.parent_tags))
+            # load all tag relationships used by API serialization before detaching
+            tags_query = select(Tag).options(selectinload(Tag.parent_tags), selectinload(Tag.aliases))
             tags = session.scalars(tags_query).unique()
             tags_list = list(tags)
 
@@ -1170,35 +1179,29 @@ class Library:
             session.commit()
         return True
 
-    def remove_tag(self, tag_id: int):
+    def remove_tag(self, tag_id: int) -> bool:
         with Session(self.engine, expire_on_commit=False) as session:
             try:
-                aliases = session.scalars(select(TagAlias).where(TagAlias.tag_id == tag_id))
-                for alias in aliases:
-                    session.delete(alias)
-                    session.flush()
-
-                tag_parents = session.scalars(
-                    select(TagParent).where(TagParent.parent_id == tag_id)
-                ).all()
-                for tag_parent in tag_parents:
-                    session.delete(tag_parent)
-                    session.flush()
-
-                disam_stmt = (
+                session.execute(delete(TagAlias).where(TagAlias.tag_id == tag_id))
+                session.execute(delete(TagEntry).where(TagEntry.tag_id == tag_id))
+                session.execute(
+                    delete(TagParent).where(
+                        or_(TagParent.child_id == tag_id, TagParent.parent_id == tag_id)
+                    )
+                )
+                session.execute(
                     update(Tag)
                     .where(Tag.disambiguation_id == tag_id)
                     .values(disambiguation_id=None)
                 )
-                session.execute(disam_stmt)
-                session.flush()
-
-                session.query(Tag).filter_by(id=tag_id).delete()
+                session.execute(delete(Tag).where(Tag.id == tag_id))
                 session.commit()
 
             except IntegrityError as e:
                 logger.error(e)
                 session.rollback()
+                return False
+        return True
 
     def update_field_position(
         self,

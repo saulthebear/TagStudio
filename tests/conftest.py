@@ -10,7 +10,6 @@ from tempfile import TemporaryDirectory
 from unittest.mock import Mock, patch
 
 import pytest
-from PySide6.QtWidgets import QScrollArea
 
 CWD = Path(__file__).parent
 # this needs to be above `src` imports
@@ -20,8 +19,6 @@ from tagstudio.core.constants import THUMB_CACHE_NAME, TS_FOLDER_NAME
 from tagstudio.core.library.alchemy.library import Library
 from tagstudio.core.library.alchemy.models import Entry, Tag
 from tagstudio.core.utils.types import unwrap
-from tagstudio.qt.thumb_grid_layout import ThumbGridLayout
-from tagstudio.qt.ts_qt import QtDriver
 
 
 @pytest.fixture
@@ -155,6 +152,11 @@ def entry_full(library: Library):
 
 @pytest.fixture
 def qt_driver(library: Library, library_dir: Path):
+    from PySide6.QtWidgets import QScrollArea
+
+    from tagstudio.qt.thumb_grid_layout import ThumbGridLayout
+    from tagstudio.qt.ts_qt import QtDriver
+
     class Args:
         settings_file = library_dir / "settings.toml"
         cache_file = library_dir / "tagstudio.ini"

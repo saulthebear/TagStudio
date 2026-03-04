@@ -12,7 +12,6 @@ import traceback
 import structlog
 
 from tagstudio.core.constants import VERSION, VERSION_BRANCH
-from tagstudio.qt.ts_qt import QtDriver
 
 logger = structlog.get_logger(__name__)
 
@@ -56,6 +55,34 @@ def main():
         help="Reveals additional internal data useful for debugging.",
     )
     parser.add_argument(
+        "--frontend",
+        dest="frontend",
+        choices=["qt", "api"],
+        default="qt",
+        help="Frontend to run. 'api' starts the local backend for web clients.",
+    )
+    parser.add_argument(
+        "--api-host",
+        dest="api_host",
+        type=str,
+        default="127.0.0.1",
+        help="Host for --frontend api mode.",
+    )
+    parser.add_argument(
+        "--api-port",
+        dest="api_port",
+        type=int,
+        default=5987,
+        help="Port for --frontend api mode.",
+    )
+    parser.add_argument(
+        "--api-token",
+        dest="api_token",
+        type=str,
+        default=None,
+        help="Optional API token for --frontend api mode.",
+    )
+    parser.add_argument(
         "-v",
         "--version",
         action="version",
@@ -63,6 +90,17 @@ def main():
         version=f"TagStudio v{VERSION} {VERSION_BRANCH}",
     )
     args = parser.parse_args()
+
+    if args.frontend == "api":
+        from tagstudio.api.app import create_app
+
+        import uvicorn
+
+        app = create_app(api_token=args.api_token)
+        uvicorn.run(app, host=args.api_host, port=args.api_port, log_level="info")
+        return
+
+    from tagstudio.qt.ts_qt import QtDriver
 
     driver = QtDriver(args)
     ui_name = "Qt"

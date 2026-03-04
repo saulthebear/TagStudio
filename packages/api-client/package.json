@@ -1,0 +1,12 @@
+{
+  "name": "@tagstudio/api-client",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "generate": "python -m tagstudio.api.openapi --output openapi/tagstudio-api.json"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}

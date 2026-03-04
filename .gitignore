@@ -268,3 +268,9 @@ TagStudio.ini
 
 result
 result-*
+
+# Node/Bun workspace artifacts
+node_modules/
+bun.lockb
+apps/*/dist/
+apps/*/.vite/

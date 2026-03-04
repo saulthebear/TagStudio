@@ -1,0 +1,36 @@
+name: Web Checks
+
+on:
+  pull_request:
+    paths:
+      - "apps/**"
+      - "packages/**"
+      - "package.json"
+      - "tsconfig.base.json"
+      - "bunfig.toml"
+  push:
+    branches:
+      - main
+    paths:
+      - "apps/**"
+      - "packages/**"
+      - "package.json"
+      - "tsconfig.base.json"
+      - "bunfig.toml"
+
+jobs:
+  web-build:
+    name: Build Web Workspace
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Build web app
+        run: bun run build:web

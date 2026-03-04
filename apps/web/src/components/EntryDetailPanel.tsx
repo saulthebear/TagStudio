@@ -1,0 +1,154 @@
+import { type EntryResponse, type FieldTypeResponse, type TagResponse } from "@tagstudio/api-client";
+import { Button } from "@tagstudio/ui";
+
+type EntryDetailPanelProps = {
+  selectedEntry: EntryResponse | null;
+  tagsDisplay: string;
+  tagQuery: string;
+  selectedTagId: string;
+  fieldDrafts: Record<string, string>;
+  newFieldKey: string;
+  newFieldValue: string;
+  availableTags: TagResponse[];
+  fieldTypes: FieldTypeResponse[];
+  addTagPending: boolean;
+  updateFieldPending: boolean;
+  onTagQueryChange: (value: string) => void;
+  onSelectedTagChange: (value: string) => void;
+  onAddTag: () => void;
+  onRemoveTag: (tagId: number) => void;
+  onFieldDraftChange: (fieldKey: string, value: string) => void;
+  onSaveField: (fieldKey: string, value: string) => void;
+  onNewFieldKeyChange: (value: string) => void;
+  onNewFieldValueChange: (value: string) => void;
+  onApplyField: () => void;
+};
+
+export function EntryDetailPanel({
+  selectedEntry,
+  tagsDisplay,
+  tagQuery,
+  selectedTagId,
+  fieldDrafts,
+  newFieldKey,
+  newFieldValue,
+  availableTags,
+  fieldTypes,
+  addTagPending,
+  updateFieldPending,
+  onTagQueryChange,
+  onSelectedTagChange,
+  onAddTag,
+  onRemoveTag,
+  onFieldDraftChange,
+  onSaveField,
+  onNewFieldKeyChange,
+  onNewFieldValueChange,
+  onApplyField
+}: EntryDetailPanelProps) {
+  return (
+    <div className="panel min-h-[360px]">
+      <h2 className="panel-title mt-0">Entry Detail</h2>
+      {selectedEntry ? (
+        <div className="space-y-2 text-sm">
+          <div>
+            <strong>Path:</strong> {selectedEntry.path}
+          </div>
+          <div>
+            <strong>Tags:</strong> {tagsDisplay || "none"}
+          </div>
+          <div className="space-y-2">
+            <strong>Tag Actions:</strong>
+            <div className="flex gap-2">
+              <input
+                className="w-full rounded-xl border border-[var(--color-border-soft)] bg-white/95 px-2 py-1 text-sm"
+                placeholder="Filter tags..."
+                value={tagQuery}
+                onChange={(event) => onTagQueryChange(event.target.value)}
+              />
+              <select
+                className="max-w-56 rounded-xl border border-[var(--color-border-soft)] bg-white/95 px-2 py-1 text-sm"
+                value={selectedTagId}
+                onChange={(event) => onSelectedTagChange(event.target.value)}
+              >
+                <option value="">Select tag</option>
+                {availableTags.map((tag) => (
+                  <option key={tag.id} value={String(tag.id)}>
+                    {tag.name}
+                  </option>
+                ))}
+              </select>
+              <Button variant="secondary" disabled={!selectedTagId || addTagPending} onClick={onAddTag}>
+                Add
+              </Button>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {selectedEntry.tags.map((tag) => (
+                <button
+                  key={tag.id}
+                  type="button"
+                  className="rounded-xl border border-[var(--color-border-soft)] px-2 py-1 text-xs"
+                  onClick={() => onRemoveTag(tag.id)}
+                >
+                  Remove {tag.name}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <strong>Fields:</strong>
+            <ul className="m-0 mt-1 list-none space-y-2 p-0">
+              {selectedEntry.fields.map((field) => (
+                <li key={field.id}>
+                  <div className="mb-1 font-medium">{field.type_name}</div>
+                  <div className="flex gap-2">
+                    <input
+                      className="w-full rounded-xl border border-[var(--color-border-soft)] bg-white/95 px-2 py-1 text-sm"
+                      value={fieldDrafts[field.type_key] ?? ""}
+                      onChange={(event) => onFieldDraftChange(field.type_key, event.target.value)}
+                    />
+                    <Button
+                      variant="secondary"
+                      disabled={updateFieldPending}
+                      onClick={() => onSaveField(field.type_key, fieldDrafts[field.type_key] ?? "")}
+                    >
+                      Save
+                    </Button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div className="space-y-1">
+            <strong>Add/Update Field:</strong>
+            <div className="flex gap-2">
+              <select
+                className="rounded-xl border border-[var(--color-border-soft)] bg-white/95 px-2 py-1 text-sm"
+                value={newFieldKey}
+                onChange={(event) => onNewFieldKeyChange(event.target.value)}
+              >
+                <option value="">Select field type</option>
+                {fieldTypes.map((fieldType) => (
+                  <option key={fieldType.key} value={fieldType.key}>
+                    {fieldType.name}
+                  </option>
+                ))}
+              </select>
+              <input
+                className="w-full rounded-xl border border-[var(--color-border-soft)] bg-white/95 px-2 py-1 text-sm"
+                value={newFieldValue}
+                onChange={(event) => onNewFieldValueChange(event.target.value)}
+                placeholder="Field value"
+              />
+              <Button variant="secondary" disabled={!newFieldKey || updateFieldPending} onClick={onApplyField}>
+                Apply
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <p className="text-sm text-slate-500">Select a result to inspect tags and fields.</p>
+      )}
+    </div>
+  );
+}

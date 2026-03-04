@@ -1,0 +1,18 @@
+{
+  "name": "tagstudio-web-workspace",
+  "private": true,
+  "packageManager": "bun@1.2.4",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "bun run dev:web",
+    "dev:web": "bun run --cwd apps/web dev",
+    "build": "bun run build:web",
+    "build:web": "bun run --cwd apps/web build",
+    "lint": "bun run --cwd apps/web lint",
+    "test:web": "bun run --cwd apps/web test",
+    "generate:openapi": "python -m tagstudio.api.openapi --output packages/api-client/openapi/tagstudio-api.json"
+  }
+}
