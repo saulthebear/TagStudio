@@ -4,16 +4,60 @@ name = "TagStudio"
 
 [setup]
 script = '''
-if [ ! -f ./.venv/bin/activate ]; then
-  python3.12 -m venv .venv
+#!/usr/bin/env bash
+set -euo pipefail
+
+PYTHON_BIN="${PYTHON_BIN:-python3.12}"
+VENV_DIR=".venv"
+STAMP_FILE="$VENV_DIR/.deps-stamp"
+
+if ! command -v "$PYTHON_BIN" >/dev/null 2>&1; then
+  echo "error: $PYTHON_BIN not found (TagStudio requires Python >=3.12,<3.13)"
+  exit 1
 fi
 
-source ./.venv/bin/activate
+if [ ! -x "$VENV_DIR/bin/python" ]; then
+  "$PYTHON_BIN" -m venv "$VENV_DIR"
+fi
 
-# Reinstall deps only when pyproject changes
-if [ ! -f ./.venv/pyproject.toml ] || ! cmp -s pyproject.toml ./.venv/pyproject.toml; then
+source "$VENV_DIR/bin/activate"
+
+# Ensure venv uses supported interpreter.
+if ! python - <<'PY'
+import sys
+raise SystemExit(0 if sys.version_info[:2] == (3, 12) else 1)
+PY
+then
+  deactivate || true
+  rm -rf "$VENV_DIR"
+  "$PYTHON_BIN" -m venv "$VENV_DIR"
+  source "$VENV_DIR/bin/activate"
+fi
+
+CURRENT_STAMP="$(python - <<'PY'
+import hashlib, pathlib, sys
+h = hashlib.sha256()
+h.update(pathlib.Path("pyproject.toml").read_bytes())
+h.update(sys.version.encode())
+h.update(b".[dev]")
+print(h.hexdigest())
+PY
+)"
+
+NEED_INSTALL=0
+if [ ! -f "$STAMP_FILE" ] || [ "$(cat "$STAMP_FILE")" != "$CURRENT_STAMP" ]; then
+  NEED_INSTALL=1
+fi
+
+# Catch broken/incomplete envs.
+if ! python -c "import fastapi, pytest, mypy" >/dev/null 2>&1; then
+  NEED_INSTALL=1
+fi
+
+if [ "$NEED_INSTALL" -eq 1 ]; then
+  python -m pip install --upgrade pip
   python -m pip install -e ".[dev]"
-  cp pyproject.toml ./.venv/pyproject.toml
+  printf "%s" "$CURRENT_STAMP" > "$STAMP_FILE"
 fi
 '''
 
@@ -24,3 +68,8 @@ command = '''
 bun install
 bun run dev:web
 '''
+
+[[actions]]
+name = "Run Python"
+icon = "tool"
+command = "PYTHONPATH=src .venv/bin/python -m tagstudio.api.main --host 127.0.0.1 --port 5987"
