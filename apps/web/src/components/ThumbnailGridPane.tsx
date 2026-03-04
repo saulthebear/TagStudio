@@ -1,5 +1,5 @@
 import { type EntrySummaryResponse } from "@tagstudio/api-client";
-import { type SyntheticEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type ThumbnailGridPaneProps = {
   entries: EntrySummaryResponse[];
@@ -11,7 +11,14 @@ type ThumbnailGridPaneProps = {
   hasMore: boolean;
   onLoadMore: () => void;
   onSelectEntry: (entryId: number) => void;
-  getMediaUrl: (entryId: number) => string;
+  getThumbnailUrl: (
+    entryId: number,
+    options?: {
+      size?: number;
+      fit?: "cover" | "contain";
+      kind?: "grid" | "preview";
+    }
+  ) => string;
 };
 
 type MediaKind = "image" | "video" | "other";
@@ -31,7 +38,7 @@ const IMAGE_SUFFIXES = new Set([
   "svg"
 ]);
 
-const VIDEO_SUFFIXES = new Set(["mp4", "mov", "mkv", "webm", "avi"]);
+const VIDEO_SUFFIXES = new Set(["mp4", "mov", "mkv", "webm", "avi", "m4v"]);
 const AUDIO_SUFFIXES = new Set(["mp3", "wav", "ogg", "flac", "m4a"]);
 const PDF_SUFFIXES = new Set(["pdf"]);
 const ARCHIVE_SUFFIXES = new Set(["zip", "rar", "7z", "tar", "gz"]);
@@ -78,7 +85,7 @@ export function ThumbnailGridPane({
   hasMore,
   onLoadMore,
   onSelectEntry,
-  getMediaUrl
+  getThumbnailUrl
 }: ThumbnailGridPaneProps) {
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const [failedMediaIds, setFailedMediaIds] = useState<Set<number>>(() => new Set());
@@ -92,24 +99,6 @@ export function ThumbnailGridPane({
       next.add(entryId);
       return next;
     });
-  }, []);
-
-  const seekVideoToPreviewFrame = useCallback((event: SyntheticEvent<HTMLVideoElement>) => {
-    const video = event.currentTarget;
-    video.pause();
-    if (!Number.isFinite(video.duration) || video.duration <= 0) {
-      return;
-    }
-    const safeMax = Math.max(video.duration - 0.01, 0);
-    const previewTime = Math.min(0.1, safeMax);
-    if (previewTime <= 0) {
-      return;
-    }
-    try {
-      video.currentTime = previewTime;
-    } catch {
-      // Ignore seek failures and keep the default first frame.
-    }
   }, []);
 
   useEffect(() => {
@@ -189,25 +178,20 @@ export function ThumbnailGridPane({
                 aria-selected={selected}
               >
                 <div className="thumb-media">
-                  {showMedia && mediaKind === "image" ? (
+                  {showMedia ? (
                     <img
-                      src={getMediaUrl(entry.id)}
+                      src={getThumbnailUrl(entry.id, { kind: "grid", fit: "cover" })}
                       alt={entry.filename}
                       loading="lazy"
+                      decoding="async"
                       className="thumb-media-image"
                       onError={() => markMediaFailed(entry.id)}
                     />
                   ) : null}
                   {showMedia && mediaKind === "video" ? (
-                    <video
-                      src={getMediaUrl(entry.id)}
-                      muted
-                      playsInline
-                      preload="metadata"
-                      className="thumb-media-video"
-                      onLoadedMetadata={seekVideoToPreviewFrame}
-                      onError={() => markMediaFailed(entry.id)}
-                    />
+                    <span className="thumb-video-badge" aria-hidden="true">
+                      ▶
+                    </span>
                   ) : null}
                   {!showMedia ? <span className="thumb-media-icon">{iconForSuffix(entry.suffix)}</span> : null}
                 </div>

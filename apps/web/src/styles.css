@@ -279,6 +279,7 @@ body {
 }
 
 .thumb-media {
+  position: relative;
   width: 100%;
   aspect-ratio: 1 / 1;
   border-radius: 0.8rem;
@@ -308,6 +309,22 @@ body {
   padding: 0.25rem 0.45rem;
   border: 1px solid #334155;
   border-radius: 0.45rem;
+}
+
+.thumb-video-badge {
+  position: absolute;
+  right: 0.45rem;
+  bottom: 0.45rem;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 999px;
+  border: 1px solid rgb(255 255 255 / 0.35);
+  background: rgb(15 23 42 / 0.72);
+  color: #e2e8f0;
+  display: grid;
+  place-items: center;
+  font-size: 0.7rem;
+  line-height: 1;
 }
 
 .thumb-label {

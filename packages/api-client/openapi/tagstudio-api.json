@@ -443,6 +443,117 @@
         }
       }
     },
+    "/api/v1/entries/{entry_id}/thumbnail": {
+      "get": {
+        "summary": "Entry Thumbnail",
+        "operationId": "entry_thumbnail_api_v1_entries__entry_id__thumbnail_get",
+        "parameters": [
+          {
+            "name": "entry_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Entry Id"
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "maximum": 2048,
+                  "minimum": 32
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Size"
+            }
+          },
+          {
+            "name": "fit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ThumbnailFit",
+              "default": "cover"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ThumbnailKind",
+              "default": "grid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/thumbnails/prewarm": {
+      "post": {
+        "summary": "Prewarm Thumbnails",
+        "operationId": "prewarm_thumbnails_api_v1_thumbnails_prewarm_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ThumbnailPrewarmRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThumbnailPrewarmResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/entries/{entry_id}/fields/{field_key}": {
       "patch": {
         "summary": "Update Entry Field",
@@ -1353,6 +1464,28 @@
             ],
             "title": "Media Url"
           },
+          "thumbnail_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thumbnail Url"
+          },
+          "poster_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Poster Url"
+          },
           "text_excerpt": {
             "anyOf": [
               {
@@ -1474,6 +1607,9 @@
           },
           "layout": {
             "$ref": "#/components/schemas/LayoutSettings"
+          },
+          "thumbnails": {
+            "$ref": "#/components/schemas/ThumbnailSettings"
           }
         },
         "type": "object",
@@ -1530,6 +1666,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/LayoutSettingsUpdateRequest"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "thumbnails": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ThumbnailSettingsUpdateRequest"
               },
               {
                 "type": "null"
@@ -1878,6 +2024,177 @@
         },
         "type": "object",
         "title": "TagUpdateRequest"
+      },
+      "ThumbnailFit": {
+        "type": "string",
+        "enum": [
+          "cover",
+          "contain"
+        ],
+        "title": "ThumbnailFit"
+      },
+      "ThumbnailKind": {
+        "type": "string",
+        "enum": [
+          "grid",
+          "preview"
+        ],
+        "title": "ThumbnailKind"
+      },
+      "ThumbnailPrewarmRequest": {
+        "properties": {
+          "entry_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "title": "Entry Ids"
+          },
+          "size": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 2048.0,
+                "minimum": 32.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size"
+          },
+          "fit": {
+            "$ref": "#/components/schemas/ThumbnailFit",
+            "default": "cover"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ThumbnailKind",
+            "default": "grid"
+          },
+          "priority": {
+            "$ref": "#/components/schemas/ThumbnailPriority",
+            "default": "background"
+          }
+        },
+        "type": "object",
+        "title": "ThumbnailPrewarmRequest"
+      },
+      "ThumbnailPrewarmResponse": {
+        "properties": {
+          "accepted": {
+            "type": "integer",
+            "title": "Accepted",
+            "default": 0
+          },
+          "skipped": {
+            "type": "integer",
+            "title": "Skipped",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "ThumbnailPrewarmResponse"
+      },
+      "ThumbnailPriority": {
+        "type": "string",
+        "enum": [
+          "foreground",
+          "background"
+        ],
+        "title": "ThumbnailPriority"
+      },
+      "ThumbnailSettings": {
+        "properties": {
+          "cache_max_mib": {
+            "type": "integer",
+            "maximum": 16384.0,
+            "minimum": 64.0,
+            "title": "Cache Max Mib",
+            "default": 512
+          },
+          "grid_size": {
+            "type": "integer",
+            "maximum": 2048.0,
+            "minimum": 32.0,
+            "title": "Grid Size",
+            "default": 256
+          },
+          "preview_size": {
+            "type": "integer",
+            "maximum": 2048.0,
+            "minimum": 32.0,
+            "title": "Preview Size",
+            "default": 768
+          },
+          "quality": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Quality",
+            "default": 80
+          }
+        },
+        "type": "object",
+        "title": "ThumbnailSettings"
+      },
+      "ThumbnailSettingsUpdateRequest": {
+        "properties": {
+          "cache_max_mib": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 16384.0,
+                "minimum": 64.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cache Max Mib"
+          },
+          "grid_size": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 2048.0,
+                "minimum": 32.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grid Size"
+          },
+          "preview_size": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 2048.0,
+                "minimum": 32.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preview Size"
+          },
+          "quality": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 100.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quality"
+          }
+        },
+        "type": "object",
+        "title": "ThumbnailSettingsUpdateRequest"
       },
       "UpdateFieldRequest": {
         "properties": {
