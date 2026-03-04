@@ -1,6 +1,6 @@
-from dataclasses import dataclass, field
-from copy import deepcopy
 import json
+from copy import deepcopy
+from dataclasses import dataclass, field
 from pathlib import Path
 from threading import RLock
 from typing import Any
@@ -29,11 +29,7 @@ DEFAULT_WEB_SETTINGS: dict[str, Any] = {
 def _deep_merge(base: dict[str, Any], updates: dict[str, Any]) -> dict[str, Any]:
     merged = deepcopy(base)
     for key, value in updates.items():
-        if (
-            key in merged
-            and isinstance(merged[key], dict)
-            and isinstance(value, dict)
-        ):
+        if key in merged and isinstance(merged[key], dict) and isinstance(value, dict):
             merged[key] = _deep_merge(merged[key], value)
         else:
             merged[key] = value

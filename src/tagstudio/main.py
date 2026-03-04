@@ -92,9 +92,9 @@ def main():
     args = parser.parse_args()
 
     if args.frontend == "api":
-        from tagstudio.api.app import create_app
-
         import uvicorn
+
+        from tagstudio.api.app import create_app
 
         app = create_app(api_token=args.api_token)
         uvicorn.run(app, host=args.api_host, port=args.api_port, log_level="info")
