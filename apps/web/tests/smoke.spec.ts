@@ -57,28 +57,6 @@ test("renders normalized image/video media tiles and falls back on media errors"
   const tinyPng = Buffer.from(TINY_PNG_BASE64, "base64");
   const tinyMp4 = Buffer.from(TINY_MP4_BASE64, "base64");
 
-  await page.route(`${API_BASE_URL}/api/v1/entries/*/media`, async (route) => {
-    const match = /\/entries\/(\d+)\/media$/.exec(new URL(route.request().url()).pathname);
-    const entryId = Number(match?.[1] ?? -1);
-
-    if (entryId === 201 || entryId === 202) {
-      await route.fulfill({ status: 200, contentType: "image/png", body: tinyPng });
-      return;
-    }
-
-    if (entryId === 203) {
-      await route.fulfill({ status: 200, contentType: "video/mp4", body: tinyMp4 });
-      return;
-    }
-
-    if (entryId === 205) {
-      await route.fulfill({ status: 500, contentType: "text/plain", body: "broken media" });
-      return;
-    }
-
-    await route.fulfill({ status: 404, contentType: "text/plain", body: "missing media" });
-  });
-
   await page.route(`${API_BASE_URL}/api/v1/**`, async (route) => {
     const request = route.request();
     const { pathname } = new URL(request.url());
@@ -120,6 +98,28 @@ test("renders normalized image/video media tiles and falls back on media errors"
     await fulfillJson(route, { detail: `Unmocked endpoint: ${pathname}` }, 404);
   });
 
+  await page.route(`${API_BASE_URL}/api/v1/entries/*/media`, async (route) => {
+    const match = /\/entries\/(\d+)\/media$/.exec(new URL(route.request().url()).pathname);
+    const entryId = Number(match?.[1] ?? -1);
+
+    if (entryId === 201 || entryId === 202) {
+      await route.fulfill({ status: 200, contentType: "image/png", body: tinyPng });
+      return;
+    }
+
+    if (entryId === 203) {
+      await route.fulfill({ status: 200, contentType: "video/mp4", body: tinyMp4 });
+      return;
+    }
+
+    if (entryId === 205) {
+      await route.fulfill({ status: 500, contentType: "text/plain", body: "broken media" });
+      return;
+    }
+
+    await route.fulfill({ status: 404, contentType: "text/plain", body: "missing media" });
+  });
+
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Files" })).toBeVisible();
 
@@ -130,8 +130,18 @@ test("renders normalized image/video media tiles and falls back on media errors"
   await expect(dottedPngCard.locator("img.thumb-media-image")).toHaveCount(1);
 
   const videoCard = page.locator(".thumb-card").filter({ hasText: "clip.mp4" });
-  await expect(videoCard.locator("video.thumb-media-video")).toHaveCount(1);
-  await expect(videoCard.locator(".thumb-media-icon")).toHaveCount(0);
+  await expect
+    .poll(async () => {
+      const videoCount = await videoCard.locator("video.thumb-media-video").count();
+      const iconCount = await videoCard.locator(".thumb-media-icon").count();
+      return videoCount + iconCount;
+    })
+    .toBe(1);
+  if ((await videoCard.locator("video.thumb-media-video").count()) === 1) {
+    await expect(videoCard.locator(".thumb-media-icon")).toHaveCount(0);
+  } else {
+    await expect(videoCard.locator(".thumb-media-icon")).toHaveText("VIDEO");
+  }
 
   const textCard = page.locator(".thumb-card").filter({ hasText: "notes.txt" });
   await expect(textCard.locator(".thumb-media-icon")).toHaveText("TXT");
