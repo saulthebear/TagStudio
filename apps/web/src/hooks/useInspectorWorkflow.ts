@@ -6,7 +6,9 @@ import {
   type FieldTypeResponse,
   type JobEventPayload,
   type PreviewResponse,
-  type TagResponse
+  type TagCreatePayload,
+  type TagResponse,
+  type TagUpdatePayload
 } from "@tagstudio/api-client";
 
 import { api } from "@/api/client";
@@ -23,30 +25,32 @@ type UseInspectorWorkflowArgs = {
 
 type UseInspectorWorkflowResult = {
   selectedEntry: EntryResponse | null;
+  selectedEntryId: number | null;
   preview: PreviewResponse | undefined;
   fieldDrafts: Record<string, string>;
   setFieldDraft: (fieldKey: string, value: string) => void;
-  selectedTagId: string;
-  setSelectedTagId: (value: string) => void;
-  tagQuery: string;
-  setTagQuery: (value: string) => void;
   newFieldKey: string;
   setNewFieldKey: (value: string) => void;
   newFieldValue: string;
   setNewFieldValue: (value: string) => void;
-  tags: TagResponse[];
+  allTags: TagResponse[];
   fieldTypes: FieldTypeResponse[];
   tagsDisplay: string;
-  addTagPending: boolean;
   updateFieldPending: boolean;
+  tagMutationPending: boolean;
+  tagEditPending: boolean;
   refreshPending: boolean;
   refreshStatus: JobEventPayload | null;
   selectEntry: (entryId: number) => void;
-  addSelectedTag: () => void;
-  removeTagFromEntry: (tagId: number) => void;
+  clearSelection: () => void;
   saveField: (fieldKey: string, value: string) => void;
   applyField: () => void;
   refreshLibrary: () => void;
+  refreshSelectedEntry: () => Promise<void>;
+  addTagToEntries: (entryIds: number[], tagId: number) => Promise<void>;
+  removeTagFromEntries: (entryIds: number[], tagId: number) => Promise<void>;
+  createTag: (payload: TagCreatePayload) => Promise<TagResponse | null>;
+  updateTag: (tagId: number, payload: TagUpdatePayload) => Promise<TagResponse | null>;
   reconcileSelectionWithEntries: (entries: EntrySummaryResponse[]) => void;
 };
 
@@ -70,13 +74,28 @@ export function useInspectorWorkflow({
   const eventStreamRef = useRef<EventSource | null>(null);
   const prewarmedPreviewIdsRef = useRef<Set<number>>(new Set());
 
+  const [selectedEntryId, setSelectedEntryId] = useState<number | null>(null);
   const [selectedEntry, setSelectedEntry] = useState<EntryResponse | null>(null);
   const [fieldDrafts, setFieldDrafts] = useState<Record<string, string>>({});
-  const [selectedTagId, setSelectedTagId] = useState("");
-  const [tagQuery, setTagQuery] = useState("");
   const [newFieldKey, setNewFieldKey] = useState("");
   const [newFieldValue, setNewFieldValue] = useState("");
   const [refreshStatus, setRefreshStatus] = useState<JobEventPayload | null>(null);
+
+  const syncSearchResults = useCallback(async () => {
+    await executeSearch({ query: activeQuery, pageIndex: 0, append: false });
+  }, [activeQuery, executeSearch]);
+
+  const refreshSelectedEntry = useCallback(async () => {
+    if (!selectedEntryId) {
+      setSelectedEntry(null);
+      setFieldDrafts({});
+      return;
+    }
+
+    const entry = await api.getEntry(selectedEntryId);
+    setSelectedEntry(entry);
+    setFieldDrafts(buildFieldDrafts(entry));
+  }, [selectedEntryId]);
 
   useEffect(
     () => () => {
@@ -87,10 +106,9 @@ export function useInspectorWorkflow({
 
   useEffect(() => {
     eventStreamRef.current?.close();
+    setSelectedEntryId(null);
     setSelectedEntry(null);
     setFieldDrafts({});
-    setSelectedTagId("");
-    setTagQuery("");
     setNewFieldKey("");
     setNewFieldValue("");
     setRefreshStatus(null);
@@ -121,16 +139,16 @@ export function useInspectorWorkflow({
     enabled: isLibraryOpen
   });
 
-  const tags = useQuery({
-    queryKey: ["tags", activeLibraryPath, tagQuery],
-    queryFn: () => api.getTags(tagQuery),
+  const allTags = useQuery({
+    queryKey: ["tags", activeLibraryPath, "all"],
+    queryFn: () => api.getTags(undefined, -1),
     enabled: isLibraryOpen
   });
 
   const preview = useQuery<PreviewResponse>({
-    queryKey: ["preview", selectedEntry?.id],
-    queryFn: () => api.getPreview(selectedEntry!.id),
-    enabled: selectedEntry !== null
+    queryKey: ["preview", selectedEntryId],
+    queryFn: () => api.getPreview(selectedEntryId!),
+    enabled: selectedEntryId !== null
   });
 
   const loadEntry = useMutation({
@@ -159,32 +177,64 @@ export function useInspectorWorkflow({
     }
   });
 
-  const addTagToEntry = useMutation({
-    mutationFn: (payload: { entryId: number; tagId: number }) =>
-      api.addTagsToEntries([payload.entryId], [payload.tagId]),
+  const addTagsMutation = useMutation({
+    mutationFn: (payload: { entryIds: number[]; tagId: number }) =>
+      api.addTagsToEntries(payload.entryIds, [payload.tagId]),
     onSuccess: async (_, payload) => {
       onClearError();
-      const entry = await api.getEntry(payload.entryId);
-      setSelectedEntry(entry);
+      if (selectedEntryId !== null && payload.entryIds.includes(selectedEntryId)) {
+        await refreshSelectedEntry();
+      }
       queryClient.invalidateQueries({ queryKey: ["tags"] });
       queryClient.invalidateQueries({ queryKey: ["library-state"] });
+      await syncSearchResults();
     },
     onError: (error) => {
       onError(error instanceof Error ? error.message : "Failed to add tag.");
     }
   });
 
-  const removeTagFromEntryMutation = useMutation({
-    mutationFn: (payload: { entryId: number; tagId: number }) =>
-      api.removeTagsFromEntries([payload.entryId], [payload.tagId]),
+  const removeTagsMutation = useMutation({
+    mutationFn: (payload: { entryIds: number[]; tagId: number }) =>
+      api.removeTagsFromEntries(payload.entryIds, [payload.tagId]),
     onSuccess: async (_, payload) => {
       onClearError();
-      const entry = await api.getEntry(payload.entryId);
-      setSelectedEntry(entry);
+      if (selectedEntryId !== null && payload.entryIds.includes(selectedEntryId)) {
+        await refreshSelectedEntry();
+      }
       queryClient.invalidateQueries({ queryKey: ["library-state"] });
+      await syncSearchResults();
     },
     onError: (error) => {
       onError(error instanceof Error ? error.message : "Failed to remove tag.");
+    }
+  });
+
+  const createTagMutation = useMutation({
+    mutationFn: (payload: TagCreatePayload) => api.createTag(payload),
+    onSuccess: async () => {
+      onClearError();
+      queryClient.invalidateQueries({ queryKey: ["tags"] });
+      await syncSearchResults();
+    },
+    onError: (error) => {
+      onError(error instanceof Error ? error.message : "Failed to create tag.");
+    }
+  });
+
+  const updateTagMutation = useMutation({
+    mutationFn: (payload: { tagId: number; data: TagUpdatePayload }) =>
+      api.updateTag(payload.tagId, payload.data),
+    onSuccess: async () => {
+      onClearError();
+      if (selectedEntryId !== null) {
+        await refreshSelectedEntry();
+      }
+      queryClient.invalidateQueries({ queryKey: ["tags"] });
+      await syncSearchResults();
+    },
+    onError: (error) => {
+      onError(error instanceof Error ? error.message : "Failed to update tag.");
     }
   });
 
@@ -224,10 +274,19 @@ export function useInspectorWorkflow({
 
   const selectEntry = useCallback(
     (entryId: number) => {
+      setSelectedEntryId(entryId);
       loadEntry.mutate(entryId);
     },
     [loadEntry]
   );
+
+  const clearSelection = useCallback(() => {
+    setSelectedEntryId(null);
+    setSelectedEntry(null);
+    setFieldDrafts({});
+    setNewFieldKey("");
+    setNewFieldValue("");
+  }, []);
 
   const setFieldDraft = useCallback((fieldKey: string, value: string) => {
     setFieldDrafts((prev) => ({
@@ -235,25 +294,6 @@ export function useInspectorWorkflow({
       [fieldKey]: value
     }));
   }, []);
-
-  const addSelectedTag = useCallback(() => {
-    if (!selectedEntry || !selectedTagId) {
-      return;
-    }
-
-    addTagToEntry.mutate({ entryId: selectedEntry.id, tagId: Number(selectedTagId) });
-  }, [addTagToEntry, selectedEntry, selectedTagId]);
-
-  const removeTagFromEntry = useCallback(
-    (tagId: number) => {
-      if (!selectedEntry) {
-        return;
-      }
-
-      removeTagFromEntryMutation.mutate({ entryId: selectedEntry.id, tagId });
-    },
-    [removeTagFromEntryMutation, selectedEntry]
-  );
 
   const saveField = useCallback(
     (fieldKey: string, value: string) => {
@@ -278,19 +318,67 @@ export function useInspectorWorkflow({
     });
   }, [newFieldKey, newFieldValue, selectedEntry, updateEntryField]);
 
+  const addTagToEntries = useCallback(
+    async (entryIds: number[], tagId: number) => {
+      if (entryIds.length === 0) {
+        return;
+      }
+      await addTagsMutation.mutateAsync({ entryIds, tagId });
+    },
+    [addTagsMutation]
+  );
+
+  const removeTagFromEntries = useCallback(
+    async (entryIds: number[], tagId: number) => {
+      if (entryIds.length === 0) {
+        return;
+      }
+      await removeTagsMutation.mutateAsync({ entryIds, tagId });
+    },
+    [removeTagsMutation]
+  );
+
+  const createTag = useCallback(
+    async (payload: TagCreatePayload) => {
+      try {
+        return await createTagMutation.mutateAsync(payload);
+      } catch {
+        return null;
+      }
+    },
+    [createTagMutation]
+  );
+
+  const updateTag = useCallback(
+    async (tagId: number, payload: TagUpdatePayload) => {
+      try {
+        return await updateTagMutation.mutateAsync({ tagId, data: payload });
+      } catch {
+        return null;
+      }
+    },
+    [updateTagMutation]
+  );
+
   const refreshLibrary = useCallback(() => {
     refreshLibraryMutation.mutate();
   }, [refreshLibraryMutation]);
 
-  const reconcileSelectionWithEntries = useCallback((entries: EntrySummaryResponse[]) => {
-    setSelectedEntry((prev) => {
-      if (!prev) {
-        return null;
+  const reconcileSelectionWithEntries = useCallback(
+    (entries: EntrySummaryResponse[]) => {
+      if (selectedEntryId === null) {
+        return;
       }
 
-      return entries.some((entry) => entry.id === prev.id) ? prev : null;
-    });
-  }, []);
+      const stillPresent = entries.some((entry) => entry.id === selectedEntryId);
+      if (stillPresent) {
+        return;
+      }
+
+      clearSelection();
+    },
+    [clearSelection, selectedEntryId]
+  );
 
   const tagsDisplay = useMemo(
     () =>
@@ -302,30 +390,32 @@ export function useInspectorWorkflow({
 
   return {
     selectedEntry,
+    selectedEntryId,
     preview: preview.data,
     fieldDrafts,
     setFieldDraft,
-    selectedTagId,
-    setSelectedTagId,
-    tagQuery,
-    setTagQuery,
     newFieldKey,
     setNewFieldKey,
     newFieldValue,
     setNewFieldValue,
-    tags: tags.data ?? [],
+    allTags: allTags.data ?? [],
     fieldTypes: fieldTypes.data ?? [],
     tagsDisplay,
-    addTagPending: addTagToEntry.isPending,
     updateFieldPending: updateEntryField.isPending,
+    tagMutationPending: addTagsMutation.isPending || removeTagsMutation.isPending,
+    tagEditPending: createTagMutation.isPending || updateTagMutation.isPending,
     refreshPending: refreshLibraryMutation.isPending,
     refreshStatus,
     selectEntry,
-    addSelectedTag,
-    removeTagFromEntry,
+    clearSelection,
     saveField,
     applyField,
     refreshLibrary,
+    refreshSelectedEntry,
+    addTagToEntries,
+    removeTagFromEntries,
+    createTag,
+    updateTag,
     reconcileSelectionWithEntries
   };
 }

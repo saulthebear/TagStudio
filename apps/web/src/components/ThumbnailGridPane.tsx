@@ -1,16 +1,23 @@
 import { type EntrySummaryResponse } from "@tagstudio/api-client";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type MouseEvent as ReactMouseEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState
+} from "react";
 
 type ThumbnailGridPaneProps = {
   entries: EntrySummaryResponse[];
   totalCount: number;
-  selectedEntryId: number | null;
+  selectedEntryIds: number[];
   activeQuery: string;
   searchPending: boolean;
   loadingMore: boolean;
   hasMore: boolean;
   onLoadMore: () => void;
-  onSelectEntry: (entryId: number) => void;
+  onSelectEntry: (entryId: number, event: ReactMouseEvent<HTMLButtonElement>) => void;
   getThumbnailUrl: (
     entryId: number,
     options?: {
@@ -78,7 +85,7 @@ function iconForSuffix(rawSuffix: string): string {
 export function ThumbnailGridPane({
   entries,
   totalCount,
-  selectedEntryId,
+  selectedEntryIds,
   activeQuery,
   searchPending,
   loadingMore,
@@ -166,7 +173,7 @@ export function ThumbnailGridPane({
 
         <div className="thumb-grid" role="listbox" aria-label="Library entries">
           {entries.map((entry) => {
-            const selected = selectedEntryId === entry.id;
+            const selected = selectedEntryIds.includes(entry.id);
             const mediaKind = getMediaKind(entry.suffix);
             const showMedia = mediaKind !== "other" && !failedMediaIds.has(entry.id);
             return (
@@ -174,7 +181,7 @@ export function ThumbnailGridPane({
                 key={entry.id}
                 type="button"
                 className={`thumb-card ${selected ? "thumb-card-selected" : ""}`}
-                onClick={() => onSelectEntry(entry.id)}
+                onClick={(event) => onSelectEntry(entry.id, event)}
                 aria-selected={selected}
               >
                 <div className="thumb-media">

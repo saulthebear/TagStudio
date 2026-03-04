@@ -635,3 +635,253 @@ body {
     grid-template-columns: 1fr;
   }
 }
+
+.metadata-tag-actions {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.metadata-tag-actions-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.metadata-tag-list {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.metadata-tag-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  border: 1px solid var(--color-border-soft);
+  border-radius: 0.6rem;
+  padding: 0.35rem 0.5rem;
+}
+
+.metadata-tag-row-actions {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.metadata-tag-partial {
+  color: #b45309;
+  font-style: normal;
+}
+
+.add-tags-panel {
+  width: min(760px, 100%);
+  max-height: min(92vh, 860px);
+  overflow: hidden;
+}
+
+.add-tags-controls {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.add-tags-limit-row {
+  grid-template-columns: auto minmax(120px, 180px);
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.add-tags-list-shell {
+  border: 1px solid var(--color-border-soft);
+  border-radius: 0.75rem;
+  overflow: hidden;
+  background: white;
+}
+
+.add-tags-row,
+.add-tags-create-row {
+  width: 100%;
+  min-height: 44px;
+  border: 0;
+  border-bottom: 1px solid color-mix(in oklab, var(--color-border-soft) 70%, white 30%);
+  background: transparent;
+  text-align: left;
+}
+
+.add-tags-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.15rem 0.4rem;
+}
+
+.add-tags-row-main {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.45rem 0.55rem;
+  border-radius: 0.6rem;
+  cursor: pointer;
+}
+
+.add-tags-row-main:disabled {
+  cursor: default;
+  opacity: 0.75;
+}
+
+.add-tags-row-state {
+  font-size: 0.78rem;
+  color: #475569;
+}
+
+.add-tags-create-row {
+  border: 2px dashed var(--color-border-strong);
+  margin: 0.4rem;
+  border-radius: 0.6rem;
+  padding: 0.55rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.add-tags-row-highlighted,
+.add-tags-row-highlighted .add-tags-row-main,
+.add-tags-create-row:hover,
+.add-tags-row-main:hover {
+  background: color-mix(in oklab, #3b82f6 12%, white 88%);
+}
+
+.tag-editor-panel {
+  width: min(760px, 100%);
+  max-height: min(92vh, 880px);
+  overflow: auto;
+}
+
+.tag-editor-aliases {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.tag-editor-alias-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.4rem;
+}
+
+.tag-editor-parent-list {
+  border: 1px solid var(--color-border-soft);
+  border-radius: 0.6rem;
+  padding: 0.4rem;
+  max-height: 180px;
+  overflow: auto;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.tag-editor-parent-pill {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid var(--color-border-soft);
+  border-radius: 0.5rem;
+  padding: 0.3rem 0.4rem;
+}
+
+.tag-editor-empty {
+  margin: 0;
+  color: #64748b;
+}
+
+.tag-editor-hint {
+  margin: 0;
+  color: #334155;
+  font-size: 0.8rem;
+}
+
+.tag-editor-preview {
+  margin: 0;
+  color: #1d4ed8;
+  font-size: 0.8rem;
+}
+
+.tag-editor-suboverlay {
+  z-index: 60;
+}
+
+.tag-editor-subpanel {
+  width: min(640px, 100%);
+  max-height: min(84vh, 720px);
+  overflow: auto;
+}
+
+.tag-editor-parent-controls {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.5rem;
+}
+
+.tag-editor-parent-candidates {
+  border: 1px solid var(--color-border-soft);
+  border-radius: 0.7rem;
+  overflow: auto;
+  max-height: 320px;
+}
+
+.tag-editor-candidate-row {
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid color-mix(in oklab, var(--color-border-soft) 70%, white 30%);
+  background: white;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.55rem 0.65rem;
+  cursor: pointer;
+}
+
+.tag-editor-candidate-row:hover {
+  background: color-mix(in oklab, #3b82f6 10%, white 90%);
+}
+
+.tag-editor-candidate-row:disabled {
+  opacity: 0.65;
+  cursor: default;
+}
+
+.tag-editor-color-grid {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.tag-editor-color-title {
+  margin: 0.4rem 0 0.2rem;
+  font-size: 0.85rem;
+  color: #334155;
+}
+
+.tag-editor-color-row {
+  width: 100%;
+  border: 1px solid var(--color-border-soft);
+  background: white;
+  border-radius: 0.6rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.5rem;
+  cursor: pointer;
+}
+
+.tag-editor-color-row:hover {
+  background: color-mix(in oklab, #3b82f6 10%, white 90%);
+}
+
+.tag-editor-color-swatch {
+  width: 1.2rem;
+  height: 1.2rem;
+  border-radius: 0.35rem;
+  border: 1px solid #334155;
+  flex: 0 0 auto;
+}
