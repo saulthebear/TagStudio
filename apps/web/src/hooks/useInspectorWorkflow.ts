@@ -68,6 +68,7 @@ export function useInspectorWorkflow({
 }: UseInspectorWorkflowArgs): UseInspectorWorkflowResult {
   const queryClient = useQueryClient();
   const eventStreamRef = useRef<EventSource | null>(null);
+  const prewarmedPreviewIdsRef = useRef<Set<number>>(new Set());
 
   const [selectedEntry, setSelectedEntry] = useState<EntryResponse | null>(null);
   const [fieldDrafts, setFieldDrafts] = useState<Record<string, string>>({});
@@ -93,7 +94,26 @@ export function useInspectorWorkflow({
     setNewFieldKey("");
     setNewFieldValue("");
     setRefreshStatus(null);
+    prewarmedPreviewIdsRef.current = new Set();
   }, [activeLibraryPath]);
+
+  useEffect(() => {
+    if (!selectedEntry) {
+      return;
+    }
+    if (prewarmedPreviewIdsRef.current.has(selectedEntry.id)) {
+      return;
+    }
+    prewarmedPreviewIdsRef.current.add(selectedEntry.id);
+    void api
+      .prewarmThumbnails({
+        entry_ids: [selectedEntry.id],
+        fit: "contain",
+        kind: "preview",
+        priority: "foreground"
+      })
+      .catch(() => {});
+  }, [selectedEntry]);
 
   const fieldTypes = useQuery({
     queryKey: ["field-types", activeLibraryPath],

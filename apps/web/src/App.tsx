@@ -215,7 +215,7 @@ export function App() {
           setMobileActivePane("preview");
         }
       }}
-      getMediaUrl={(entryId) => api.getMediaUrl(entryId)}
+      getThumbnailUrl={(entryId, options) => api.getThumbnailUrl(entryId, options)}
     />
   );
 
@@ -224,6 +224,8 @@ export function App() {
       selectedEntry={selectedEntry}
       preview={preview}
       getMediaUrl={(entryId) => api.getMediaUrl(entryId)}
+      getThumbnailUrl={(entryId, options) => api.getThumbnailUrl(entryId, options)}
+      resolveApiUrl={(path) => api.resolveUrl(path)}
       tagsDisplay={tagsDisplay}
       tagQuery={tagQuery}
       selectedTagId={selectedTagId}

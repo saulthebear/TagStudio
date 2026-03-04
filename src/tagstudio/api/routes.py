@@ -1,8 +1,9 @@
 import mimetypes
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlencode
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
@@ -24,6 +25,10 @@ from tagstudio.api.schemas import (
     SettingsResponse,
     SettingsUpdateRequest,
     SuccessResponse,
+    ThumbnailFit,
+    ThumbnailKind,
+    ThumbnailPrewarmRequest,
+    ThumbnailPrewarmResponse,
     TagCreateRequest,
     TagMutationRequest,
     TagMutationResponse,
@@ -37,6 +42,7 @@ from tagstudio.core.library.alchemy.enums import BrowsingState, SortingModeEnum
 from tagstudio.core.library.alchemy.joins import TagParent
 from tagstudio.core.library.alchemy.library import Library, LibraryStatus
 from tagstudio.core.library.alchemy.models import Tag, TagAlias
+from tagstudio.core.media.thumbnail_pipeline import ThumbnailUnsupportedError
 
 TEXT_SUFFIXES = {"txt", "md", "json", "toml", "yaml", "yml", "csv", "log", "py", "ts", "tsx"}
 VIDEO_SUFFIXES = {"mp4", "mov", "mkv", "webm", "avi"}
@@ -83,6 +89,22 @@ def create_router(*, state: ApiState, jobs: JobManager) -> APIRouter:
             raise HTTPException(status_code=400, detail="Entry path escapes library root.") from exc
         return entry_path, str(entry.path)
 
+    def build_thumbnail_url(
+        entry_id: int,
+        *,
+        size: int,
+        fit: ThumbnailFit,
+        kind: ThumbnailKind,
+    ) -> str:
+        params = urlencode(
+            {
+                "size": size,
+                "fit": fit.value,
+                "kind": kind.value,
+            }
+        )
+        return f"/api/v1/entries/{entry_id}/thumbnail?{params}"
+
     @router.get("/health", response_model=HealthResponse)
     def health() -> HealthResponse:
         return HealthResponse()
@@ -122,6 +144,8 @@ def create_router(*, state: ApiState, jobs: JobManager) -> APIRouter:
             updates["page_size"] = request.page_size
         if request.layout is not None:
             updates["layout"] = request.layout.model_dump(exclude_none=True)
+        if request.thumbnails is not None:
+            updates["thumbnails"] = request.thumbnails.model_dump(exclude_none=True)
         return SettingsResponse.model_validate(state.update_web_settings(updates))
 
     @router.get("/field-types", response_model=list[FieldTypeResponse])
@@ -227,11 +251,27 @@ def create_router(*, state: ApiState, jobs: JobManager) -> APIRouter:
                 kind = PreviewKind.BINARY
                 text_excerpt = None
 
+        thumb_settings = state.get_web_settings().get("thumbnails", {})
+        preview_size = int(thumb_settings.get("preview_size", 768))
+        thumbnail_url: str | None = None
+        poster_url: str | None = None
+        if kind in {PreviewKind.IMAGE, PreviewKind.VIDEO}:
+            thumbnail_url = build_thumbnail_url(
+                entry_id,
+                size=preview_size,
+                fit=ThumbnailFit.CONTAIN,
+                kind=ThumbnailKind.PREVIEW,
+            )
+            if kind == PreviewKind.VIDEO:
+                poster_url = thumbnail_url
+
         return PreviewResponse(
             entry_id=entry_id,
             preview_kind=kind,
             media_type=media_type or "application/octet-stream",
             media_url=f"/api/v1/entries/{entry_id}/media",
+            thumbnail_url=thumbnail_url,
+            poster_url=poster_url,
             text_excerpt=text_excerpt,
             supports_media_controls=supports_media_controls,
         )
@@ -244,6 +284,73 @@ def create_router(*, state: ApiState, jobs: JobManager) -> APIRouter:
             raise HTTPException(status_code=404, detail="Entry file not found.")
         media_type, _ = mimetypes.guess_type(str(entry_path))
         return FileResponse(entry_path, media_type=media_type or "application/octet-stream")
+
+    @router.get("/entries/{entry_id}/thumbnail")
+    def entry_thumbnail(
+        entry_id: int,
+        size: int | None = Query(default=None, ge=32, le=2048),
+        fit: ThumbnailFit = ThumbnailFit.COVER,
+        kind: ThumbnailKind = ThumbnailKind.GRID,
+    ) -> FileResponse:
+        lib = get_library_or_error()
+        entry_path, _ = resolve_entry_file(lib, entry_id)
+        if not entry_path.exists() or not entry_path.is_file():
+            raise HTTPException(status_code=404, detail="Entry file not found.")
+
+        pipeline = state.get_thumbnail_pipeline()
+        if pipeline is None:
+            raise HTTPException(status_code=409, detail="Thumbnail pipeline unavailable.")
+
+        try:
+            effective_size = size if size is not None else pipeline.get_default_size(kind.value)
+            thumbnail_path = pipeline.get_or_create(
+                entry_path,
+                size=effective_size,
+                fit=fit.value,
+                kind=kind.value,
+            )
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="Entry file not found.") from exc
+        except ThumbnailUnsupportedError as exc:
+            raise HTTPException(status_code=415, detail="Thumbnail unsupported for this file.") from exc
+
+        return FileResponse(
+            thumbnail_path,
+            media_type="image/webp",
+            headers={"Cache-Control": "public, max-age=31536000, immutable"},
+        )
+
+    @router.post("/thumbnails/prewarm", response_model=ThumbnailPrewarmResponse, status_code=202)
+    def prewarm_thumbnails(request: ThumbnailPrewarmRequest) -> ThumbnailPrewarmResponse:
+        lib = get_library_or_error()
+        pipeline = state.get_thumbnail_pipeline()
+        if pipeline is None:
+            raise HTTPException(status_code=409, detail="Thumbnail pipeline unavailable.")
+
+        entry_paths: list[Path] = []
+        skipped = 0
+        for entry_id in request.entry_ids:
+            try:
+                entry_path, _ = resolve_entry_file(lib, entry_id)
+            except HTTPException:
+                skipped += 1
+                continue
+            if not entry_path.exists() or not entry_path.is_file():
+                skipped += 1
+                continue
+            entry_paths.append(entry_path)
+
+        result = pipeline.enqueue_prewarm(
+            entry_paths,
+            size=request.size,
+            fit=request.fit.value,
+            kind=request.kind.value,
+            priority=request.priority.value,
+        )
+        return ThumbnailPrewarmResponse(
+            accepted=result.accepted,
+            skipped=result.skipped + skipped,
+        )
 
     @router.patch("/entries/{entry_id}/fields/{field_key}", response_model=EntryResponse)
     def update_entry_field(

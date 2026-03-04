@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -7,14 +8,21 @@ from tempfile import TemporaryDirectory
 from fastapi.testclient import TestClient
 
 from tagstudio.api.app import create_app
+from tagstudio.core.media.thumbnail_pipeline import ThumbnailUnsupportedError
 from tagstudio.core.library.alchemy.library import Library
 from tagstudio.core.library.alchemy.models import Entry, Tag
 from tagstudio.core.utils.types import unwrap
+
+TINY_PNG_BASE64 = (
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO7Y0XcAAAAASUVORK5CYII="
+)
 
 
 def seed_library(path: Path) -> None:
     path.mkdir(parents=True, exist_ok=True)
     (path / "foo.txt").write_text("hello", encoding="utf-8")
+    (path / "thumb.png").write_bytes(base64.b64decode(TINY_PNG_BASE64))
+    (path / "broken.webm").write_bytes(b"not a real video file")
 
     lib = Library()
     status = lib.open_library(path)
@@ -24,10 +32,20 @@ def seed_library(path: Path) -> None:
         lib.add_tag(Tag(name="foo", color_namespace="tagstudio-standard", color_slug="red"))
     )
     folder = unwrap(lib.folder)
-    entry = Entry(path=Path("foo.txt"), folder=folder, fields=lib.default_fields)
-    assert lib.add_entries([entry])
-    assert lib.add_tags_to_entries(entry.id, tag.id)
+    entries = [
+        Entry(path=Path("foo.txt"), folder=folder, fields=lib.default_fields),
+        Entry(path=Path("thumb.png"), folder=folder, fields=lib.default_fields),
+        Entry(path=Path("broken.webm"), folder=folder, fields=lib.default_fields),
+    ]
+    assert lib.add_entries(entries)
+    assert lib.add_tags_to_entries(entries[0].id, tag.id)
     lib.close()
+
+
+def get_entry_ids_by_filename(client: TestClient) -> dict[str, int]:
+    search = client.post("/api/v1/search", json={"query": ""})
+    assert search.status_code == 200
+    return {item["filename"]: item["id"] for item in search.json()["entries"]}
 
 
 def test_api_core_workflows() -> None:
@@ -62,6 +80,7 @@ def test_api_core_workflows() -> None:
             assert settings.json()["page_size"] == 200
             assert settings.json()["layout"]["main_split_ratio"] == 0.78
             assert settings.json()["layout"]["mobile_active_pane"] == "grid"
+            assert settings.json()["thumbnails"]["grid_size"] >= 32
 
             updated_settings = client.patch(
                 "/api/v1/settings",
@@ -73,6 +92,12 @@ def test_api_core_workflows() -> None:
                         "main_split_ratio": 0.66,
                         "mobile_active_pane": "metadata",
                     },
+                    "thumbnails": {
+                        "cache_max_mib": 600,
+                        "grid_size": 224,
+                        "preview_size": 720,
+                        "quality": 78,
+                    },
                 },
             )
             assert updated_settings.status_code == 200
@@ -81,6 +106,8 @@ def test_api_core_workflows() -> None:
             assert updated_settings.json()["ascending"] is False
             assert updated_settings.json()["layout"]["main_split_ratio"] == 0.66
             assert updated_settings.json()["layout"]["mobile_active_pane"] == "metadata"
+            assert updated_settings.json()["thumbnails"]["grid_size"] == 224
+            assert updated_settings.json()["thumbnails"]["preview_size"] == 720
 
             partial_layout_update = client.patch(
                 "/api/v1/settings",
@@ -189,3 +216,106 @@ def test_refresh_job_sse() -> None:
             search = client.post("/api/v1/search", json={"query": 'path:"added.txt"'})
             assert search.status_code == 200
             assert search.json()["total_count"] == 1
+
+
+def test_thumbnail_endpoints_and_cache_behavior() -> None:
+    with TemporaryDirectory() as tmp:
+        library_path = Path(tmp)
+        seed_library(library_path)
+
+        app = create_app()
+        with TestClient(app) as client:
+            open_res = client.post("/api/v1/libraries/open", json={"path": str(library_path)})
+            assert open_res.status_code == 200
+
+            entry_ids = get_entry_ids_by_filename(client)
+            image_entry_id = entry_ids["thumb.png"]
+            text_entry_id = entry_ids["foo.txt"]
+            broken_video_entry_id = entry_ids["broken.webm"]
+
+            image_preview = client.get(f"/api/v1/entries/{image_entry_id}/preview")
+            assert image_preview.status_code == 200
+            assert image_preview.json()["thumbnail_url"] is not None
+
+            video_preview = client.get(f"/api/v1/entries/{broken_video_entry_id}/preview")
+            assert video_preview.status_code == 200
+            assert video_preview.json()["poster_url"] is not None
+
+            first_thumb = client.get(f"/api/v1/entries/{image_entry_id}/thumbnail")
+            assert first_thumb.status_code == 200
+            assert first_thumb.headers["content-type"].startswith("image/webp")
+
+            cache_dir = library_path / ".TagStudio" / "thumbs" / "web" / "v1"
+            cache_files = list(cache_dir.rglob("*.webp"))
+            assert len(cache_files) == 1
+            initial_mtime = cache_files[0].stat().st_mtime_ns
+
+            second_thumb = client.get(f"/api/v1/entries/{image_entry_id}/thumbnail")
+            assert second_thumb.status_code == 200
+            assert second_thumb.content == first_thumb.content
+            cache_files = list(cache_dir.rglob("*.webp"))
+            assert len(cache_files) == 1
+            assert cache_files[0].stat().st_mtime_ns >= initial_mtime
+
+            text_thumb = client.get(f"/api/v1/entries/{text_entry_id}/thumbnail")
+            assert text_thumb.status_code == 415
+
+            broken_video_thumb = client.get(f"/api/v1/entries/{broken_video_entry_id}/thumbnail")
+            assert broken_video_thumb.status_code == 415
+
+
+def test_thumbnail_prewarm_endpoint() -> None:
+    with TemporaryDirectory() as tmp:
+        library_path = Path(tmp)
+        seed_library(library_path)
+
+        app = create_app()
+        with TestClient(app) as client:
+            open_res = client.post("/api/v1/libraries/open", json={"path": str(library_path)})
+            assert open_res.status_code == 200
+
+            entry_ids = get_entry_ids_by_filename(client)
+            image_entry_id = entry_ids["thumb.png"]
+            response = client.post(
+                "/api/v1/thumbnails/prewarm",
+                json={
+                    "entry_ids": [image_entry_id, 999_999],
+                    "kind": "grid",
+                    "fit": "cover",
+                    "priority": "background",
+                },
+            )
+            assert response.status_code == 202
+            assert response.json()["accepted"] == 1
+            assert response.json()["skipped"] == 1
+
+
+def test_thumbnail_lock_is_released_after_generation_failure() -> None:
+    with TemporaryDirectory() as tmp:
+        library_path = Path(tmp)
+        seed_library(library_path)
+
+        app = create_app()
+        with TestClient(app) as client:
+            open_res = client.post("/api/v1/libraries/open", json={"path": str(library_path)})
+            assert open_res.status_code == 200
+
+            entry_ids = get_entry_ids_by_filename(client)
+            image_entry_id = entry_ids["thumb.png"]
+
+            pipeline = app.state.tagstudio.get_thumbnail_pipeline()
+            assert pipeline is not None
+            original_render = pipeline._render_thumbnail
+
+            def fail_render(*_args, **_kwargs):
+                raise ThumbnailUnsupportedError("simulated failure")
+
+            pipeline._render_thumbnail = fail_render  # type: ignore[method-assign]
+            try:
+                first = client.get(f"/api/v1/entries/{image_entry_id}/thumbnail")
+                second = client.get(f"/api/v1/entries/{image_entry_id}/thumbnail")
+            finally:
+                pipeline._render_thumbnail = original_render  # type: ignore[method-assign]
+
+            assert first.status_code == 415
+            assert second.status_code == 415

@@ -76,8 +76,27 @@ export type PreviewResponse = {
   preview_kind: PreviewKind;
   media_type: string | null;
   media_url: string | null;
+  thumbnail_url: string | null;
+  poster_url: string | null;
   text_excerpt: string | null;
   supports_media_controls: boolean;
+};
+
+export type ThumbnailFit = "cover" | "contain";
+export type ThumbnailKind = "grid" | "preview";
+export type ThumbnailPriority = "foreground" | "background";
+
+export type ThumbnailPrewarmRequest = {
+  entry_ids: number[];
+  size?: number;
+  fit?: ThumbnailFit;
+  kind?: ThumbnailKind;
+  priority?: ThumbnailPriority;
+};
+
+export type ThumbnailPrewarmResponse = {
+  accepted: number;
+  skipped: number;
 };
 
 export type SearchResponse = {
@@ -117,6 +136,7 @@ export type SettingsResponse = {
   show_hidden_entries: boolean;
   page_size: number;
   layout: LayoutSettings;
+  thumbnails: ThumbnailSettings;
 };
 
 export type LayoutSettings = {
@@ -143,12 +163,27 @@ export type LayoutSettingsUpdateRequest = {
   mobile_active_pane?: "grid" | "preview" | "metadata";
 };
 
+export type ThumbnailSettings = {
+  cache_max_mib: number;
+  grid_size: number;
+  preview_size: number;
+  quality: number;
+};
+
+export type ThumbnailSettingsUpdateRequest = {
+  cache_max_mib?: number;
+  grid_size?: number;
+  preview_size?: number;
+  quality?: number;
+};
+
 export type SettingsUpdateRequest = {
   sorting_mode?: SortingMode;
   ascending?: boolean;
   show_hidden_entries?: boolean;
   page_size?: number;
   layout?: LayoutSettingsUpdateRequest;
+  thumbnails?: ThumbnailSettingsUpdateRequest;
 };
 
 export type ApiConfig = {
@@ -227,7 +262,38 @@ export class TagStudioApiClient {
   }
 
   getMediaUrl(entryId: number): string {
-    return `${this.baseUrl}/api/v1/entries/${entryId}/media`;
+    return this.resolveUrl(`/api/v1/entries/${entryId}/media`);
+  }
+
+  getThumbnailUrl(
+    entryId: number,
+    options: {
+      size?: number;
+      fit?: ThumbnailFit;
+      kind?: ThumbnailKind;
+    } = {}
+  ): string {
+    const params = new URLSearchParams();
+    if (options.size !== undefined) {
+      params.set("size", String(options.size));
+    }
+    if (options.fit) {
+      params.set("fit", options.fit);
+    }
+    if (options.kind) {
+      params.set("kind", options.kind);
+    }
+    const suffix = params.size > 0 ? `?${params.toString()}` : "";
+    return this.resolveUrl(`/api/v1/entries/${entryId}/thumbnail${suffix}`);
+  }
+
+  async prewarmThumbnails(
+    payload: ThumbnailPrewarmRequest
+  ): Promise<ThumbnailPrewarmResponse> {
+    return this.request("/api/v1/thumbnails/prewarm", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
   }
 
   async updateEntryField(
@@ -289,13 +355,14 @@ export class TagStudioApiClient {
   }
 
   getJobEventsUrl(jobId: string): string {
-    const params = new URLSearchParams();
-    if (this.token) {
-      // EventSource does not support custom headers, so auth token must be in query.
-      params.set("token", this.token);
-    }
-    const suffix = params.size > 0 ? `?${params}` : "";
-    return `${this.baseUrl}/api/v1/jobs/${jobId}/events${suffix}`;
+    return this.resolveUrl(`/api/v1/jobs/${jobId}/events`);
+  }
+
+  resolveUrl(path: string): string {
+    const url = path.startsWith("http://") || path.startsWith("https://")
+      ? new URL(path)
+      : new URL(path.startsWith("/") ? path : `/${path}`, `${this.baseUrl}/`);
+    return this.withTokenQuery(url).toString();
   }
 
   private async request<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -327,5 +394,16 @@ export class TagStudioApiClient {
     }
 
     return (await response.json()) as T;
+  }
+
+  private withTokenQuery(url: URL): URL {
+    if (!this.token) {
+      return url;
+    }
+    if (!url.searchParams.has("token")) {
+      // EventSource and direct media URLs may not carry custom auth headers.
+      url.searchParams.set("token", this.token);
+    }
+    return url;
   }
 }

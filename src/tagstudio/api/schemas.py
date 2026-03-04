@@ -20,6 +20,21 @@ class PreviewKind(str, Enum):
     MISSING = "missing"
 
 
+class ThumbnailFit(str, Enum):
+    COVER = "cover"
+    CONTAIN = "contain"
+
+
+class ThumbnailKind(str, Enum):
+    GRID = "grid"
+    PREVIEW = "preview"
+
+
+class ThumbnailPriority(str, Enum):
+    FOREGROUND = "foreground"
+    BACKGROUND = "background"
+
+
 class HealthResponse(BaseModel):
     status: str = "ok"
 
@@ -106,8 +121,23 @@ class PreviewResponse(BaseModel):
     preview_kind: PreviewKind
     media_type: str | None = None
     media_url: str | None = None
+    thumbnail_url: str | None = None
+    poster_url: str | None = None
     text_excerpt: str | None = None
     supports_media_controls: bool = False
+
+
+class ThumbnailPrewarmRequest(BaseModel):
+    entry_ids: list[int] = Field(default_factory=list, max_length=100)
+    size: int | None = Field(default=None, ge=32, le=2048)
+    fit: ThumbnailFit = ThumbnailFit.COVER
+    kind: ThumbnailKind = ThumbnailKind.GRID
+    priority: ThumbnailPriority = ThumbnailPriority.BACKGROUND
+
+
+class ThumbnailPrewarmResponse(BaseModel):
+    accepted: int = 0
+    skipped: int = 0
 
 
 class SearchResponse(BaseModel):
@@ -194,12 +224,27 @@ class LayoutSettingsUpdateRequest(BaseModel):
     mobile_active_pane: Literal["grid", "preview", "metadata"] | None = None
 
 
+class ThumbnailSettings(BaseModel):
+    cache_max_mib: int = Field(default=512, ge=64, le=16384)
+    grid_size: int = Field(default=256, ge=32, le=2048)
+    preview_size: int = Field(default=768, ge=32, le=2048)
+    quality: int = Field(default=80, ge=1, le=100)
+
+
+class ThumbnailSettingsUpdateRequest(BaseModel):
+    cache_max_mib: int | None = Field(default=None, ge=64, le=16384)
+    grid_size: int | None = Field(default=None, ge=32, le=2048)
+    preview_size: int | None = Field(default=None, ge=32, le=2048)
+    quality: int | None = Field(default=None, ge=1, le=100)
+
+
 class SettingsResponse(BaseModel):
     sorting_mode: SortingMode = SortingMode.DATE_ADDED
     ascending: bool = True
     show_hidden_entries: bool = False
     page_size: int = Field(default=200, ge=1, le=2000)
     layout: LayoutSettings = Field(default_factory=LayoutSettings)
+    thumbnails: ThumbnailSettings = Field(default_factory=ThumbnailSettings)
 
 
 class SettingsUpdateRequest(BaseModel):
@@ -208,6 +253,7 @@ class SettingsUpdateRequest(BaseModel):
     show_hidden_entries: bool | None = None
     page_size: int | None = Field(default=None, ge=1, le=2000)
     layout: LayoutSettingsUpdateRequest | None = None
+    thumbnails: ThumbnailSettingsUpdateRequest | None = None
 
 
 class SuccessResponse(BaseModel):

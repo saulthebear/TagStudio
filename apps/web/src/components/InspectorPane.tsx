@@ -12,6 +12,15 @@ type InspectorPaneProps = {
   selectedEntry: EntryResponse | null;
   preview: PreviewResponse | undefined;
   getMediaUrl: (entryId: number) => string;
+  getThumbnailUrl: (
+    entryId: number,
+    options?: {
+      size?: number;
+      fit?: "cover" | "contain";
+      kind?: "grid" | "preview";
+    }
+  ) => string;
+  resolveApiUrl: (path: string) => string;
   tagsDisplay: string;
   tagQuery: string;
   selectedTagId: string;
@@ -41,6 +50,8 @@ export function InspectorPane({
   selectedEntry,
   preview,
   getMediaUrl,
+  getThumbnailUrl,
+  resolveApiUrl,
   tagsDisplay,
   tagQuery,
   selectedTagId,
@@ -72,6 +83,8 @@ export function InspectorPane({
         selectedEntry={selectedEntry}
         preview={preview}
         getMediaUrl={getMediaUrl}
+        getThumbnailUrl={getThumbnailUrl}
+        resolveApiUrl={resolveApiUrl}
       />
     </div>
   );
@@ -138,12 +151,23 @@ type PreviewContentProps = {
   selectedEntry: EntryResponse | null;
   preview: PreviewResponse | undefined;
   getMediaUrl: (entryId: number) => string;
+  getThumbnailUrl: (
+    entryId: number,
+    options?: {
+      size?: number;
+      fit?: "cover" | "contain";
+      kind?: "grid" | "preview";
+    }
+  ) => string;
+  resolveApiUrl: (path: string) => string;
 };
 
 function PreviewContent({
   selectedEntry,
   preview,
-  getMediaUrl
+  getMediaUrl,
+  getThumbnailUrl,
+  resolveApiUrl
 }: PreviewContentProps) {
   const hasSelectedEntry = selectedEntry !== null;
 
@@ -152,13 +176,27 @@ function PreviewContent({
       {!hasSelectedEntry ? <p className="text-sm text-slate-500">Select an entry to render preview.</p> : null}
       {hasSelectedEntry && preview?.preview_kind === "image" ? (
         <img
-          src={getMediaUrl(selectedEntry.id)}
+          src={
+            preview.thumbnail_url
+              ? resolveApiUrl(preview.thumbnail_url)
+              : getThumbnailUrl(selectedEntry.id, { kind: "preview", fit: "contain" })
+          }
           alt={selectedEntry.filename}
           className="inspector-image"
         />
       ) : null}
       {hasSelectedEntry && preview?.preview_kind === "video" ? (
-        <video src={getMediaUrl(selectedEntry.id)} controls className="inspector-video" />
+        <video
+          src={getMediaUrl(selectedEntry.id)}
+          poster={
+            preview.poster_url
+              ? resolveApiUrl(preview.poster_url)
+              : getThumbnailUrl(selectedEntry.id, { kind: "preview", fit: "contain" })
+          }
+          preload="metadata"
+          controls
+          className="inspector-video"
+        />
       ) : null}
       {hasSelectedEntry && preview?.preview_kind === "audio" ? (
         <audio src={getMediaUrl(selectedEntry.id)} controls className="w-full" />

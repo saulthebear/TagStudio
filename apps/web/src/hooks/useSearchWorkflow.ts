@@ -12,6 +12,9 @@ export type SearchRequest = {
 
 export type ExecuteSearchFn = (request: SearchRequest) => Promise<void>;
 
+const FOREGROUND_PREWARM_LIMIT = 48;
+const PREWARM_BATCH_SIZE = 100;
+
 type UseSearchWorkflowArgs = {
   activeLibraryPath: string | null;
   isLibraryOpen: boolean;
@@ -53,6 +56,7 @@ export function useSearchWorkflow({
   onClearError
 }: UseSearchWorkflowArgs): UseSearchWorkflowResult {
   const searchRequestIdRef = useRef(0);
+  const prewarmedEntryIdsRef = useRef<Set<number>>(new Set());
 
   const [searchInput, setSearchInput] = useState("");
   const [activeQuery, setActiveQuery] = useState("");
@@ -71,7 +75,55 @@ export function useSearchWorkflow({
     setNextPageIndex(0);
     setSearchInput("");
     setActiveQuery("");
+    prewarmedEntryIdsRef.current = new Set();
   }, [activeLibraryPath]);
+
+  const prewarmEntries = useCallback((incomingEntries: EntrySummaryResponse[]) => {
+    if (incomingEntries.length === 0) {
+      return;
+    }
+
+    const unseenIds = incomingEntries
+      .map((entry) => entry.id)
+      .filter((entryId) => !prewarmedEntryIdsRef.current.has(entryId));
+
+    if (unseenIds.length === 0) {
+      return;
+    }
+
+    for (const entryId of unseenIds) {
+      prewarmedEntryIdsRef.current.add(entryId);
+    }
+
+    const foreground = unseenIds.slice(0, FOREGROUND_PREWARM_LIMIT);
+    const background = unseenIds.slice(FOREGROUND_PREWARM_LIMIT);
+
+    if (foreground.length > 0) {
+      void api
+        .prewarmThumbnails({
+          entry_ids: foreground,
+          fit: "cover",
+          kind: "grid",
+          priority: "foreground"
+        })
+        .catch(() => {});
+    }
+
+    for (let index = 0; index < background.length; index += PREWARM_BATCH_SIZE) {
+      const batch = background.slice(index, index + PREWARM_BATCH_SIZE);
+      if (batch.length === 0) {
+        continue;
+      }
+      void api
+        .prewarmThumbnails({
+          entry_ids: batch,
+          fit: "cover",
+          kind: "grid",
+          priority: "background"
+        })
+        .catch(() => {});
+    }
+  }, []);
 
   const executeSearch = useCallback<ExecuteSearchFn>(
     async ({
@@ -124,6 +176,7 @@ export function useSearchWorkflow({
         } else {
           setEntries(data.entries);
         }
+        prewarmEntries(data.entries);
       } catch (error) {
         if (requestId !== searchRequestIdRef.current) {
           return;
@@ -144,6 +197,7 @@ export function useSearchWorkflow({
       onClearError,
       onError,
       pageSize,
+      prewarmEntries,
       searchPending,
       showHiddenEntries,
       sortingMode

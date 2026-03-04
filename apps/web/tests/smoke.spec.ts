@@ -3,9 +3,6 @@ import { expect, test, type Route } from "@playwright/test";
 const API_BASE_URL = "http://127.0.0.1:5987";
 
 const TINY_PNG_BASE64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO7Y0XcAAAAASUVORK5CYII=";
-const TINY_MP4_BASE64 = [
-  "AAAAHGZ0eXBpc29tAAACAGlzb21pc28ybXA0MQAAAAhmcmVlAAAAKW1kYXQAAAGzABAHAAABthBj8YsbfgAAAbZQ8fN/AAABtlFh838AAANgbW9vdgAAAGxtdmhkAAAAAAAAAAAAAAAAAAAD6AAAAHgAAQAAAQAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAot0cmFrAAAAXHRraGQAAAADAAAAAAAAAAAAAAABAAAAAAAAAHgAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAABAAAAAAAgAAAAIAAAAAAAkZWR0cwAAABxlbHN0AAAAAAAAAAEAAAB4AAAAAAABAAAAAAIDbWRpYQAAACBtZGhkAAAAAAAAAAAAAAAAAAAyAAAABgBVxAAAAAAALWhkbHIAAAAAAAAAAHZpZGUAAAAAAAAAAAAAAABWaWRlb0hhbmRsZXIAAAABrm1pbmYAAAAUdm1oZAAAAAEAAAAAAAAAAAAAACRkaW5mAAAAHGRyZWYAAAAAAAAAAQAAAAx1cmwgAAAAAQAAAW5zdGJsAAAA6nN0c2QAAAAAAAAAAQAAANptcDR2AAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAAgACABIAAAASAAAAAAAAAABE0xhdmM2Mi4xMS4xMDAgbXBlZzQAAAAAAAAAAAAAAAAAGP//AAAAYGVzZHMAAAAAA4CAgE8AAQAEgICAQSARAAAAAAMNQAAACJgFgICALwAAAbABAAABtYkTAAABAAAAASAAxI2IAM0ARAEUYwAAAbJMYXZjNjIuMTEuMTAwBoCAgAECAAAAEHBhc3AAAAABAAAAAQAAABRidHJ0AAAAAAADDUAAAAiYAAAAGHN0dHMAAAAAAAAAAQAAAAMAAAIAAAAAFHN0c3MAAAAAAAAAAQAAAAEAAAAcc3RzYwAAAAAAAAABAAAAAQAAAAMAAAABAAAAIHN0c3oAAAAAAAAAAAAAAAMAAAARAAAACAAAAAgAAAAUc3RjbwAAAAAAAAABAAAALAAAAGF1ZHRhAAAAWW1ldGEAAAAAAAAAIWhkbHIAAAAAAAAAAG1kaXJhcHBsAAAAAAAAAAAAAAAALGlsc3QAAAAkqXRvbwAAABxkYXRhAAAAAQAAAABMYXZmNjIuMy4xMDA="
-].join("");
 
 async function fulfillJson(route: Route, payload: unknown, status = 200): Promise<void> {
   await route.fulfill({
@@ -55,8 +52,6 @@ test("renders normalized image/video media tiles and falls back on media errors"
   };
 
   const tinyPng = Buffer.from(TINY_PNG_BASE64, "base64");
-  const tinyMp4 = Buffer.from(TINY_MP4_BASE64, "base64");
-
   await page.route(`${API_BASE_URL}/api/v1/**`, async (route) => {
     const request = route.request();
     const { pathname } = new URL(request.url());
@@ -95,20 +90,20 @@ test("renders normalized image/video media tiles and falls back on media errors"
       return;
     }
 
-    await fulfillJson(route, { detail: `Unmocked endpoint: ${pathname}` }, 404);
-  });
-
-  await page.route(`${API_BASE_URL}/api/v1/entries/*/media`, async (route) => {
-    const match = /\/entries\/(\d+)\/media$/.exec(new URL(route.request().url()).pathname);
-    const entryId = Number(match?.[1] ?? -1);
-
-    if (entryId === 201 || entryId === 202) {
-      await route.fulfill({ status: 200, contentType: "image/png", body: tinyPng });
+    if (pathname === "/api/v1/thumbnails/prewarm" && request.method() === "POST") {
+      await fulfillJson(route, { accepted: 0, skipped: 0 }, 202);
       return;
     }
 
-    if (entryId === 203) {
-      await route.fulfill({ status: 200, contentType: "video/mp4", body: tinyMp4 });
+    await fulfillJson(route, { detail: `Unmocked endpoint: ${pathname}` }, 404);
+  });
+
+  await page.route(`${API_BASE_URL}/api/v1/entries/*/thumbnail**`, async (route) => {
+    const match = /\/entries\/(\d+)\/thumbnail$/.exec(new URL(route.request().url()).pathname);
+    const entryId = Number(match?.[1] ?? -1);
+
+    if (entryId === 201 || entryId === 202 || entryId === 203) {
+      await route.fulfill({ status: 200, contentType: "image/png", body: tinyPng });
       return;
     }
 
@@ -130,18 +125,8 @@ test("renders normalized image/video media tiles and falls back on media errors"
   await expect(dottedPngCard.locator("img.thumb-media-image")).toHaveCount(1);
 
   const videoCard = page.locator(".thumb-card").filter({ hasText: "clip.mp4" });
-  await expect
-    .poll(async () => {
-      const videoCount = await videoCard.locator("video.thumb-media-video").count();
-      const iconCount = await videoCard.locator(".thumb-media-icon").count();
-      return videoCount + iconCount;
-    })
-    .toBe(1);
-  if ((await videoCard.locator("video.thumb-media-video").count()) === 1) {
-    await expect(videoCard.locator(".thumb-media-icon")).toHaveCount(0);
-  } else {
-    await expect(videoCard.locator(".thumb-media-icon")).toHaveText("VIDEO");
-  }
+  await expect(videoCard.locator("img.thumb-media-image")).toHaveCount(1);
+  await expect(videoCard.locator(".thumb-video-badge")).toHaveCount(1);
 
   const textCard = page.locator(".thumb-card").filter({ hasText: "notes.txt" });
   await expect(textCard.locator(".thumb-media-icon")).toHaveText("TXT");
@@ -219,6 +204,11 @@ test("applies top-bar filter menu toggles with live query sync and request flags
         ids: entries.map((entry) => entry.id),
         entries
       });
+      return;
+    }
+
+    if (pathname === "/api/v1/thumbnails/prewarm" && request.method() === "POST") {
+      await fulfillJson(route, { accepted: 0, skipped: 0 }, 202);
       return;
     }
 
