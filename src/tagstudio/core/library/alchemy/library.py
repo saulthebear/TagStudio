@@ -67,6 +67,7 @@ from tagstudio.core.constants import (
     TS_FOLDER_NAME,
 )
 from tagstudio.core.enums import LibraryPrefs
+from tagstudio.core.i18n import tr
 from tagstudio.core.library.alchemy import default_color_groups
 from tagstudio.core.library.alchemy.constants import (
     DB_VERSION,
@@ -103,7 +104,6 @@ from tagstudio.core.library.alchemy.models import (
     Version,
 )
 from tagstudio.core.library.alchemy.visitors import SQLBoolExpressionBuilder
-from tagstudio.core.i18n import tr
 from tagstudio.core.library.json.library import Library as JsonLibrary
 from tagstudio.core.utils.types import unwrap
 
@@ -952,7 +952,10 @@ class Library:
     def tags(self) -> list[Tag]:
         with Session(self.engine) as session:
             # load all tag relationships used by API serialization before detaching
-            tags_query = select(Tag).options(selectinload(Tag.parent_tags), selectinload(Tag.aliases))
+            tags_query = select(Tag).options(
+                selectinload(Tag.parent_tags),
+                selectinload(Tag.aliases),
+            )
             tags = session.scalars(tags_query).unique()
             tags_list = list(tags)
 

@@ -46,6 +46,7 @@ mypy = ["mypy==1.15.0", "mypy-extensions==1.*", "types-ujson~=5.10"]
 pre-commit = ["pre-commit~=4.2"]
 pyinstaller = ["Pyinstaller~=6.13"]
 pytest = [
+    "httpx~=0.28",
     "pytest==8.3.5",
     "pytest-cov==6.1.1",
     "pytest-qt==4.4.0",

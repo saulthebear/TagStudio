@@ -16,7 +16,7 @@ class CacheStore(Protocol):
     def value(self, key: str) -> Any:
         """Get a value from cache."""
 
-    def setValue(self, key: str, value: Any) -> None:
+    def setValue(self, key: str, value: Any) -> None:  # noqa: N802
         """Set a value in cache."""
 
 
