@@ -494,13 +494,7 @@ class ThumbnailPipeline:
             [*ffmpeg_prefix, "-i", str(entry_path), *ffmpeg_suffix],
         ]
 
-        seen_commands: set[tuple[str, ...]] = set()
         for cmd in commands:
-            signature = tuple(cmd)
-            if signature in seen_commands:
-                continue
-            seen_commands.add(signature)
-
             try:
                 result = subprocess.run(  # noqa: S603
                     cmd,

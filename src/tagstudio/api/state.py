@@ -157,7 +157,6 @@ class ApiState:
         with self.lock:
             settings = self.get_web_settings()
             settings = _deep_merge(settings, updates)
-            settings = _deep_merge(DEFAULT_WEB_SETTINGS, settings)
             settings = self._normalize_web_settings(settings)
             settings_path = self._settings_path()
             if settings_path is not None:

@@ -359,9 +359,17 @@ export class TagStudioApiClient {
   }
 
   resolveUrl(path: string): string {
-    const url = path.startsWith("http://") || path.startsWith("https://")
-      ? new URL(path)
-      : new URL(path.startsWith("/") ? path : `/${path}`, `${this.baseUrl}/`);
+    const baseUrl = new URL(`${this.baseUrl}/`);
+    const resolvedPath = path.startsWith("http://")
+      || path.startsWith("https://")
+      || path.startsWith("//")
+      || path.startsWith("/")
+      ? path
+      : `/${path}`;
+    const url = new URL(resolvedPath, baseUrl);
+    if (url.origin !== baseUrl.origin) {
+      return url.toString();
+    }
     return this.withTokenQuery(url).toString();
   }
 
