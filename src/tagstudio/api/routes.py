@@ -25,8 +25,8 @@ from tagstudio.api.schemas import (
     SettingsResponse,
     SettingsUpdateRequest,
     SuccessResponse,
-    TagColorResponse,
     TagColorNamespaceResponse,
+    TagColorResponse,
     TagCreateRequest,
     TagMutationRequest,
     TagMutationResponse,
@@ -128,7 +128,10 @@ def create_router(*, state: ApiState, jobs: JobManager) -> APIRouter:
 
         for parent_id in parent_ids:
             if lib.get_tag(parent_id) is None:
-                raise HTTPException(status_code=422, detail=f"Parent tag {parent_id} does not exist.")
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Parent tag {parent_id} does not exist.",
+                )
 
         if tag_id is not None:
             descendant_ids = get_descendant_tag_ids(lib, tag_id)
@@ -149,6 +152,7 @@ def create_router(*, state: ApiState, jobs: JobManager) -> APIRouter:
                 status_code=422,
                 detail="disambiguation_id must reference one of parent_ids.",
             )
+
     @router.get("/health", response_model=HealthResponse)
     def health() -> HealthResponse:
         return HealthResponse()
@@ -470,7 +474,11 @@ def create_router(*, state: ApiState, jobs: JobManager) -> APIRouter:
     @router.post("/tags", response_model=TagResponse)
     def create_tag(request: TagCreateRequest) -> TagResponse:
         lib = get_library_or_error()
-        parent_ids = validate_parent_ids_for_tag(lib, tag_id=None, parent_ids=set(request.parent_ids))
+        parent_ids = validate_parent_ids_for_tag(
+            lib,
+            tag_id=None,
+            parent_ids=set(request.parent_ids),
+        )
         validate_disambiguation(request.disambiguation_id, parent_ids)
 
         tag = Tag(
@@ -526,11 +534,13 @@ def create_router(*, state: ApiState, jobs: JobManager) -> APIRouter:
 
             existing_parent_ids = {
                 parent_id
-                for parent_id, in session.execute(
+                for (parent_id,) in session.execute(
                     select(TagParent.parent_id).where(TagParent.child_id == tag_id)
                 ).all()
             }
-            requested_parent_ids = set(request.parent_ids or []) if "parent_ids" in provided_fields else None
+            requested_parent_ids = (
+                set(request.parent_ids or []) if "parent_ids" in provided_fields else None
+            )
             effective_parent_ids = (
                 requested_parent_ids if requested_parent_ids is not None else existing_parent_ids
             )

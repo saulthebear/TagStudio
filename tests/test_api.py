@@ -202,7 +202,10 @@ def test_tag_validation_and_parent_filtering() -> None:
             child_id = child.json()["id"]
             grandchild_id = grandchild.json()["id"]
 
-            child_parent = client.patch(f"/api/v1/tags/{child_id}", json={"parent_ids": [parent_id]})
+            child_parent = client.patch(
+                f"/api/v1/tags/{child_id}",
+                json={"parent_ids": [parent_id]},
+            )
             assert child_parent.status_code == 200
 
             grandchild_parent = client.patch(
