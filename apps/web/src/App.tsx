@@ -21,6 +21,14 @@ import { SplitPane, type SplitPaneState } from "@/components/SplitPane";
 import { ThumbnailGridPane } from "@/components/ThumbnailGridPane";
 import { TopFilterBar } from "@/components/TopFilterBar";
 import { api } from "@/api/client";
+import {
+  formatAppliedFilterSummary,
+  getActiveFilterCount,
+  getUntaggedTokenState,
+  hasUntaggedTagConflict,
+  isFlatQuery,
+  toggleUntaggedInQuery
+} from "@/lib/entry-filters";
 
 type MobilePane = "grid" | "preview" | "metadata";
 
@@ -587,6 +595,26 @@ export function App() {
   );
 
   const hasMore = entries.length < totalCount;
+  const liveUntaggedState = useMemo(
+    () => getUntaggedTokenState(searchInput),
+    [searchInput]
+  );
+  const showUntaggedConflict = useMemo(
+    () => hasUntaggedTagConflict(searchInput),
+    [searchInput]
+  );
+  const showConservativeHint = useMemo(
+    () => !isFlatQuery(searchInput),
+    [searchInput]
+  );
+  const activeFilterCount = useMemo(
+    () => getActiveFilterCount(searchInput, showHiddenEntries),
+    [searchInput, showHiddenEntries]
+  );
+  const filterSummary = useMemo(
+    () => formatAppliedFilterSummary(activeQuery, showHiddenEntries),
+    [activeQuery, showHiddenEntries]
+  );
 
   const gridPane = (
     <ThumbnailGridPane
@@ -689,10 +717,14 @@ export function App() {
           <TopFilterBar
             libraryPath={activeLibraryPath ?? ""}
             searchInput={searchInput}
-            activeQuery={activeQuery}
+            filterSummary={filterSummary}
             sortingMode={sortingMode}
             ascending={ascending}
+            untaggedChecked={liveUntaggedState.positive}
+            showUntaggedConflict={showUntaggedConflict}
+            showConservativeHint={showConservativeHint}
             showHiddenEntries={showHiddenEntries}
+            activeFilterCount={activeFilterCount}
             totalCount={totalCount}
             searchPending={searchPending}
             refreshPending={refreshLibrary.isPending}
@@ -714,6 +746,15 @@ export function App() {
                 pageIndex: 0,
                 append: false,
                 ascending: nextAscending
+              });
+            }}
+            onUntaggedChange={(nextUntaggedChecked) => {
+              const nextSearchInput = toggleUntaggedInQuery(searchInput, nextUntaggedChecked);
+              setSearchInput(nextSearchInput);
+              void executeSearch({
+                query: nextSearchInput,
+                pageIndex: 0,
+                append: false
               });
             }}
             onShowHiddenChange={(nextShowHiddenEntries) => {

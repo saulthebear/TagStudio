@@ -1,13 +1,27 @@
 import { type SortingMode } from "@tagstudio/api-client";
 import { Button } from "@tagstudio/ui";
+import { SlidersHorizontal } from "lucide-react";
+
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger
+} from "@/components/ui/dropdown-menu";
 
 type TopFilterBarProps = {
   libraryPath: string;
   searchInput: string;
-  activeQuery: string;
+  filterSummary: string;
   sortingMode: SortingMode;
   ascending: boolean;
+  untaggedChecked: boolean;
+  showUntaggedConflict: boolean;
+  showConservativeHint: boolean;
   showHiddenEntries: boolean;
+  activeFilterCount: number;
   totalCount: number;
   searchPending: boolean;
   refreshPending: boolean;
@@ -15,6 +29,7 @@ type TopFilterBarProps = {
   onSearch: () => void;
   onSortingModeChange: (value: SortingMode) => void;
   onAscendingChange: (value: boolean) => void;
+  onUntaggedChange: (value: boolean) => void;
   onShowHiddenChange: (value: boolean) => void;
   onOpenLibraryModal: () => void;
   onRefresh: () => void;
@@ -30,10 +45,14 @@ const SORTING_OPTIONS: Array<{ label: string; value: SortingMode }> = [
 export function TopFilterBar({
   libraryPath,
   searchInput,
-  activeQuery,
+  filterSummary,
   sortingMode,
   ascending,
+  untaggedChecked,
+  showUntaggedConflict,
+  showConservativeHint,
   showHiddenEntries,
+  activeFilterCount,
   totalCount,
   searchPending,
   refreshPending,
@@ -41,6 +60,7 @@ export function TopFilterBar({
   onSearch,
   onSortingModeChange,
   onAscendingChange,
+  onUntaggedChange,
   onShowHiddenChange,
   onOpenLibraryModal,
   onRefresh,
@@ -69,8 +89,57 @@ export function TopFilterBar({
         }}
       />
 
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            className={`filter-trigger ${showUntaggedConflict ? "filter-trigger-warning" : ""}`}
+            aria-label="Open filters menu"
+            title="Open filters menu"
+          >
+            <SlidersHorizontal size={16} />
+            <span>Filters</span>
+            {activeFilterCount > 0 ? (
+              <span
+                className={`filter-badge ${showUntaggedConflict ? "filter-badge-warning" : ""}`}
+              >
+                {activeFilterCount}
+              </span>
+            ) : null}
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent className="top-filter-dropdown" align="start">
+          <DropdownMenuLabel className="top-filter-dropdown-label">
+            Entry Filters
+          </DropdownMenuLabel>
+          <DropdownMenuSeparator className="top-filter-dropdown-separator" />
+          <DropdownMenuCheckboxItem
+            checked={untaggedChecked}
+            onCheckedChange={(value) => onUntaggedChange(value === true)}
+          >
+            Untagged
+          </DropdownMenuCheckboxItem>
+          <DropdownMenuCheckboxItem
+            checked={showHiddenEntries}
+            onCheckedChange={(value) => onShowHiddenChange(value === true)}
+          >
+            Show hidden entries
+          </DropdownMenuCheckboxItem>
+          {showUntaggedConflict ? (
+            <p className="top-filter-dropdown-hint top-filter-dropdown-hint-warning">
+              `Untagged` with `tag:` or `tag_id:` usually returns zero results.
+            </p>
+          ) : null}
+          {showConservativeHint ? (
+            <p className="top-filter-dropdown-hint">
+              Advanced query detected. Untagged token removal is conservative.
+            </p>
+          ) : null}
+        </DropdownMenuContent>
+      </DropdownMenu>
+
       <select
-        className="input-base"
+        className="input-base top-filter-sort-mode"
         value={sortingMode}
         onChange={(event) => onSortingModeChange(event.target.value as SortingMode)}
       >
@@ -82,7 +151,7 @@ export function TopFilterBar({
       </select>
 
       <select
-        className="input-base"
+        className="input-base top-filter-sort-direction"
         value={ascending ? "asc" : "desc"}
         onChange={(event) => onAscendingChange(event.target.value === "asc")}
       >
@@ -90,21 +159,10 @@ export function TopFilterBar({
         <option value="asc">Ascending</option>
       </select>
 
-      <label className="top-filter-checkbox" htmlFor="show-hidden-toggle">
-        <input
-          id="show-hidden-toggle"
-          className="toggle-base"
-          type="checkbox"
-          checked={showHiddenEntries}
-          onChange={(event) => onShowHiddenChange(event.target.checked)}
-        />
-        Hidden
-      </label>
-
       <Button
         variant="secondary"
         size="md"
-        className="top-filter-action"
+        className="top-filter-action top-filter-search-action"
         disabled={searchPending}
         onClick={onSearch}
       >
@@ -114,19 +172,24 @@ export function TopFilterBar({
       <Button
         variant="secondary"
         size="md"
-        className="top-filter-action"
+        className="top-filter-action top-filter-refresh-action"
         disabled={refreshPending}
         onClick={onRefresh}
       >
         Refresh
       </Button>
 
-      <Button variant="secondary" size="md" className="top-filter-action" onClick={onOpenSettings}>
+      <Button
+        variant="secondary"
+        size="md"
+        className="top-filter-action top-filter-settings-action"
+        onClick={onOpenSettings}
+      >
         Settings
       </Button>
 
       <div className="top-filter-status" aria-live="polite">
-        Results: <strong>{totalCount}</strong> {activeQuery ? `| Filter: ${activeQuery}` : "| Filter: none"}
+        Results: <strong>{totalCount}</strong> | Filter: {filterSummary}
       </div>
     </section>
   );

@@ -96,7 +96,15 @@ body {
   display: grid;
   gap: 0.5rem;
   align-items: center;
-  grid-template-columns: minmax(180px, 320px) minmax(220px, 1fr) 160px 140px auto auto auto auto;
+  grid-template-columns:
+    minmax(180px, 300px)
+    minmax(220px, 1fr)
+    auto
+    160px
+    140px
+    auto
+    auto
+    auto;
   padding: 0.65rem;
 }
 
@@ -118,13 +126,77 @@ body {
   min-width: 180px;
 }
 
-.top-filter-checkbox {
+.filter-trigger {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
-  font-size: 0.8rem;
+  justify-content: center;
+  gap: 0.45rem;
+  border: 1px solid var(--ui-control-border);
+  border-radius: var(--ui-control-radius);
+  background: var(--ui-control-bg);
+  color: var(--ui-control-text);
+  min-height: 40px;
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+  box-shadow: var(--ui-control-shadow);
+  transition: border-color 0.15s ease;
+}
+
+.filter-trigger:hover,
+.filter-trigger:focus-visible {
+  border-color: var(--ui-focus-border);
+  outline: none;
+}
+
+.filter-trigger-warning {
+  border-color: #f59e0b;
+}
+
+.filter-badge {
+  min-width: 1.2rem;
+  height: 1.2rem;
+  border-radius: 999px;
+  padding: 0 0.3rem;
+  background: var(--color-brand);
+  color: white;
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1.2rem;
+}
+
+.filter-badge-warning {
+  background: #f59e0b;
+}
+
+.top-filter-dropdown {
+  display: grid;
+  gap: 0.2rem;
+  width: min(300px, 90vw);
+}
+
+.top-filter-dropdown-label {
+  padding: 0.35rem 0.5rem;
+  font-size: 0.76rem;
+  font-weight: 700;
   color: #334155;
-  white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.top-filter-dropdown-separator {
+  height: 1px;
+  margin: 0.2rem 0.3rem;
+  background: var(--ui-control-border);
+}
+
+.top-filter-dropdown-hint {
+  margin: 0.2rem 0.5rem 0.35rem;
+  font-size: 0.74rem;
+  color: #475569;
+}
+
+.top-filter-dropdown-hint-warning {
+  color: #b45309;
 }
 
 .top-filter-action {
@@ -134,7 +206,7 @@ body {
 
 .top-filter-status {
   grid-column: 1 / -1;
-  font-size: 0.78rem;
+  font-size: 0.8rem;
   color: #475569;
 }
 
@@ -472,13 +544,21 @@ body {
 
 @media (max-width: 1180px) {
   .top-filter-bar {
-    grid-template-columns: minmax(180px, 1fr) minmax(220px, 2fr) 150px 130px auto auto auto auto;
+    grid-template-columns:
+      minmax(180px, 1fr)
+      minmax(220px, 2fr)
+      auto
+      150px
+      130px
+      auto
+      auto
+      auto;
   }
 }
 
 @media (max-width: 1023px) {
   .top-filter-bar {
-    grid-template-columns: 1fr 1fr 140px 120px auto auto auto auto;
+    grid-template-columns: 1fr 1fr auto 140px 120px auto auto auto;
   }
 
   .library-gate-controls {
@@ -488,16 +568,46 @@ body {
 
 @media (max-width: 767px) {
   .top-filter-bar {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: auto 1fr;
   }
 
   .top-filter-status {
     grid-column: 1 / -1;
   }
 
-  .library-chip,
+  .library-chip {
+    grid-column: 1 / -1;
+  }
+
   .top-filter-search {
     grid-column: 1 / -1;
+  }
+
+  .filter-trigger {
+    grid-column: 1 / 2;
+  }
+
+  .top-filter-search-action {
+    grid-column: 2 / 3;
+    width: 100%;
+  }
+
+  .top-filter-sort-mode {
+    grid-column: 1 / 2;
+  }
+
+  .top-filter-sort-direction {
+    grid-column: 2 / 3;
+  }
+
+  .top-filter-refresh-action {
+    grid-column: 1 / 2;
+    width: 100%;
+  }
+
+  .top-filter-settings-action {
+    grid-column: 2 / 3;
+    width: 100%;
   }
 
   .library-gate {

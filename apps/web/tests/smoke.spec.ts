@@ -143,3 +143,123 @@ test("renders normalized image/video media tiles and falls back on media errors"
   const brokenCard = page.locator(".thumb-card").filter({ hasText: "broken-image.webp" });
   await expect(brokenCard.locator(".thumb-media-icon")).toHaveText("WEBP");
 });
+
+test("applies top-bar filter menu toggles with live query sync and request flags", async ({ page }) => {
+  const entries = [
+    { id: 301, path: "images/sample.webp", filename: "sample.webp", suffix: "webp", tag_ids: [] }
+  ];
+  const searchRequests: Array<{ query: string; show_hidden_entries: boolean }> = [];
+
+  const settingsPayload = {
+    sorting_mode: "file.date_added",
+    ascending: false,
+    show_hidden_entries: false,
+    page_size: 200,
+    layout: {
+      main_split_ratio: 0.78,
+      main_left_collapsed: false,
+      main_right_collapsed: false,
+      main_last_open_ratio: 0.78,
+      inspector_split_ratio: 0.52,
+      preview_collapsed: false,
+      metadata_collapsed: false,
+      inspector_last_open_ratio: 0.52,
+      mobile_active_pane: "grid"
+    }
+  };
+
+  await page.addInitScript((apiBaseUrl) => {
+    (window as { tagstudioNative?: { apiBaseUrl: string } }).tagstudioNative = { apiBaseUrl };
+  }, API_BASE_URL);
+
+  await page.route(`${API_BASE_URL}/api/v1/**`, async (route) => {
+    const request = route.request();
+    const { pathname } = new URL(request.url());
+
+    if (pathname === "/api/v1/libraries/state") {
+      await fulfillJson(route, {
+        is_open: true,
+        library_path: "/tmp/library",
+        entries_count: entries.length,
+        tags_count: 0
+      });
+      return;
+    }
+
+    if (pathname === "/api/v1/settings") {
+      await fulfillJson(route, settingsPayload);
+      return;
+    }
+
+    if (pathname === "/api/v1/field-types") {
+      await fulfillJson(route, []);
+      return;
+    }
+
+    if (pathname === "/api/v1/tags") {
+      await fulfillJson(route, []);
+      return;
+    }
+
+    if (pathname === "/api/v1/search" && request.method() === "POST") {
+      const payload = request.postDataJSON() as {
+        query?: string;
+        show_hidden_entries?: boolean;
+      };
+
+      searchRequests.push({
+        query: payload.query?.trim() ?? "",
+        show_hidden_entries: payload.show_hidden_entries ?? false
+      });
+
+      await fulfillJson(route, {
+        total_count: entries.length,
+        ids: entries.map((entry) => entry.id),
+        entries
+      });
+      return;
+    }
+
+    await fulfillJson(route, { detail: `Unmocked endpoint: ${pathname}` }, 404);
+  });
+
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "Files" })).toBeVisible();
+  await expect.poll(() => searchRequests.length).toBe(1);
+
+  const searchInput = page.getByPlaceholder("Search entries (e.g. tag:\"favorite\" or path:\"*.png\")");
+  const searchButton = page.getByRole("button", { name: "Search" });
+  const filterButton = page.getByRole("button", { name: "Open filters menu" });
+
+  await searchInput.fill("special:untagged");
+  await filterButton.click();
+  await expect(page.getByRole("menuitemcheckbox", { name: "Untagged" })).toHaveAttribute(
+    "aria-checked",
+    "true"
+  );
+
+  await page.getByRole("menuitemcheckbox", { name: "Untagged" }).click();
+  await expect.poll(() => searchRequests.at(-1)?.query).toBe("");
+
+  await searchInput.fill("tag:foo");
+  await searchButton.click();
+  await expect.poll(() => searchRequests.at(-1)?.query).toBe("tag:foo");
+
+  await filterButton.click();
+  await page.getByRole("menuitemcheckbox", { name: "Untagged" }).click();
+  await expect.poll(() => searchRequests.at(-1)?.query).toBe("tag:foo special:untagged");
+  await expect(filterButton).toHaveClass(/filter-trigger-warning/);
+  await filterButton.click();
+  await expect(page.getByText("usually returns zero results")).toBeVisible();
+
+  await page.getByRole("menuitemcheckbox", { name: "Show hidden entries" }).click();
+  await expect.poll(() => searchRequests.at(-1)?.show_hidden_entries).toBe(true);
+
+  await searchInput.fill("(special:untagged OR tag:foo)");
+  await searchButton.click();
+  await expect.poll(() => searchRequests.at(-1)?.query).toBe("(special:untagged OR tag:foo)");
+  await filterButton.click();
+  await expect(
+    page.getByText("Advanced query detected. Untagged token removal is conservative.")
+  ).toBeVisible();
+});
