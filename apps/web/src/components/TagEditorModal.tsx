@@ -1,15 +1,7 @@
-import {
-  type TagColorNamespaceResponse,
-  type TagCreatePayload,
-  type TagResponse,
-  type TagUpdatePayload
-} from "@tagstudio/api-client";
+import { type TagCreatePayload, type TagResponse, type TagUpdatePayload } from "@tagstudio/api-client";
 import { Button } from "@tagstudio/ui";
-import { useQuery } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
 
-import { api } from "@/api/client";
-import { useDraggableModalPosition } from "@/hooks/useDraggableModalPosition";
+import { useTagEditorWorkflow } from "@/hooks/useTagEditorWorkflow";
 
 type TagEditorModalProps = {
   open: boolean;
@@ -31,48 +23,6 @@ const LIMIT_OPTIONS: Array<{ label: string; value: number }> = [
   { label: "All", value: -1 }
 ];
 
-function toUniqueAliases(values: string[]): string[] {
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (const value of values) {
-    const trimmed = value.trim();
-    if (!trimmed) {
-      continue;
-    }
-    const key = trimmed.toLowerCase();
-    if (seen.has(key)) {
-      continue;
-    }
-    seen.add(key);
-    out.push(trimmed);
-  }
-  return out;
-}
-
-function findColorName(
-  groups: TagColorNamespaceResponse[] | undefined,
-  namespace: string | null,
-  slug: string | null
-): string {
-  if (!namespace || !slug || !groups) {
-    return "No Color";
-  }
-
-  for (const group of groups) {
-    if (group.namespace !== namespace) {
-      continue;
-    }
-
-    for (const color of group.colors) {
-      if (color.slug === slug) {
-        return `${group.namespace_name}: ${color.name}`;
-      }
-    }
-  }
-
-  return "No Color";
-}
-
 export function TagEditorModal({
   open,
   mode,
@@ -83,194 +33,33 @@ export function TagEditorModal({
   onUpdate,
   onSaved
 }: TagEditorModalProps) {
-  const [name, setName] = useState("");
-  const [shorthand, setShorthand] = useState("");
-  const [aliases, setAliases] = useState<string[]>([]);
-  const [parentIds, setParentIds] = useState<number[]>([]);
-  const [disambiguationId, setDisambiguationId] = useState<number | null>(null);
-  const [colorNamespace, setColorNamespace] = useState<string | null>(null);
-  const [colorSlug, setColorSlug] = useState<string | null>(null);
-  const [isCategory, setIsCategory] = useState(false);
-  const [isHidden, setIsHidden] = useState(false);
-
-  const [parentPickerOpen, setParentPickerOpen] = useState(false);
-  const [parentQuery, setParentQuery] = useState("");
-  const [parentLimit, setParentLimit] = useState(25);
-  const [colorPickerOpen, setColorPickerOpen] = useState(false);
-  const [savePending, setSavePending] = useState(false);
-
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") {
-        return;
-      }
-
-      event.preventDefault();
-      event.stopPropagation();
-
-      if (colorPickerOpen) {
-        setColorPickerOpen(false);
-      } else if (parentPickerOpen) {
-        setParentPickerOpen(false);
-      } else {
-        onClose();
-      }
-    };
-
-    window.addEventListener("keydown", onKeyDown, true);
-    return () => window.removeEventListener("keydown", onKeyDown, true);
-  }, [open, colorPickerOpen, parentPickerOpen, onClose]);
-
-  const tagEditorDrag = useDraggableModalPosition({ open });
-  const parentPickerDrag = useDraggableModalPosition({ open: open && parentPickerOpen });
-  const colorPickerDrag = useDraggableModalPosition({ open: open && colorPickerOpen });
-
-  const allTagsQuery = useQuery({
-    queryKey: ["tag-editor-all-tags"],
-    queryFn: () => api.getTags(undefined, -1),
-    enabled: open
+  const workflow = useTagEditorWorkflow({
+    open,
+    mode,
+    tag,
+    initialName,
+    onClose,
+    onCreate,
+    onUpdate,
+    onSaved
   });
-
-  const parentCandidatesQuery = useQuery({
-    queryKey: ["tag-editor-parent-candidates", tag?.id ?? "new", parentQuery, parentLimit],
-    queryFn: () => api.getTags(parentQuery, parentLimit, tag?.id),
-    enabled: open && parentPickerOpen
-  });
-
-  const tagColorsQuery = useQuery({
-    queryKey: ["tag-colors"],
-    queryFn: () => api.getTagColors(),
-    enabled: open
-  });
-
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-
-    setName(mode === "create" ? (initialName ?? "") : (tag?.name ?? ""));
-    setShorthand(mode === "create" ? "" : (tag?.shorthand ?? ""));
-    setAliases(mode === "create" ? [] : [...(tag?.aliases ?? [])]);
-    setParentIds(mode === "create" ? [] : [...(tag?.parent_ids ?? [])]);
-    setDisambiguationId(mode === "create" ? null : (tag?.disambiguation_id ?? null));
-    setColorNamespace(mode === "create" ? null : (tag?.color_namespace ?? null));
-    setColorSlug(mode === "create" ? null : (tag?.color_slug ?? null));
-    setIsCategory(mode === "create" ? false : (tag?.is_category ?? false));
-    setIsHidden(mode === "create" ? false : (tag?.is_hidden ?? false));
-    setParentPickerOpen(false);
-    setParentQuery("");
-    setParentLimit(25);
-    setColorPickerOpen(false);
-    setSavePending(false);
-  }, [initialName, mode, open, tag]);
-
-  const tagById = useMemo(() => {
-    const map = new Map<number, TagResponse>();
-    for (const item of allTagsQuery.data ?? []) {
-      map.set(item.id, item);
-    }
-    return map;
-  }, [allTagsQuery.data]);
-
-  const disambiguationLabel = useMemo(() => {
-    if (!disambiguationId) {
-      return "";
-    }
-    const parent = tagById.get(disambiguationId);
-    const display = parent?.shorthand || parent?.name || `#${disambiguationId}`;
-    return `${name.trim() || "Tag"} (${display})`;
-  }, [disambiguationId, name, tagById]);
-
-  const colorLabel = useMemo(
-    () => findColorName(tagColorsQuery.data, colorNamespace, colorSlug),
-    [colorNamespace, colorSlug, tagColorsQuery.data]
-  );
 
   if (!open) {
     return null;
   }
 
-  const normalizedName = name.trim();
-  const canSave = normalizedName.length > 0 && !savePending;
-
-  const selectedParents = parentIds
-    .map((id) => tagById.get(id))
-    .filter((value): value is TagResponse => value !== undefined)
-    .sort((a, b) => a.name.localeCompare(b.name));
-
-  const removeParent = (parentId: number) => {
-    setParentIds((prev) => prev.filter((id) => id !== parentId));
-    setDisambiguationId((prev) => (prev === parentId ? null : prev));
-  };
-
-  const addAliasRow = () => {
-    setAliases((prev) => [...prev, ""]);
-  };
-
-  const updateAlias = (index: number, nextValue: string) => {
-    setAliases((prev) => prev.map((value, idx) => (idx === index ? nextValue : value)));
-  };
-
-  const removeAlias = (index: number) => {
-    setAliases((prev) => prev.filter((_, idx) => idx !== index));
-  };
-
-  const saveTag = async () => {
-    if (!canSave) {
-      return;
-    }
-
-    const aliasValues = toUniqueAliases(aliases);
-    const payload: TagCreatePayload = {
-      name: normalizedName,
-      shorthand: shorthand.trim() ? shorthand.trim() : null,
-      aliases: aliasValues,
-      parent_ids: [...parentIds],
-      disambiguation_id: disambiguationId,
-      color_namespace: colorNamespace,
-      color_slug: colorSlug,
-      is_category: isCategory,
-      is_hidden: isHidden
-    };
-
-    setSavePending(true);
-    try {
-      const saved =
-        mode === "create" || !tag
-          ? await onCreate(payload)
-          : await onUpdate(tag.id, {
-              ...payload,
-              aliases: payload.aliases,
-              parent_ids: payload.parent_ids,
-              is_category: payload.is_category,
-              is_hidden: payload.is_hidden
-            });
-
-      if (saved) {
-        onSaved?.(saved);
-        onClose();
-      }
-    } finally {
-      setSavePending(false);
-    }
-  };
-
   return (
     <div className="overlay" role="presentation" onClick={onClose}>
       <div
-        ref={tagEditorDrag.panelRef}
-        className={`overlay-panel panel tag-editor-panel ${tagEditorDrag.isDragging ? "modal-panel-dragging" : ""}`}
+        ref={workflow.tagEditorDrag.panelRef}
+        className={`overlay-panel panel tag-editor-panel ${workflow.tagEditorDrag.isDragging ? "modal-panel-dragging" : ""}`}
         role="dialog"
         aria-modal="true"
         aria-label={mode === "create" ? "Create tag" : "Edit tag"}
-        style={tagEditorDrag.panelStyle}
+        style={workflow.tagEditorDrag.panelStyle}
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="modal-drag-handle" {...tagEditorDrag.dragHandleProps}>
+        <div className="modal-drag-handle" {...workflow.tagEditorDrag.dragHandleProps}>
           <h2 className="panel-title m-0">{mode === "create" ? "New Tag" : "Edit Tag"}</h2>
         </div>
 
@@ -278,8 +67,8 @@ export function TagEditorModal({
           <span>Name</span>
           <input
             className="input-base"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
+            value={workflow.name}
+            onChange={(event) => workflow.setName(event.target.value)}
             placeholder="Tag name"
           />
         </label>
@@ -288,8 +77,8 @@ export function TagEditorModal({
           <span>Shorthand</span>
           <input
             className="input-base"
-            value={shorthand}
-            onChange={(event) => setShorthand(event.target.value)}
+            value={workflow.shorthand}
+            onChange={(event) => workflow.setShorthand(event.target.value)}
             placeholder="Optional shorthand"
           />
         </label>
@@ -297,20 +86,20 @@ export function TagEditorModal({
         <div className="settings-row">
           <span>Aliases</span>
           <div className="tag-editor-aliases">
-            {aliases.map((alias, index) => (
+            {workflow.aliases.map((alias, index) => (
               <div key={`alias-${index}`} className="tag-editor-alias-row">
                 <input
                   className="input-base"
                   value={alias}
-                  onChange={(event) => updateAlias(index, event.target.value)}
+                  onChange={(event) => workflow.updateAlias(index, event.target.value)}
                   placeholder="Alias"
                 />
-                <Button variant="secondary" size="sm" onClick={() => removeAlias(index)}>
+                <Button variant="secondary" size="sm" onClick={() => workflow.removeAlias(index)}>
                   -
                 </Button>
               </div>
             ))}
-            <Button variant="secondary" size="sm" onClick={addAliasRow}>
+            <Button variant="secondary" size="sm" onClick={workflow.addAliasRow}>
               + Add Alias
             </Button>
           </div>
@@ -319,20 +108,20 @@ export function TagEditorModal({
         <div className="settings-row">
           <span>Parent Tags</span>
           <div className="tag-editor-parent-list">
-            {selectedParents.length === 0 ? (
+            {workflow.selectedParents.length === 0 ? (
               <p className="tag-editor-empty">No parent tags selected.</p>
             ) : (
-              selectedParents.map((parent) => (
+              workflow.selectedParents.map((parent) => (
                 <div key={parent.id} className="tag-editor-parent-pill">
                   <span>{parent.name}</span>
-                  <Button variant="secondary" size="sm" onClick={() => removeParent(parent.id)}>
+                  <Button variant="secondary" size="sm" onClick={() => workflow.removeParent(parent.id)}>
                     Remove
                   </Button>
                 </div>
               ))
             )}
           </div>
-          <Button variant="secondary" size="sm" onClick={() => setParentPickerOpen(true)}>
+          <Button variant="secondary" size="sm" onClick={() => workflow.setParentPickerOpen(true)}>
             Add Parent Tag(s)
           </Button>
         </div>
@@ -341,14 +130,14 @@ export function TagEditorModal({
           <span>Disambiguation Parent</span>
           <select
             className="input-base"
-            value={disambiguationId ? String(disambiguationId) : ""}
+            value={workflow.disambiguationId ? String(workflow.disambiguationId) : ""}
             onChange={(event) => {
               const nextValue = event.target.value;
-              setDisambiguationId(nextValue ? Number(nextValue) : null);
+              workflow.setDisambiguationId(nextValue ? Number(nextValue) : null);
             }}
           >
             <option value="">None</option>
-            {selectedParents.map((parent) => (
+            {workflow.selectedParents.map((parent) => (
               <option key={parent.id} value={String(parent.id)}>
                 {parent.name}
               </option>
@@ -357,13 +146,13 @@ export function TagEditorModal({
           <p className="tag-editor-hint">
             This parent name is shown in the UI as <strong>TagName (ParentName)</strong>.
           </p>
-          {disambiguationLabel ? <p className="tag-editor-preview">Preview: {disambiguationLabel}</p> : null}
+          {workflow.disambiguationLabel ? <p className="tag-editor-preview">Preview: {workflow.disambiguationLabel}</p> : null}
         </div>
 
         <div className="settings-row">
           <span>Color</span>
-          <Button variant="secondary" onClick={() => setColorPickerOpen(true)}>
-            {colorLabel}
+          <Button variant="secondary" onClick={() => workflow.setColorPickerOpen(true)}>
+            {workflow.colorLabel}
           </Button>
         </div>
 
@@ -373,8 +162,8 @@ export function TagEditorModal({
             <input
               className="toggle-base"
               type="checkbox"
-              checked={isCategory}
-              onChange={(event) => setIsCategory(event.target.checked)}
+              checked={workflow.isCategory}
+              onChange={(event) => workflow.setIsCategory(event.target.checked)}
             />
             <span>Is Category</span>
           </label>
@@ -382,47 +171,47 @@ export function TagEditorModal({
             <input
               className="toggle-base"
               type="checkbox"
-              checked={isHidden}
-              onChange={(event) => setIsHidden(event.target.checked)}
+              checked={workflow.isHidden}
+              onChange={(event) => workflow.setIsHidden(event.target.checked)}
             />
             <span>Is Hidden</span>
           </label>
         </div>
 
         <div className="overlay-panel-actions">
-          <Button variant="secondary" onClick={onClose} disabled={savePending}>
+          <Button variant="secondary" onClick={onClose} disabled={workflow.savePending}>
             Cancel
           </Button>
-          <Button onClick={saveTag} disabled={!canSave}>
-            {savePending ? "Saving..." : "Save"}
+          <Button onClick={workflow.saveTag} disabled={!workflow.canSave}>
+            {workflow.savePending ? "Saving..." : "Save"}
           </Button>
         </div>
 
-        {parentPickerOpen ? (
-          <div className="overlay tag-editor-suboverlay" role="presentation" onClick={() => setParentPickerOpen(false)}>
+        {workflow.parentPickerOpen ? (
+          <div className="overlay tag-editor-suboverlay" role="presentation" onClick={() => workflow.setParentPickerOpen(false)}>
             <div
-              ref={parentPickerDrag.panelRef}
-              className={`overlay-panel panel tag-editor-subpanel ${parentPickerDrag.isDragging ? "modal-panel-dragging" : ""}`}
+              ref={workflow.parentPickerDrag.panelRef}
+              className={`overlay-panel panel tag-editor-subpanel ${workflow.parentPickerDrag.isDragging ? "modal-panel-dragging" : ""}`}
               role="dialog"
               aria-modal="true"
               aria-label="Add parent tags"
-              style={parentPickerDrag.panelStyle}
+              style={workflow.parentPickerDrag.panelStyle}
               onClick={(event) => event.stopPropagation()}
             >
-              <div className="modal-drag-handle" {...parentPickerDrag.dragHandleProps}>
+              <div className="modal-drag-handle" {...workflow.parentPickerDrag.dragHandleProps}>
                 <h3 className="panel-title m-0">Add Parent Tag(s)</h3>
               </div>
               <div className="tag-editor-parent-controls">
                 <input
                   className="input-base"
                   placeholder="Search tags"
-                  value={parentQuery}
-                  onChange={(event) => setParentQuery(event.target.value)}
+                  value={workflow.parentQuery}
+                  onChange={(event) => workflow.setParentQuery(event.target.value)}
                 />
                 <select
                   className="input-base"
-                  value={String(parentLimit)}
-                  onChange={(event) => setParentLimit(Number(event.target.value))}
+                  value={String(workflow.parentLimit)}
+                  onChange={(event) => workflow.setParentLimit(Number(event.target.value))}
                 >
                   {LIMIT_OPTIONS.map((option) => (
                     <option key={option.label} value={option.value}>
@@ -432,19 +221,15 @@ export function TagEditorModal({
                 </select>
               </div>
               <div className="tag-editor-parent-candidates">
-                {(parentCandidatesQuery.data ?? []).map((candidate) => {
-                  const alreadyAdded = parentIds.includes(candidate.id);
+                {workflow.parentCandidates.map((candidate) => {
+                  const alreadyAdded = workflow.parentIds.includes(candidate.id);
                   return (
                     <button
                       key={candidate.id}
                       type="button"
                       className="tag-editor-candidate-row"
                       disabled={alreadyAdded}
-                      onClick={() => {
-                        setParentIds((prev) => [...prev, candidate.id]);
-                        setParentPickerOpen(false);
-                        setParentQuery("");
-                      }}
+                      onClick={() => workflow.addParent(candidate.id)}
                     >
                       <span>{candidate.name}</span>
                       <span>{alreadyAdded ? "Added" : "Add"}</span>
@@ -453,7 +238,7 @@ export function TagEditorModal({
                 })}
               </div>
               <div className="overlay-panel-actions">
-                <Button variant="secondary" onClick={() => setParentPickerOpen(false)}>
+                <Button variant="secondary" onClick={() => workflow.setParentPickerOpen(false)}>
                   Done
                 </Button>
               </div>
@@ -461,34 +246,26 @@ export function TagEditorModal({
           </div>
         ) : null}
 
-        {colorPickerOpen ? (
-          <div className="overlay tag-editor-suboverlay" role="presentation" onClick={() => setColorPickerOpen(false)}>
+        {workflow.colorPickerOpen ? (
+          <div className="overlay tag-editor-suboverlay" role="presentation" onClick={() => workflow.setColorPickerOpen(false)}>
             <div
-              ref={colorPickerDrag.panelRef}
-              className={`overlay-panel panel tag-editor-subpanel ${colorPickerDrag.isDragging ? "modal-panel-dragging" : ""}`}
+              ref={workflow.colorPickerDrag.panelRef}
+              className={`overlay-panel panel tag-editor-subpanel ${workflow.colorPickerDrag.isDragging ? "modal-panel-dragging" : ""}`}
               role="dialog"
               aria-modal="true"
               aria-label="Choose tag color"
-              style={colorPickerDrag.panelStyle}
+              style={workflow.colorPickerDrag.panelStyle}
               onClick={(event) => event.stopPropagation()}
             >
-              <div className="modal-drag-handle" {...colorPickerDrag.dragHandleProps}>
+              <div className="modal-drag-handle" {...workflow.colorPickerDrag.dragHandleProps}>
                 <h3 className="panel-title m-0">Choose Tag Color</h3>
               </div>
               <div className="tag-editor-color-grid">
-                <button
-                  type="button"
-                  className="tag-editor-color-row"
-                  onClick={() => {
-                    setColorNamespace(null);
-                    setColorSlug(null);
-                    setColorPickerOpen(false);
-                  }}
-                >
+                <button type="button" className="tag-editor-color-row" onClick={workflow.clearColor}>
                   <span className="tag-editor-color-swatch" aria-hidden="true" />
                   <span>No Color</span>
                 </button>
-                {(tagColorsQuery.data ?? []).map((group) => (
+                {workflow.colorGroups.map((group) => (
                   <div key={group.namespace}>
                     <h4 className="tag-editor-color-title">{group.namespace_name}</h4>
                     {group.colors.map((color) => (
@@ -498,11 +275,7 @@ export function TagEditorModal({
                         className="tag-editor-color-row"
                         title={`${group.namespace_name}: ${color.name}`}
                         aria-label={`${group.namespace_name}: ${color.name}`}
-                        onClick={() => {
-                          setColorNamespace(color.namespace);
-                          setColorSlug(color.slug);
-                          setColorPickerOpen(false);
-                        }}
+                        onClick={() => workflow.setColor(color.namespace, color.slug)}
                       >
                         <span
                           className="tag-editor-color-swatch"
@@ -519,7 +292,7 @@ export function TagEditorModal({
                 ))}
               </div>
               <div className="overlay-panel-actions">
-                <Button variant="secondary" onClick={() => setColorPickerOpen(false)}>
+                <Button variant="secondary" onClick={() => workflow.setColorPickerOpen(false)}>
                   Done
                 </Button>
               </div>
