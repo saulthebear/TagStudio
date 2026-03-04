@@ -6,8 +6,10 @@ import { Virtuoso } from "react-virtuoso";
 
 import { api } from "@/api/client";
 import { TagEditorModal } from "@/components/TagEditorModal";
+import { useDraggableModalPosition } from "@/hooks/useDraggableModalPosition";
 import {
   deriveTagApplicationState,
+  isEditShortcutKey,
   moveHighlightIndex,
   normalizeTagQuery,
   shouldShowCreateAndAdd
@@ -78,6 +80,24 @@ export function AddTagsModal({
   const [editorTag, setEditorTag] = useState<TagResponse | null>(null);
   const [editorInitialName, setEditorInitialName] = useState("");
   const [createAndAttach, setCreateAndAttach] = useState(false);
+  const { panelRef, panelStyle, dragHandleProps, isDragging } = useDraggableModalPosition({ open });
+
+  useEffect(() => {
+    if (!open || editorOpen) {
+      return;
+    }
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") {
+        return;
+      }
+      event.preventDefault();
+      onClose();
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open, editorOpen, onClose]);
 
   const tagsQuery = useQuery({
     queryKey: ["add-tags", query, limit],
@@ -192,6 +212,15 @@ export function AddTagsModal({
       return;
     }
 
+    if (isEditShortcutKey(event)) {
+      event.preventDefault();
+      const highlightedRow = rows[highlightedIndex] ?? rows[0];
+      if (highlightedRow?.kind === "tag") {
+        openEditEditor(highlightedRow.tag);
+      }
+      return;
+    }
+
     if (event.key === "Enter") {
       event.preventDefault();
       if (rows.length > 0) {
@@ -201,23 +230,22 @@ export function AddTagsModal({
       }
       return;
     }
-
-    if (event.key === "Escape") {
-      event.preventDefault();
-      onClose();
-    }
   };
 
   return (
     <div className="overlay" role="presentation" onClick={onClose}>
       <div
-        className="overlay-panel panel add-tags-panel"
+        ref={panelRef}
+        className={`overlay-panel panel add-tags-panel ${isDragging ? "modal-panel-dragging" : ""}`}
         role="dialog"
         aria-modal="true"
         aria-label="Add tags"
+        style={panelStyle}
         onClick={(event) => event.stopPropagation()}
       >
-        <h2 className="panel-title m-0">Add Tags</h2>
+        <div className="modal-drag-handle" {...dragHandleProps}>
+          <h2 className="panel-title m-0">Add Tags</h2>
+        </div>
 
         <div className="add-tags-controls">
           <label className="settings-row add-tags-limit-row">
@@ -291,14 +319,6 @@ export function AddTagsModal({
                             : "Add"}
                     </span>
                   </button>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => openEditEditor(row.tag)}
-                    disabled={isPending}
-                  >
-                    Edit
-                  </Button>
                 </div>
               );
             }}
@@ -329,6 +349,7 @@ export function AddTagsModal({
                 }
               }
               await onAfterTagChanged();
+              await tagsQuery.refetch();
             };
             void afterSave();
           }}

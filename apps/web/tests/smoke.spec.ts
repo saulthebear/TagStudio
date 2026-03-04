@@ -502,7 +502,9 @@ test("supports add-tags modal create-and-add workflow", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Add Tag" })).toBeVisible();
 
   await page.getByRole("button", { name: "Add Tag" }).click();
-  await expect(page.getByRole("dialog", { name: "Add tags" })).toBeVisible();
+  const addTagsDialog = page.getByRole("dialog", { name: "Add tags" });
+  await expect(addTagsDialog).toBeVisible();
+  await expect(addTagsDialog.getByRole("button", { name: "Edit" })).toHaveCount(0);
 
   const searchTags = page.getByPlaceholder("Search tags");
   await searchTags.fill("game");
@@ -516,6 +518,25 @@ test("supports add-tags modal create-and-add workflow", async ({ page }) => {
   await expect.poll(() => createdTagNames.includes("game")).toBe(true);
   await expect.poll(() => addTagRequests.some((payload) => payload.tag_ids.length === 1)).toBe(true);
 
+  await searchTags.press("Control+Enter");
+  await expect(page.getByRole("dialog", { name: "Edit tag" })).toBeVisible();
+  await page.getByRole("button", { name: "Cancel" }).click();
+
+  const addTagsDragHandle = addTagsDialog.locator(".modal-drag-handle");
+  await expect(addTagsDragHandle).toBeVisible();
+  await expect(addTagsDialog).toHaveCSS("position", "fixed");
+
   await page.getByRole("button", { name: "Done" }).click();
-  await expect(page.locator(".metadata-tag-row").first()).toContainText("game");
+  const metadataChip = page.locator(".metadata-tag-chip").first();
+  await expect(metadataChip).toContainText("game");
+  await expect(page.locator(".metadata-tag-actions").getByRole("button", { name: "Edit" })).toHaveCount(0);
+
+  const chipRemoveButton = metadataChip.locator(".metadata-tag-chip-remove");
+  await expect(chipRemoveButton).toHaveCSS("opacity", "0");
+  await metadataChip.hover();
+  await expect(chipRemoveButton).toHaveCSS("opacity", "1");
+
+  await metadataChip.locator(".metadata-tag-chip-main").click();
+  await expect(page.getByRole("dialog", { name: "Edit tag" })).toBeVisible();
+  await page.getByRole("button", { name: "Cancel" }).click();
 });

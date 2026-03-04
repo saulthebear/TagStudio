@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   computeDesktopSelection,
   deriveTagApplicationState,
+  isEditShortcutKey,
   moveHighlightIndex,
   shouldShowCreateAndAdd
 } from "../src/lib/tag-workflows";
@@ -41,6 +42,13 @@ describe("tag-workflows", () => {
     expect(moveHighlightIndex(4, 5, "down")).toBe(4);
     expect(moveHighlightIndex(0, 5, "up")).toBe(0);
     expect(moveHighlightIndex(3, 5, "up")).toBe(2);
+  });
+
+  test("recognizes edit shortcut key chord", () => {
+    expect(isEditShortcutKey({ key: "Enter", ctrlKey: true, metaKey: false })).toBe(true);
+    expect(isEditShortcutKey({ key: "Enter", ctrlKey: false, metaKey: true })).toBe(true);
+    expect(isEditShortcutKey({ key: "Enter", ctrlKey: false, metaKey: false })).toBe(false);
+    expect(isEditShortcutKey({ key: "N", ctrlKey: true, metaKey: false })).toBe(false);
   });
 
   test("computes desktop multi-selection semantics", () => {

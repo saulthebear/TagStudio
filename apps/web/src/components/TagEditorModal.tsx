@@ -9,6 +9,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 
 import { api } from "@/api/client";
+import { useDraggableModalPosition } from "@/hooks/useDraggableModalPosition";
 
 type TagEditorModalProps = {
   open: boolean;
@@ -97,6 +98,36 @@ export function TagEditorModal({
   const [parentLimit, setParentLimit] = useState(25);
   const [colorPickerOpen, setColorPickerOpen] = useState(false);
   const [savePending, setSavePending] = useState(false);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      if (colorPickerOpen) {
+        setColorPickerOpen(false);
+      } else if (parentPickerOpen) {
+        setParentPickerOpen(false);
+      } else {
+        onClose();
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, [open, colorPickerOpen, parentPickerOpen, onClose]);
+
+  const tagEditorDrag = useDraggableModalPosition({ open });
+  const parentPickerDrag = useDraggableModalPosition({ open: open && parentPickerOpen });
+  const colorPickerDrag = useDraggableModalPosition({ open: open && colorPickerOpen });
 
   const allTagsQuery = useQuery({
     queryKey: ["tag-editor-all-tags"],
@@ -231,13 +262,17 @@ export function TagEditorModal({
   return (
     <div className="overlay" role="presentation" onClick={onClose}>
       <div
-        className="overlay-panel panel tag-editor-panel"
+        ref={tagEditorDrag.panelRef}
+        className={`overlay-panel panel tag-editor-panel ${tagEditorDrag.isDragging ? "modal-panel-dragging" : ""}`}
         role="dialog"
         aria-modal="true"
         aria-label={mode === "create" ? "Create tag" : "Edit tag"}
+        style={tagEditorDrag.panelStyle}
         onClick={(event) => event.stopPropagation()}
       >
-        <h2 className="panel-title m-0">{mode === "create" ? "New Tag" : "Edit Tag"}</h2>
+        <div className="modal-drag-handle" {...tagEditorDrag.dragHandleProps}>
+          <h2 className="panel-title m-0">{mode === "create" ? "New Tag" : "Edit Tag"}</h2>
+        </div>
 
         <label className="settings-row">
           <span>Name</span>
@@ -366,13 +401,17 @@ export function TagEditorModal({
         {parentPickerOpen ? (
           <div className="overlay tag-editor-suboverlay" role="presentation" onClick={() => setParentPickerOpen(false)}>
             <div
-              className="overlay-panel panel tag-editor-subpanel"
+              ref={parentPickerDrag.panelRef}
+              className={`overlay-panel panel tag-editor-subpanel ${parentPickerDrag.isDragging ? "modal-panel-dragging" : ""}`}
               role="dialog"
               aria-modal="true"
               aria-label="Add parent tags"
+              style={parentPickerDrag.panelStyle}
               onClick={(event) => event.stopPropagation()}
             >
-              <h3 className="panel-title m-0">Add Parent Tag(s)</h3>
+              <div className="modal-drag-handle" {...parentPickerDrag.dragHandleProps}>
+                <h3 className="panel-title m-0">Add Parent Tag(s)</h3>
+              </div>
               <div className="tag-editor-parent-controls">
                 <input
                   className="input-base"
@@ -425,13 +464,17 @@ export function TagEditorModal({
         {colorPickerOpen ? (
           <div className="overlay tag-editor-suboverlay" role="presentation" onClick={() => setColorPickerOpen(false)}>
             <div
-              className="overlay-panel panel tag-editor-subpanel"
+              ref={colorPickerDrag.panelRef}
+              className={`overlay-panel panel tag-editor-subpanel ${colorPickerDrag.isDragging ? "modal-panel-dragging" : ""}`}
               role="dialog"
               aria-modal="true"
               aria-label="Choose tag color"
+              style={colorPickerDrag.panelStyle}
               onClick={(event) => event.stopPropagation()}
             >
-              <h3 className="panel-title m-0">Choose Tag Color</h3>
+              <div className="modal-drag-handle" {...colorPickerDrag.dragHandleProps}>
+                <h3 className="panel-title m-0">Choose Tag Color</h3>
+              </div>
               <div className="tag-editor-color-grid">
                 <button
                   type="button"

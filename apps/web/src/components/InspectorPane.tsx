@@ -362,35 +362,32 @@ function MetadataContent({
             <p className="tag-editor-empty">No tags applied.</p>
           ) : (
             aggregateTagRows.map((row) => (
-              <div key={row.tagId} className="metadata-tag-row">
-                <span>
-                  {row.tag?.name ?? `Tag #${row.tagId}`}
-                  {row.state === "partial" ? <em className="metadata-tag-partial"> (Partial)</em> : null}
-                </span>
-                <div className="metadata-tag-row-actions">
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => {
-                      if (row.tag) {
-                        setEditTag(row.tag);
-                      }
-                    }}
-                    disabled={!row.tag || tagEditPending}
-                  >
-                    Edit
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => {
-                      void removeTag(row.tagId);
-                    }}
-                    disabled={tagMutationPending}
-                  >
-                    Remove
-                  </Button>
-                </div>
+              <div key={row.tagId} className="metadata-tag-chip">
+                <button
+                  type="button"
+                  className="metadata-tag-chip-main"
+                  onClick={() => {
+                    if (row.tag) {
+                      setEditTag(row.tag);
+                    }
+                  }}
+                  disabled={!row.tag || tagEditPending}
+                >
+                  <span className="metadata-tag-chip-label">{row.tag?.name ?? `Tag #${row.tagId}`}</span>
+                  {row.state === "partial" ? <span className="metadata-tag-partial">Partial</span> : null}
+                </button>
+                <button
+                  type="button"
+                  className="metadata-tag-chip-remove"
+                  aria-label={`Remove ${row.tag?.name ?? `Tag #${row.tagId}`}`}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    void removeTag(row.tagId);
+                  }}
+                  disabled={tagMutationPending}
+                >
+                  ×
+                </button>
               </div>
             ))
           )}
