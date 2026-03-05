@@ -10,6 +10,7 @@ import { ErrorPanel } from "@/components/ErrorPanel";
 import { InspectorPane } from "@/components/InspectorPane";
 import { LibraryGate } from "@/components/LibraryGate";
 import { LibrarySwitcherModal } from "@/components/LibrarySwitcherModal";
+import { ModalStackProvider } from "@/hooks/useModalStackDepth";
 import { RefreshStatusPanel } from "@/components/RefreshStatusPanel";
 import { SettingsModal } from "@/components/SettingsModal";
 import { SplitPane } from "@/components/SplitPane";
@@ -312,8 +313,9 @@ export function App() {
   );
 
   return (
-    <main className="app-shell app-shell-live">
-      {uiError ? <ErrorPanel message={uiError} /> : null}
+    <ModalStackProvider>
+      <main className="app-shell app-shell-live">
+        {uiError ? <ErrorPanel message={uiError} /> : null}
 
       {!isLibraryOpen ? (
         <LibraryGate
@@ -435,32 +437,33 @@ export function App() {
         </>
       )}
 
-      <LibrarySwitcherModal
-        open={libraryModalOpen}
-        libraryPath={libraryPath}
-        openPending={openPending}
-        onLibraryPathChange={setLibraryPath}
-        onOpen={openLibrary}
-        onCreate={createLibrary}
-        onClose={closeLibraryModal}
-      />
+        <LibrarySwitcherModal
+          open={libraryModalOpen}
+          libraryPath={libraryPath}
+          openPending={openPending}
+          onLibraryPathChange={setLibraryPath}
+          onOpen={openLibrary}
+          onCreate={createLibrary}
+          onClose={closeLibraryModal}
+        />
 
-      <SettingsModal
-        open={settingsOpen}
-        sortingMode={settingsDraft.sortingMode}
-        ascending={settingsDraft.ascending}
-        showHiddenEntries={settingsDraft.showHiddenEntries}
-        pageSize={settingsDraft.pageSize}
-        savePending={savePending}
-        onSortingModeChange={(value) => setSettingsDraft((prev) => ({ ...prev, sortingMode: value }))}
-        onAscendingChange={(value) => setSettingsDraft((prev) => ({ ...prev, ascending: value }))}
-        onShowHiddenChange={(value) =>
-          setSettingsDraft((prev) => ({ ...prev, showHiddenEntries: value }))
-        }
-        onPageSizeChange={(value) => setSettingsDraft((prev) => ({ ...prev, pageSize: value }))}
-        onSave={handleSaveSettings}
-        onClose={closeSettings}
-      />
-    </main>
+        <SettingsModal
+          open={settingsOpen}
+          sortingMode={settingsDraft.sortingMode}
+          ascending={settingsDraft.ascending}
+          showHiddenEntries={settingsDraft.showHiddenEntries}
+          pageSize={settingsDraft.pageSize}
+          savePending={savePending}
+          onSortingModeChange={(value) => setSettingsDraft((prev) => ({ ...prev, sortingMode: value }))}
+          onAscendingChange={(value) => setSettingsDraft((prev) => ({ ...prev, ascending: value }))}
+          onShowHiddenChange={(value) =>
+            setSettingsDraft((prev) => ({ ...prev, showHiddenEntries: value }))
+          }
+          onPageSizeChange={(value) => setSettingsDraft((prev) => ({ ...prev, pageSize: value }))}
+          onSave={handleSaveSettings}
+          onClose={closeSettings}
+        />
+      </main>
+    </ModalStackProvider>
   );
 }

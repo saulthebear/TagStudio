@@ -4,6 +4,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type RefObject,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState
@@ -26,15 +27,38 @@ type DragPosition = {
   top: number;
 };
 
+type ViewportSize = {
+  width: number;
+  height: number;
+};
+
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
 
-function clampToViewport(panel: HTMLElement, next: DragPosition, margin: number): DragPosition {
-  const rect = panel.getBoundingClientRect();
-  const maxLeft = Math.max(margin, window.innerWidth - rect.width - margin);
-  const maxTop = Math.max(margin, window.innerHeight - rect.height - margin);
+function getViewportSize(): ViewportSize {
+  if (window.visualViewport) {
+    return {
+      width: window.visualViewport.width,
+      height: window.visualViewport.height
+    };
+  }
 
+  return {
+    width: document.documentElement.clientWidth,
+    height: document.documentElement.clientHeight
+  };
+}
+
+function clampToViewport(
+  panelWidth: number,
+  panelHeight: number,
+  next: DragPosition,
+  margin: number
+): DragPosition {
+  const { width, height } = getViewportSize();
+  const maxLeft = Math.max(margin, width - panelWidth - margin);
+  const maxTop = Math.max(margin, height - panelHeight - margin);
   return {
     left: clamp(next.left, margin, maxLeft),
     top: clamp(next.top, margin, maxTop)
@@ -43,11 +67,12 @@ function clampToViewport(panel: HTMLElement, next: DragPosition, margin: number)
 
 function centerInViewport(panel: HTMLElement, margin: number): DragPosition {
   const rect = panel.getBoundingClientRect();
+  const { width, height } = getViewportSize();
   const centered = {
-    left: (window.innerWidth - rect.width) / 2,
-    top: (window.innerHeight - rect.height) / 2
+    left: (width - rect.width) / 2,
+    top: (height - rect.height) / 2
   };
-  return clampToViewport(panel, centered, margin);
+  return clampToViewport(rect.width, rect.height, centered, margin);
 }
 
 export function useDraggableModalPosition({
@@ -68,37 +93,34 @@ export function useDraggableModalPosition({
   const [position, setPosition] = useState<DragPosition | null>(null);
   const [isDragging, setIsDragging] = useState(false);
 
-  useEffect(() => {
+  const cleanupDragState = () => {
+    if (dragCleanupRef.current) {
+      dragCleanupRef.current();
+      dragCleanupRef.current = null;
+    }
+    dragStateRef.current = null;
+    setIsDragging(false);
+    document.body.classList.remove("modal-dragging");
+  };
+
+  useLayoutEffect(() => {
     if (!open) {
-      if (dragCleanupRef.current) {
-        dragCleanupRef.current();
-        dragCleanupRef.current = null;
-      }
-      dragStateRef.current = null;
-      setIsDragging(false);
+      cleanupDragState();
       setPosition(null);
-      document.body.classList.remove("modal-dragging");
       return;
     }
 
-    const frameId = window.requestAnimationFrame(() => {
-      if (!panelRef.current) {
-        return;
-      }
-      setPosition(centerInViewport(panelRef.current, margin));
-    });
+    const panel = panelRef.current;
+    if (!panel) {
+      return;
+    }
 
-    return () => {
-      window.cancelAnimationFrame(frameId);
-    };
+    setPosition(centerInViewport(panel, margin));
   }, [margin, open]);
 
   useEffect(() => {
     return () => {
-      if (dragCleanupRef.current) {
-        dragCleanupRef.current();
-        dragCleanupRef.current = null;
-      }
+      cleanupDragState();
     };
   }, []);
 
@@ -117,7 +139,8 @@ export function useDraggableModalPosition({
         if (!current) {
           return centerInViewport(panel, margin);
         }
-        return clampToViewport(panel, current, margin);
+        const rect = panel.getBoundingClientRect();
+        return clampToViewport(rect.width, rect.height, current, margin);
       });
     };
 
@@ -161,8 +184,10 @@ export function useDraggableModalPosition({
       }
 
       moveEvent.preventDefault();
+      const panelRect = panelElement.getBoundingClientRect();
       const next = clampToViewport(
-        panelElement,
+        panelRect.width,
+        panelRect.height,
         {
           left: moveEvent.clientX - dragState.offsetX,
           top: moveEvent.clientY - dragState.offsetY
@@ -218,6 +243,12 @@ export function useDraggableModalPosition({
       return;
     }
 
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      // noop: pointer capture can fail on unsupported targets
+    }
+
     startDrag({
       mode: "pointer",
       clientX: event.clientX,
@@ -245,10 +276,19 @@ export function useDraggableModalPosition({
     if (!position) {
       return undefined;
     }
+    const vars: CSSProperties & {
+      "--modal-x": string;
+      "--modal-y": string;
+    } = {
+      "--modal-x": `${position.left}px`,
+      "--modal-y": `${position.top}px`
+    };
+
     return {
+      ...vars,
       position: "fixed",
-      left: position.left,
-      top: position.top,
+      left: 0,
+      top: 0,
       margin: 0
     };
   }, [position]);

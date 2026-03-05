@@ -1,4 +1,4 @@
-import { expect, test, type Route } from "@playwright/test";
+import { expect, test, type Locator, type Page, type Route } from "@playwright/test";
 
 const API_BASE_URL = "http://127.0.0.1:5987";
 
@@ -10,6 +10,59 @@ async function fulfillJson(route: Route, payload: unknown, status = 200): Promis
     contentType: "application/json",
     body: JSON.stringify(payload)
   });
+}
+
+async function expectDialogWithinViewport(
+  page: Page,
+  dialogLocator: Locator,
+  margin = 8
+) {
+  const viewport = page.viewportSize();
+  expect(viewport).not.toBeNull();
+  const bounds = await dialogLocator.boundingBox();
+  expect(bounds).not.toBeNull();
+  const box = bounds!;
+  expect(box.x).toBeGreaterThanOrEqual(margin);
+  expect(box.y).toBeGreaterThanOrEqual(margin);
+  expect(box.x + box.width).toBeLessThanOrEqual(viewport!.width - margin);
+  expect(box.y + box.height).toBeLessThanOrEqual(viewport!.height - margin);
+}
+
+async function dragDialogBy(
+  page: Page,
+  dialogLocator: Locator,
+  handleLocator: Locator,
+  delta: { x: number; y: number },
+  tolerance = 36
+) {
+  const before = await dialogLocator.boundingBox();
+  expect(before).not.toBeNull();
+  const handleBounds = await handleLocator.boundingBox();
+  expect(handleBounds).not.toBeNull();
+
+  const startX = handleBounds!.x + handleBounds!.width / 2;
+  const startY = handleBounds!.y + handleBounds!.height / 2;
+  await page.mouse.move(startX, startY);
+  await page.mouse.down();
+  await page.mouse.move(startX + delta.x, startY + delta.y);
+  await page.mouse.up();
+
+  await expect
+    .poll(async () => dialogLocator.boundingBox(), {
+      timeout: 2000
+    })
+    .not.toBeNull();
+
+  const after = await dialogLocator.boundingBox();
+  expect(after).not.toBeNull();
+  const movedX = after!.x - before!.x;
+  const movedY = after!.y - before!.y;
+  if (delta.x !== 0) {
+    expect(Math.abs(movedX - delta.x)).toBeLessThanOrEqual(tolerance);
+  }
+  if (delta.y !== 0) {
+    expect(Math.abs(movedY - delta.y)).toBeLessThanOrEqual(tolerance);
+  }
 }
 
 test("renders web foundation shell", async ({ page }) => {
@@ -518,13 +571,46 @@ test("supports add-tags modal create-and-add workflow", async ({ page }) => {
   await expect.poll(() => createdTagNames.includes("game")).toBe(true);
   await expect.poll(() => addTagRequests.some((payload) => payload.tag_ids.length === 1)).toBe(true);
 
-  await searchTags.press("Control+Enter");
-  await expect(page.getByRole("dialog", { name: "Edit tag" })).toBeVisible();
-  await page.getByRole("button", { name: "Cancel" }).click();
-
   const addTagsDragHandle = addTagsDialog.locator(".modal-drag-handle");
   await expect(addTagsDragHandle).toBeVisible();
   await expect(addTagsDialog).toHaveCSS("position", "fixed");
+  await expectDialogWithinViewport(page, addTagsDialog, 8);
+  await dragDialogBy(page, addTagsDialog, addTagsDragHandle, { x: -120, y: 0 });
+  await expectDialogWithinViewport(page, addTagsDialog, 8);
+  await expect(page.locator(".modal-layer-backdrop-dim")).toHaveCount(1);
+
+  await searchTags.press("Control+Enter");
+  const editTagDialog = page.getByRole("dialog", { name: "Edit tag" });
+  await expect(editTagDialog).toBeVisible();
+  await expect(page.locator(".modal-layer-backdrop-dim")).toHaveCount(1);
+  await page.mouse.click(24, 24);
+  await expect(editTagDialog).toHaveCount(0);
+  await expect(addTagsDialog).toBeVisible();
+
+  await searchTags.press("Control+Enter");
+  await expect(editTagDialog).toBeVisible();
+  const editDragHandle = editTagDialog.locator(".modal-drag-handle");
+  await dragDialogBy(page, editTagDialog, editDragHandle, { x: 90, y: 0 });
+  await expectDialogWithinViewport(page, editTagDialog, 8);
+
+  await editTagDialog.getByRole("button", { name: "Add Parent Tag(s)" }).click();
+  const parentPickerDialog = page.getByRole("dialog", { name: "Add parent tags" });
+  await expect(parentPickerDialog).toBeVisible();
+  await dragDialogBy(page, parentPickerDialog, parentPickerDialog.locator(".modal-drag-handle"), { x: 75, y: 0 });
+  await expectDialogWithinViewport(page, parentPickerDialog, 8);
+  await page.mouse.click(24, 24);
+  await expect(parentPickerDialog).toHaveCount(0);
+  await expect(editTagDialog).toBeVisible();
+
+  await editTagDialog.getByRole("button", { name: "No Color" }).click();
+  const colorPickerDialog = page.getByRole("dialog", { name: "Choose tag color" });
+  await expect(colorPickerDialog).toBeVisible();
+  await dragDialogBy(page, colorPickerDialog, colorPickerDialog.locator(".modal-drag-handle"), { x: -80, y: 0 });
+  await expectDialogWithinViewport(page, colorPickerDialog, 8);
+  await page.mouse.click(24, 24);
+  await expect(colorPickerDialog).toHaveCount(0);
+  await expect(editTagDialog).toBeVisible();
+  await editTagDialog.getByRole("button", { name: "Cancel" }).click();
 
   await page.getByRole("button", { name: "Done" }).click();
   const metadataChip = page.locator(".metadata-tag-chip").first();

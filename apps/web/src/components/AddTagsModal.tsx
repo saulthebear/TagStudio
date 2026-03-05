@@ -2,6 +2,7 @@ import { type TagCreatePayload, type TagResponse, type TagUpdatePayload } from "
 import { Button } from "@tagstudio/ui";
 import { Virtuoso } from "react-virtuoso";
 
+import { ModalLayerPortal } from "@/components/ModalLayerPortal";
 import { TagEditorModal } from "@/components/TagEditorModal";
 import { useAddTagsWorkflow } from "@/hooks/useAddTagsWorkflow";
 import { deriveTagApplicationState } from "@/lib/tag-workflows";
@@ -50,15 +51,14 @@ export function AddTagsModal({
   }
 
   return (
-    <div className="overlay" role="presentation" onClick={onClose}>
+    <ModalLayerPortal open={open} onBackdropClick={onClose}>
       <div
         ref={workflow.panelRef}
-        className={`overlay-panel panel add-tags-panel ${workflow.isDragging ? "modal-panel-dragging" : ""}`}
+        className={`overlay-panel panel add-tags-panel modal-draggable-panel ${workflow.isDragging ? "modal-panel-dragging" : ""}`}
         role="dialog"
         aria-modal="true"
         aria-label="Add tags"
         style={workflow.panelStyle}
-        onClick={(event) => event.stopPropagation()}
       >
         <div className="modal-drag-handle" {...workflow.dragHandleProps}>
           <h2 className="panel-title m-0">Add Tags</h2>
@@ -156,6 +156,6 @@ export function AddTagsModal({
           onSaved={workflow.onTagSaved}
         />
       </div>
-    </div>
+    </ModalLayerPortal>
   );
 }

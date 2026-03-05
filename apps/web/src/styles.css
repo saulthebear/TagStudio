@@ -14,6 +14,7 @@
 }
 
 :root {
+  --modal-margin: 16px;
   --ui-control-radius: 0.75rem;
   --ui-control-border: var(--color-border-soft);
   --ui-control-bg: rgb(255 255 255 / 0.95);
@@ -513,10 +514,45 @@ body {
   padding: 1rem;
 }
 
+.modal-layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+
+.modal-layer-backdrop {
+  position: absolute;
+  inset: 0;
+}
+
+.modal-layer-backdrop-dim {
+  background: rgba(15, 23, 42, 0.38);
+}
+
+.modal-layer-backdrop-clear {
+  pointer-events: auto;
+  background: transparent;
+}
+
+.modal-layer-panel {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.modal-layer-panel > * {
+  pointer-events: auto;
+}
+
 .overlay-panel {
   width: min(700px, 100%);
   display: grid;
   gap: 0.7rem;
+}
+
+.modal-draggable-panel {
+  transform: translate3d(var(--modal-x, 0), var(--modal-y, 0), 0);
+  will-change: transform;
 }
 
 .overlay-panel-actions {
@@ -770,7 +806,7 @@ body.modal-dragging {
 }
 
 .add-tags-panel {
-  width: min(760px, 100%);
+  width: min(760px, calc(100vw - (2 * var(--modal-margin))));
   max-height: min(92vh, 860px);
   overflow: hidden;
 }
@@ -847,7 +883,7 @@ body.modal-dragging {
 }
 
 .tag-editor-panel {
-  width: min(760px, 100%);
+  width: min(760px, calc(100vw - (2 * var(--modal-margin))));
   max-height: min(92vh, 880px);
   overflow: auto;
 }
@@ -905,7 +941,7 @@ body.modal-dragging {
 }
 
 .tag-editor-subpanel {
-  width: min(640px, 100%);
+  width: min(640px, calc(100vw - (2 * var(--modal-margin))));
   max-height: min(84vh, 720px);
   overflow: auto;
 }

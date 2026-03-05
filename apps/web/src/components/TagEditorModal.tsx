@@ -1,6 +1,7 @@
 import { type TagCreatePayload, type TagResponse, type TagUpdatePayload } from "@tagstudio/api-client";
 import { Button } from "@tagstudio/ui";
 
+import { ModalLayerPortal } from "@/components/ModalLayerPortal";
 import { useTagEditorWorkflow } from "@/hooks/useTagEditorWorkflow";
 
 type TagEditorModalProps = {
@@ -49,15 +50,14 @@ export function TagEditorModal({
   }
 
   return (
-    <div className="overlay" role="presentation" onClick={onClose}>
+    <ModalLayerPortal open={open} onBackdropClick={onClose}>
       <div
         ref={workflow.tagEditorDrag.panelRef}
-        className={`overlay-panel panel tag-editor-panel ${workflow.tagEditorDrag.isDragging ? "modal-panel-dragging" : ""}`}
+        className={`overlay-panel panel tag-editor-panel modal-draggable-panel ${workflow.tagEditorDrag.isDragging ? "modal-panel-dragging" : ""}`}
         role="dialog"
         aria-modal="true"
         aria-label={mode === "create" ? "Create tag" : "Edit tag"}
         style={workflow.tagEditorDrag.panelStyle}
-        onClick={(event) => event.stopPropagation()}
       >
         <div className="modal-drag-handle" {...workflow.tagEditorDrag.dragHandleProps}>
           <h2 className="panel-title m-0">{mode === "create" ? "New Tag" : "Edit Tag"}</h2>
@@ -187,119 +187,113 @@ export function TagEditorModal({
           </Button>
         </div>
 
-        {workflow.parentPickerOpen ? (
-          <div className="overlay tag-editor-suboverlay" role="presentation" onClick={() => workflow.setParentPickerOpen(false)}>
-            <div
-              ref={workflow.parentPickerDrag.panelRef}
-              className={`overlay-panel panel tag-editor-subpanel ${workflow.parentPickerDrag.isDragging ? "modal-panel-dragging" : ""}`}
-              role="dialog"
-              aria-modal="true"
-              aria-label="Add parent tags"
-              style={workflow.parentPickerDrag.panelStyle}
-              onClick={(event) => event.stopPropagation()}
-            >
-              <div className="modal-drag-handle" {...workflow.parentPickerDrag.dragHandleProps}>
-                <h3 className="panel-title m-0">Add Parent Tag(s)</h3>
-              </div>
-              <div className="tag-editor-parent-controls">
-                <input
-                  className="input-base"
-                  placeholder="Search tags"
-                  value={workflow.parentQuery}
-                  onChange={(event) => workflow.setParentQuery(event.target.value)}
-                />
-                <select
-                  className="input-base"
-                  value={String(workflow.parentLimit)}
-                  onChange={(event) => workflow.setParentLimit(Number(event.target.value))}
-                >
-                  {LIMIT_OPTIONS.map((option) => (
-                    <option key={option.label} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="tag-editor-parent-candidates">
-                {workflow.parentCandidates.map((candidate) => {
-                  const alreadyAdded = workflow.parentIds.includes(candidate.id);
-                  return (
-                    <button
-                      key={candidate.id}
-                      type="button"
-                      className="tag-editor-candidate-row"
-                      disabled={alreadyAdded}
-                      onClick={() => workflow.addParent(candidate.id)}
-                    >
-                      <span>{candidate.name}</span>
-                      <span>{alreadyAdded ? "Added" : "Add"}</span>
-                    </button>
-                  );
-                })}
-              </div>
-              <div className="overlay-panel-actions">
-                <Button variant="secondary" onClick={() => workflow.setParentPickerOpen(false)}>
-                  Done
-                </Button>
-              </div>
+        <ModalLayerPortal open={workflow.parentPickerOpen} onBackdropClick={() => workflow.setParentPickerOpen(false)}>
+          <div
+            ref={workflow.parentPickerDrag.panelRef}
+            className={`overlay-panel panel tag-editor-subpanel modal-draggable-panel ${workflow.parentPickerDrag.isDragging ? "modal-panel-dragging" : ""}`}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Add parent tags"
+            style={workflow.parentPickerDrag.panelStyle}
+          >
+            <div className="modal-drag-handle" {...workflow.parentPickerDrag.dragHandleProps}>
+              <h3 className="panel-title m-0">Add Parent Tag(s)</h3>
             </div>
-          </div>
-        ) : null}
-
-        {workflow.colorPickerOpen ? (
-          <div className="overlay tag-editor-suboverlay" role="presentation" onClick={() => workflow.setColorPickerOpen(false)}>
-            <div
-              ref={workflow.colorPickerDrag.panelRef}
-              className={`overlay-panel panel tag-editor-subpanel ${workflow.colorPickerDrag.isDragging ? "modal-panel-dragging" : ""}`}
-              role="dialog"
-              aria-modal="true"
-              aria-label="Choose tag color"
-              style={workflow.colorPickerDrag.panelStyle}
-              onClick={(event) => event.stopPropagation()}
-            >
-              <div className="modal-drag-handle" {...workflow.colorPickerDrag.dragHandleProps}>
-                <h3 className="panel-title m-0">Choose Tag Color</h3>
-              </div>
-              <div className="tag-editor-color-grid">
-                <button type="button" className="tag-editor-color-row" onClick={workflow.clearColor}>
-                  <span className="tag-editor-color-swatch" aria-hidden="true" />
-                  <span>No Color</span>
-                </button>
-                {workflow.colorGroups.map((group) => (
-                  <div key={group.namespace}>
-                    <h4 className="tag-editor-color-title">{group.namespace_name}</h4>
-                    {group.colors.map((color) => (
-                      <button
-                        key={`${group.namespace}/${color.slug}`}
-                        type="button"
-                        className="tag-editor-color-row"
-                        title={`${group.namespace_name}: ${color.name}`}
-                        aria-label={`${group.namespace_name}: ${color.name}`}
-                        onClick={() => workflow.setColor(color.namespace, color.slug)}
-                      >
-                        <span
-                          className="tag-editor-color-swatch"
-                          style={{
-                            background: color.primary,
-                            borderColor: color.secondary ?? "#334155"
-                          }}
-                          aria-hidden="true"
-                        />
-                        <span>{color.name}</span>
-                      </button>
-                    ))}
-                  </div>
+            <div className="tag-editor-parent-controls">
+              <input
+                className="input-base"
+                placeholder="Search tags"
+                value={workflow.parentQuery}
+                onChange={(event) => workflow.setParentQuery(event.target.value)}
+              />
+              <select
+                className="input-base"
+                value={String(workflow.parentLimit)}
+                onChange={(event) => workflow.setParentLimit(Number(event.target.value))}
+              >
+                {LIMIT_OPTIONS.map((option) => (
+                  <option key={option.label} value={option.value}>
+                    {option.label}
+                  </option>
                 ))}
-              </div>
-              <div className="overlay-panel-actions">
-                <Button variant="secondary" onClick={() => workflow.setColorPickerOpen(false)}>
-                  Done
-                </Button>
-              </div>
+              </select>
+            </div>
+            <div className="tag-editor-parent-candidates">
+              {workflow.parentCandidates.map((candidate) => {
+                const alreadyAdded = workflow.parentIds.includes(candidate.id);
+                return (
+                  <button
+                    key={candidate.id}
+                    type="button"
+                    className="tag-editor-candidate-row"
+                    disabled={alreadyAdded}
+                    onClick={() => workflow.addParent(candidate.id)}
+                  >
+                    <span>{candidate.name}</span>
+                    <span>{alreadyAdded ? "Added" : "Add"}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="overlay-panel-actions">
+              <Button variant="secondary" onClick={() => workflow.setParentPickerOpen(false)}>
+                Done
+              </Button>
             </div>
           </div>
-        ) : null}
+        </ModalLayerPortal>
+
+        <ModalLayerPortal open={workflow.colorPickerOpen} onBackdropClick={() => workflow.setColorPickerOpen(false)}>
+          <div
+            ref={workflow.colorPickerDrag.panelRef}
+            className={`overlay-panel panel tag-editor-subpanel modal-draggable-panel ${workflow.colorPickerDrag.isDragging ? "modal-panel-dragging" : ""}`}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Choose tag color"
+            style={workflow.colorPickerDrag.panelStyle}
+          >
+            <div className="modal-drag-handle" {...workflow.colorPickerDrag.dragHandleProps}>
+              <h3 className="panel-title m-0">Choose Tag Color</h3>
+            </div>
+            <div className="tag-editor-color-grid">
+              <button type="button" className="tag-editor-color-row" onClick={workflow.clearColor}>
+                <span className="tag-editor-color-swatch" aria-hidden="true" />
+                <span>No Color</span>
+              </button>
+              {workflow.colorGroups.map((group) => (
+                <div key={group.namespace}>
+                  <h4 className="tag-editor-color-title">{group.namespace_name}</h4>
+                  {group.colors.map((color) => (
+                    <button
+                      key={`${group.namespace}/${color.slug}`}
+                      type="button"
+                      className="tag-editor-color-row"
+                      title={`${group.namespace_name}: ${color.name}`}
+                      aria-label={`${group.namespace_name}: ${color.name}`}
+                      onClick={() => workflow.setColor(color.namespace, color.slug)}
+                    >
+                      <span
+                        className="tag-editor-color-swatch"
+                        style={{
+                          background: color.primary,
+                          borderColor: color.secondary ?? "#334155"
+                        }}
+                        aria-hidden="true"
+                      />
+                      <span>{color.name}</span>
+                    </button>
+                  ))}
+                </div>
+              ))}
+            </div>
+            <div className="overlay-panel-actions">
+              <Button variant="secondary" onClick={() => workflow.setColorPickerOpen(false)}>
+                Done
+              </Button>
+            </div>
+          </div>
+        </ModalLayerPortal>
       </div>
-    </div>
+    </ModalLayerPortal>
   );
 }
