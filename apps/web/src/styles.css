@@ -452,16 +452,41 @@ body {
 }
 
 .split-pane-handle {
-  background: color-mix(in oklab, var(--color-border-soft) 65%, white 35%);
-  border-radius: 999px;
+  background: transparent;
+  border-radius: 0.5rem;
   position: relative;
   flex: 0 0 var(--split-handle-size);
   width: var(--split-handle-size);
   height: 100%;
   align-self: stretch;
+  display: grid;
+  place-items: center;
   cursor: col-resize;
   min-width: 0;
   min-height: 0;
+  transition: background-color 0.12s ease;
+}
+
+.split-pane-handle::before,
+.split-pane-handle::after {
+  content: "";
+  pointer-events: none;
+  width: 2px;
+  height: 10px;
+  border-radius: 1px;
+  opacity: 0.78;
+  background: color-mix(in oklab, var(--color-border-strong) 78%, #334155 22%);
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.split-pane-handle::before {
+  left: calc(50% - 2px);
+}
+
+.split-pane-handle::after {
+  left: calc(50% + 2px);
 }
 
 .split-pane-vertical > .split-pane-handle {
@@ -469,6 +494,38 @@ body {
   height: var(--split-handle-size);
   align-self: auto;
   cursor: row-resize;
+}
+
+.split-pane-vertical > .split-pane-handle::before,
+.split-pane-vertical > .split-pane-handle::after {
+  width: 10px;
+  height: 2px;
+  border-radius: 1px;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.split-pane-vertical > .split-pane-handle::before {
+  top: calc(50% - 2px);
+}
+
+.split-pane-vertical > .split-pane-handle::after {
+  top: calc(50% + 2px);
+}
+
+.split-pane-handle:hover,
+.split-pane-handle:focus-visible {
+  background: color-mix(in oklab, var(--color-border-soft) 36%, transparent);
+}
+
+.split-pane-handle:hover::after,
+.split-pane-handle:hover::before,
+.split-pane-handle:focus-visible::after {
+  opacity: 1;
+}
+
+.split-pane-handle:focus-visible::before {
+  opacity: 1;
 }
 
 .split-pane-handle:focus-visible {

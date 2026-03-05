@@ -81,7 +81,6 @@ export function SplitPane({
   className
 }: SplitPaneProps) {
   const rootRef = useRef<HTMLDivElement | null>(null);
-  const effectiveHandleSize = Math.max(handleSize, 24);
 
   const bothOpen = !state.primaryCollapsed && !state.secondaryCollapsed;
 
@@ -146,11 +145,11 @@ export function SplitPane({
     if (totalPx <= 0) {
       return;
     }
-    const availablePx = totalPx - effectiveHandleSize;
+    const availablePx = totalPx - handleSize;
     if (availablePx <= 0) {
       return;
     }
-    const halfHandle = effectiveHandleSize / 2;
+    const halfHandle = handleSize / 2;
     const toPrimarySize = (cursorPx: number) => {
       const boundaryPx = clamp(cursorPx, halfHandle, totalPx - halfHandle);
       return clamp(boundaryPx - halfHandle, 0, availablePx);
@@ -291,7 +290,7 @@ export function SplitPane({
       style={
         {
           "--split-rail-size": `${railSize}px`,
-          "--split-handle-size": `${effectiveHandleSize}px`
+          "--split-handle-size": `${handleSize}px`
         } as CSSProperties
       }
     >
