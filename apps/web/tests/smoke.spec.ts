@@ -65,6 +65,30 @@ async function dragDialogBy(
   }
 }
 
+type Box = { x: number; y: number; width: number; height: number };
+
+function requireBox(box: Box | null, name: string): Box {
+  expect(box, `${name} should have a bounding box`).not.toBeNull();
+  if (!box) {
+    throw new Error(`Missing bounding box for ${name}`);
+  }
+  return box;
+}
+
+async function dragSeparatorTo(page: Page, label: string, targetX: number, targetY: number): Promise<void> {
+  const separator = page.getByRole("separator", { name: label });
+  await expect(separator).toBeVisible();
+
+  const box = requireBox(await separator.boundingBox(), label);
+  const startX = box.x + box.width / 2;
+  const startY = box.y + box.height / 2;
+
+  await page.mouse.move(startX, startY);
+  await page.mouse.down();
+  await page.mouse.move(targetX, targetY, { steps: 12 });
+  await page.mouse.up();
+}
+
 test("renders web foundation shell", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "TagStudio" })).toBeVisible();
@@ -625,4 +649,186 @@ test("supports add-tags modal create-and-add workflow", async ({ page }) => {
   await metadataChip.locator(".metadata-tag-chip-main").click();
   await expect(page.getByRole("dialog", { name: "Edit tag" })).toBeVisible();
   await page.getByRole("button", { name: "Cancel" }).click();
+});
+
+test("keeps split panes within bounds after collapse/expand and divider drags", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+
+  const entries = [
+    { id: 401, path: "images/sample.png", filename: "sample.png", suffix: "png", tag_ids: [] }
+  ];
+  const initialSettings = {
+    sorting_mode: "file.date_added",
+    ascending: false,
+    show_hidden_entries: false,
+    page_size: 200,
+    layout: {
+      main_split_ratio: 0.78,
+      main_left_collapsed: false,
+      main_right_collapsed: true,
+      main_last_open_ratio: 0.78,
+      inspector_split_ratio: 0.52,
+      preview_collapsed: false,
+      metadata_collapsed: false,
+      inspector_last_open_ratio: 0.52,
+      mobile_active_pane: "grid"
+    }
+  };
+  let settingsPayload = initialSettings;
+
+  await page.route(`${API_BASE_URL}/api/v1/**`, async (route) => {
+    const request = route.request();
+    const { pathname } = new URL(request.url());
+
+    if (pathname === "/api/v1/libraries/state") {
+      await fulfillJson(route, {
+        is_open: true,
+        library_path: "/tmp/library",
+        entries_count: entries.length,
+        tags_count: 0
+      });
+      return;
+    }
+
+    if (pathname === "/api/v1/settings") {
+      if (request.method() === "PATCH") {
+        const payload = request.postDataJSON() as {
+          sorting_mode?: string;
+          ascending?: boolean;
+          show_hidden_entries?: boolean;
+          page_size?: number;
+          layout?: Partial<(typeof initialSettings)["layout"]>;
+        };
+
+        settingsPayload = {
+          ...settingsPayload,
+          ...payload,
+          layout: {
+            ...settingsPayload.layout,
+            ...(payload.layout ?? {})
+          }
+        };
+      }
+
+      await fulfillJson(route, settingsPayload);
+      return;
+    }
+
+    if (pathname === "/api/v1/field-types") {
+      await fulfillJson(route, []);
+      return;
+    }
+
+    if (pathname === "/api/v1/tags") {
+      await fulfillJson(route, []);
+      return;
+    }
+
+    if (pathname === "/api/v1/search" && request.method() === "POST") {
+      await fulfillJson(route, {
+        total_count: entries.length,
+        ids: entries.map((entry) => entry.id),
+        entries
+      });
+      return;
+    }
+
+    if (pathname === "/api/v1/thumbnails/prewarm" && request.method() === "POST") {
+      await fulfillJson(route, { accepted: 0, skipped: 0 }, 202);
+      return;
+    }
+
+    await fulfillJson(route, { detail: `Unmocked endpoint: ${pathname}` }, 404);
+  });
+
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "Files" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Expand Inspector" }).click();
+  const mainDividerLabel = "File grid and Inspector divider";
+  await expect(page.getByRole("separator", { name: mainDividerLabel })).toBeVisible();
+
+  const mainSplitBox = requireBox(await page.locator(".main-split").boundingBox(), "main split container");
+  const firstDragTargetX = mainSplitBox.x + mainSplitBox.width * 0.68;
+  const firstDragTargetY = mainSplitBox.y + mainSplitBox.height / 2;
+  await dragSeparatorTo(page, mainDividerLabel, firstDragTargetX, firstDragTargetY);
+
+  const hasHorizontalOverflowAfterExpand = await page.evaluate(
+    () => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1
+  );
+  expect(hasHorizontalOverflowAfterExpand).toBe(true);
+
+  const mainSecondaryWithinBounds = await page.evaluate(() => {
+    const split = document.querySelector(".main-split") as HTMLElement | null;
+    const secondary = split?.querySelector(":scope > .split-pane-region-secondary") as HTMLElement | null;
+    if (!split || !secondary) {
+      return false;
+    }
+    const splitRect = split.getBoundingClientRect();
+    const secondaryRect = secondary.getBoundingClientRect();
+    return secondaryRect.right <= splitRect.right + 1;
+  });
+  expect(mainSecondaryWithinBounds).toBe(true);
+
+  await dragSeparatorTo(
+    page,
+    mainDividerLabel,
+    mainSplitBox.x + mainSplitBox.width - 320,
+    mainSplitBox.y + mainSplitBox.height / 2
+  );
+  const secondaryAtMinBounds = requireBox(
+    await page.locator(".main-split > .split-pane-region-secondary").boundingBox(),
+    "main secondary min-size region"
+  );
+  expect(secondaryAtMinBounds.width).toBeGreaterThanOrEqual(298);
+
+  await dragSeparatorTo(page, mainDividerLabel, mainSplitBox.x + 340, mainSplitBox.y + mainSplitBox.height / 2);
+  const primaryAtMinBounds = requireBox(
+    await page.locator(".main-split > .split-pane-region-primary").boundingBox(),
+    "main primary min-size region"
+  );
+  expect(primaryAtMinBounds.width).toBeGreaterThanOrEqual(318);
+
+  const inspectorDividerLabel = "Preview and Metadata divider";
+  await expect(page.getByRole("separator", { name: inspectorDividerLabel })).toBeVisible();
+  const inspectorSplitBox = requireBox(
+    await page.locator(".inspector-split").boundingBox(),
+    "inspector split container"
+  );
+  const inspectorCenterX = inspectorSplitBox.x + inspectorSplitBox.width / 2;
+
+  await dragSeparatorTo(page, inspectorDividerLabel, inspectorCenterX, inspectorSplitBox.y + 240);
+  const previewAtMinBounds = requireBox(
+    await page.locator(".inspector-split > .split-pane-region-primary").boundingBox(),
+    "inspector preview min-size region"
+  );
+  expect(previewAtMinBounds.height).toBeGreaterThanOrEqual(218);
+
+  await dragSeparatorTo(
+    page,
+    inspectorDividerLabel,
+    inspectorCenterX,
+    inspectorSplitBox.y + inspectorSplitBox.height - 240
+  );
+  const metadataAtMinBounds = requireBox(
+    await page.locator(".inspector-split > .split-pane-region-secondary").boundingBox(),
+    "inspector metadata min-size region"
+  );
+  expect(metadataAtMinBounds.height).toBeGreaterThanOrEqual(218);
+  const metadataWithinInspectorBounds = await page.evaluate(() => {
+    const split = document.querySelector(".inspector-split") as HTMLElement | null;
+    const metadata = split?.querySelector(":scope > .split-pane-region-secondary") as HTMLElement | null;
+    if (!split || !metadata) {
+      return false;
+    }
+    const splitRect = split.getBoundingClientRect();
+    const metadataRect = metadata.getBoundingClientRect();
+    return metadataRect.bottom <= splitRect.bottom + 1;
+  });
+  expect(metadataWithinInspectorBounds).toBe(true);
+
+  const hasHorizontalOverflowAtEnd = await page.evaluate(
+    () => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1
+  );
+  expect(hasHorizontalOverflowAtEnd).toBe(true);
 });

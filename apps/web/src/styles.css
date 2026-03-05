@@ -452,16 +452,22 @@ body {
 }
 
 .split-pane-handle {
-  flex: 0 0 var(--split-handle-size);
   background: color-mix(in oklab, var(--color-border-soft) 65%, white 35%);
   border-radius: 999px;
-  margin: 0.15rem;
+  position: relative;
+  flex: 0 0 var(--split-handle-size);
+  width: var(--split-handle-size);
+  height: 100%;
+  align-self: stretch;
   cursor: col-resize;
-  min-width: 24px;
-  min-height: 24px;
+  min-width: 0;
+  min-height: 0;
 }
 
 .split-pane-vertical > .split-pane-handle {
+  width: 100%;
+  height: var(--split-handle-size);
+  align-self: auto;
   cursor: row-resize;
 }
 

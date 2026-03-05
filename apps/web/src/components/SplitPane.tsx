@@ -41,12 +41,12 @@ function clamp(value: number, min: number, max: number): number {
 
 function clampRatioWithMinimums(
   rawRatio: number,
-  totalPx: number,
+  availablePx: number,
   minPrimarySize: number,
   minSecondarySize: number
 ): number {
-  const minRatio = clamp(minPrimarySize / totalPx, 0.1, 0.9);
-  const maxRatio = clamp(1 - minSecondarySize / totalPx, 0.1, 0.9);
+  const minRatio = clamp(minPrimarySize / availablePx, 0.1, 0.9);
+  const maxRatio = clamp(1 - minSecondarySize / availablePx, 0.1, 0.9);
   return clamp(rawRatio, minRatio, maxRatio);
 }
 
@@ -81,6 +81,7 @@ export function SplitPane({
   className
 }: SplitPaneProps) {
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const effectiveHandleSize = Math.max(handleSize, 24);
 
   const bothOpen = !state.primaryCollapsed && !state.secondaryCollapsed;
 
@@ -92,22 +93,22 @@ export function SplitPane({
       : "split-pane-both-open";
   const singleOpenClass = bothOpen ? "" : "split-pane-single-open";
 
-  const ratioPercent = state.ratio * 100;
-
   const primaryStyle = useMemo(
-    () =>
-      orientation === "horizontal"
-        ? { width: `${ratioPercent}%` }
-        : { height: `${ratioPercent}%` },
-    [orientation, ratioPercent]
+    () => ({
+      flexGrow: state.ratio,
+      flexShrink: 1,
+      flexBasis: "0%"
+    }),
+    [state.ratio]
   );
 
   const secondaryStyle = useMemo(
-    () =>
-      orientation === "horizontal"
-        ? { width: `${100 - ratioPercent}%` }
-        : { height: `${100 - ratioPercent}%` },
-    [orientation, ratioPercent]
+    () => ({
+      flexGrow: 1 - state.ratio,
+      flexShrink: 1,
+      flexBasis: "0%"
+    }),
+    [state.ratio]
   );
 
   const updateState = (next: SplitPaneState) => {
@@ -141,16 +142,25 @@ export function SplitPane({
     }
 
     const rect = root.getBoundingClientRect();
-    const total = orientation === "horizontal" ? rect.width : rect.height;
-    if (total <= 0) {
+    const totalPx = orientation === "horizontal" ? rect.width : rect.height;
+    if (totalPx <= 0) {
       return;
     }
+    const availablePx = totalPx - effectiveHandleSize;
+    if (availablePx <= 0) {
+      return;
+    }
+    const halfHandle = effectiveHandleSize / 2;
+    const toPrimarySize = (cursorPx: number) => {
+      const boundaryPx = clamp(cursorPx, halfHandle, totalPx - halfHandle);
+      return clamp(boundaryPx - halfHandle, 0, availablePx);
+    };
 
     const onMove = (event: PointerEvent) => {
       const cursor = orientation === "horizontal" ? event.clientX - rect.left : event.clientY - rect.top;
-      const clampedCursor = clamp(cursor, 0, total);
-      const primarySize = clampedCursor;
-      const secondarySize = total - primarySize;
+      const clampedCursor = clamp(cursor, 0, totalPx);
+      const primarySize = toPrimarySize(clampedCursor);
+      const secondarySize = availablePx - primarySize;
 
       if (mode === "separator") {
         if (primarySize < collapseThreshold) {
@@ -174,8 +184,8 @@ export function SplitPane({
         }
 
         const nextRatio = clampRatioWithMinimums(
-          primarySize / total,
-          total,
+          primarySize / availablePx,
+          availablePx,
           minPrimarySize,
           minSecondarySize
         );
@@ -194,8 +204,8 @@ export function SplitPane({
           return;
         }
         const nextRatio = clampRatioWithMinimums(
-          primarySize / total,
-          total,
+          primarySize / availablePx,
+          availablePx,
           minPrimarySize,
           minSecondarySize
         );
@@ -214,8 +224,8 @@ export function SplitPane({
           return;
         }
         const nextRatio = clampRatioWithMinimums(
-          primarySize / total,
-          total,
+          primarySize / availablePx,
+          availablePx,
           minPrimarySize,
           minSecondarySize
         );
@@ -281,7 +291,7 @@ export function SplitPane({
       style={
         {
           "--split-rail-size": `${railSize}px`,
-          "--split-handle-size": `${handleSize}px`
+          "--split-handle-size": `${effectiveHandleSize}px`
         } as CSSProperties
       }
     >
