@@ -100,7 +100,6 @@ export function useDraggableModalPosition({
     }
     dragStateRef.current = null;
     setIsDragging(false);
-    document.body.classList.remove("modal-dragging");
   };
 
   useLayoutEffect(() => {
@@ -123,6 +122,18 @@ export function useDraggableModalPosition({
       cleanupDragState();
     };
   }, []);
+
+  useEffect(() => {
+    if (isDragging) {
+      document.body.classList.add("modal-dragging");
+    } else {
+      document.body.classList.remove("modal-dragging");
+    }
+
+    return () => {
+      document.body.classList.remove("modal-dragging");
+    };
+  }, [isDragging]);
 
   useEffect(() => {
     if (!open) {
@@ -171,7 +182,6 @@ export function useDraggableModalPosition({
       offsetY: args.clientY - rect.top
     };
     setIsDragging(true);
-    document.body.classList.add("modal-dragging");
 
     const onMove = (moveEvent: PointerEvent | MouseEvent) => {
       const dragState = dragStateRef.current;
@@ -218,7 +228,6 @@ export function useDraggableModalPosition({
       dragCleanupRef.current = null;
       dragStateRef.current = null;
       setIsDragging(false);
-      document.body.classList.remove("modal-dragging");
     };
 
     if (dragCleanupRef.current) {

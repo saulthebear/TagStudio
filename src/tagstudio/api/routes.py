@@ -240,7 +240,7 @@ def create_router(*, state: ApiState, jobs: JobManager) -> APIRouter:
         if limit == 0 or limit < -1:
             raise HTTPException(status_code=400, detail="limit must be -1 or >= 1")
 
-        effective_limit = TAG_LIST_SOFT_CAP if limit == -1 else limit
+        effective_limit = TAG_LIST_SOFT_CAP if limit == -1 else min(limit, TAG_LIST_SOFT_CAP)
 
         if query:
             direct_tags, ancestor_tags = lib.search_tags(query, limit=effective_limit)

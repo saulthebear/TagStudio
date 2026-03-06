@@ -8,7 +8,7 @@ import {
   type TagUpdatePayload
 } from "@tagstudio/api-client";
 import { Button } from "@tagstudio/ui";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import { AddTagsModal } from "@/components/AddTagsModal";
 import { SplitPane, type SplitPaneState } from "@/components/SplitPane";
@@ -292,7 +292,7 @@ function MetadataContent({
       }
     }
     return map;
-  }, [allTags, selectedEntry?.tags]);
+  }, [allTags, selectedEntry]);
 
   const entryTagIdsByEntry = useMemo(() => {
     const map = new Map<number, Set<number>>();
@@ -335,10 +335,10 @@ function MetadataContent({
 
   const singleSelection = selectedCount === 1;
 
-  const removeTag = async (tagId: number) => {
+  const removeTag = useCallback(async (tagId: number) => {
     await onRemoveTagFromEntries(selectedEntryIds, tagId);
     await onRefreshSelection();
-  };
+  }, [onRefreshSelection, onRemoveTagFromEntries, selectedEntryIds]);
 
   return (
     <div className="metadata-content space-y-3 text-sm">

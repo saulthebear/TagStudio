@@ -218,7 +218,9 @@ export function useAddTagsWorkflow({
       await onAfterTagChanged();
       await tagsQuery.refetch();
     };
-    void afterSave();
+    void afterSave().catch((error) => {
+      console.error("Failed to finish tag save workflow", error);
+    });
   };
 
   return {
