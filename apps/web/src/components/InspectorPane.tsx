@@ -329,16 +329,16 @@ function MetadataContent({
     return rows;
   }, [selectedCount, selectedEntries, tagById]);
 
+  const removeTag = useCallback(async (tagId: number) => {
+    await onRemoveTagFromEntries(selectedEntryIds, tagId);
+    await onRefreshSelection();
+  }, [onRefreshSelection, onRemoveTagFromEntries, selectedEntryIds]);
+
   if (selectedCount === 0) {
     return <p className="text-sm text-slate-500">Select one or more entries to inspect metadata.</p>;
   }
 
   const singleSelection = selectedCount === 1;
-
-  const removeTag = useCallback(async (tagId: number) => {
-    await onRemoveTagFromEntries(selectedEntryIds, tagId);
-    await onRefreshSelection();
-  }, [onRefreshSelection, onRemoveTagFromEntries, selectedEntryIds]);
 
   return (
     <div className="metadata-content space-y-3 text-sm">
