@@ -106,6 +106,8 @@ export function App() {
     hasMore,
     searchPending,
     loadingMore,
+    searchResultsStale,
+    markSearchResultsStale,
     executeSearch,
     searchFromInput,
     loadMore
@@ -121,6 +123,10 @@ export function App() {
     onError,
     onClearError
   });
+
+  const handleSearchResultsStale = useCallback(() => {
+    markSearchResultsStale();
+  }, [markSearchResultsStale]);
 
   const {
     selectedEntry,
@@ -155,6 +161,7 @@ export function App() {
     isLibraryOpen,
     activeQuery,
     executeSearch,
+    onSearchResultsStale: handleSearchResultsStale,
     onError,
     onClearError
   });
@@ -341,6 +348,7 @@ export function App() {
             totalCount={totalCount}
             searchPending={searchPending}
             refreshPending={refreshPending}
+            searchResultsStale={searchResultsStale}
             onSearchInputChange={setSearchInput}
             onSearch={searchFromInput}
             onSortingModeChange={(nextSortingMode) => {

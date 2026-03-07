@@ -1,6 +1,6 @@
 import { type SortingMode } from "@tagstudio/api-client";
 import { Button } from "@tagstudio/ui";
-import { SlidersHorizontal } from "lucide-react";
+import { RefreshCw, SlidersHorizontal } from "lucide-react";
 
 import {
   DropdownMenu,
@@ -25,6 +25,7 @@ type TopFilterBarProps = {
   totalCount: number;
   searchPending: boolean;
   refreshPending: boolean;
+  searchResultsStale: boolean;
   onSearchInputChange: (value: string) => void;
   onSearch: () => void;
   onSortingModeChange: (value: SortingMode) => void;
@@ -56,6 +57,7 @@ export function TopFilterBar({
   totalCount,
   searchPending,
   refreshPending,
+  searchResultsStale,
   onSearchInputChange,
   onSearch,
   onSortingModeChange,
@@ -162,7 +164,7 @@ export function TopFilterBar({
       <Button
         variant="secondary"
         size="md"
-        className="top-filter-action top-filter-search-action"
+        className={`top-filter-action top-filter-search-action ${searchResultsStale ? "btn-search-stale" : ""}`}
         disabled={searchPending}
         onClick={onSearch}
       >
@@ -190,6 +192,16 @@ export function TopFilterBar({
 
       <div className="top-filter-status" aria-live="polite">
         Results: <strong>{totalCount}</strong> | Filter: {filterSummary}
+        {searchResultsStale ? (
+          <>
+            {" "}
+            |{" "}
+            <button type="button" className="top-filter-stale-pill" onClick={onSearch}>
+              <span>Results are stale</span>
+              <RefreshCw size={12} aria-hidden="true" />
+            </button>
+          </>
+        ) : null}
       </div>
     </section>
   );

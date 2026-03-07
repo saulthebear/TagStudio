@@ -27,6 +27,7 @@
   --ui-primary-bg-hover: #dfeaff;
   --ui-primary-border: #c4d5f3;
   --ui-primary-text: #1f3b6b;
+  --ui-stale-accent: #d97706;
 
   /* shadcn-style compatibility aliases used by shared UI primitives */
   --accent: var(--ui-primary-bg);
@@ -209,6 +210,59 @@ body {
   grid-column: 1 / -1;
   font-size: 0.8rem;
   color: #475569;
+}
+
+.top-filter-stale-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  border: 1px solid color-mix(in oklab, var(--ui-stale-accent) 45%, var(--ui-control-border) 55%);
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--ui-stale-accent) 7%, white 93%);
+  color: #9a3412;
+  padding: 0.08rem 0.44rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.15;
+  cursor: pointer;
+  opacity: 0;
+  transform: translateY(-2px);
+  animation: stale-hint-in 160ms ease forwards;
+}
+
+.top-filter-stale-pill:hover,
+.top-filter-stale-pill:focus-visible {
+  background: color-mix(in oklab, var(--ui-stale-accent) 12%, white 88%);
+  border-color: color-mix(in oklab, var(--ui-stale-accent) 60%, var(--ui-control-border) 40%);
+  outline: none;
+}
+
+.btn-search-stale {
+  position: relative;
+  border-color: color-mix(in oklab, var(--ui-stale-accent) 40%, var(--ui-control-border) 60%);
+}
+
+.btn-search-stale::after {
+  content: "";
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--ui-stale-accent);
+  box-shadow: 0 0 0 2px rgb(255 255 255 / 0.95);
+}
+
+@keyframes stale-hint-in {
+  from {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .content-shell {
