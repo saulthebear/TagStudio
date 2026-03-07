@@ -3,6 +3,7 @@ import {
   type KeyboardEvent,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
+  useCallback,
   useMemo,
   useRef
 } from "react";
@@ -110,11 +111,14 @@ export function SplitPane({
     [state.ratio]
   );
 
-  const updateState = (next: SplitPaneState) => {
-    onStateChange(normalizeState(next));
-  };
+  const updateState = useCallback(
+    (next: SplitPaneState) => {
+      onStateChange(normalizeState(next));
+    },
+    [onStateChange]
+  );
 
-  const expandPrimary = () => {
+  const expandPrimary = useCallback(() => {
     updateState({
       ...state,
       primaryCollapsed: false,
@@ -122,9 +126,9 @@ export function SplitPane({
       ratio: state.lastOpenRatio,
       lastOpenRatio: state.lastOpenRatio
     });
-  };
+  }, [state, updateState]);
 
-  const expandSecondary = () => {
+  const expandSecondary = useCallback(() => {
     updateState({
       ...state,
       primaryCollapsed: false,
@@ -132,156 +136,194 @@ export function SplitPane({
       ratio: state.lastOpenRatio,
       lastOpenRatio: state.lastOpenRatio
     });
-  };
+  }, [state, updateState]);
 
-  const runPointerDrag = (mode: DragMode, startEvent: ReactPointerEvent<HTMLElement>) => {
-    const root = rootRef.current;
-    if (!root) {
-      return;
-    }
+  const runPointerDrag = useCallback(
+    (mode: DragMode, startEvent: ReactPointerEvent<HTMLElement>) => {
+      const root = rootRef.current;
+      if (!root) {
+        return;
+      }
 
-    const rect = root.getBoundingClientRect();
-    const totalPx = orientation === "horizontal" ? rect.width : rect.height;
-    if (totalPx <= 0) {
-      return;
-    }
-    const availablePx = totalPx - handleSize;
-    if (availablePx <= 0) {
-      return;
-    }
-    const halfHandle = handleSize / 2;
-    const toPrimarySize = (cursorPx: number) => {
-      const boundaryPx = clamp(cursorPx, halfHandle, totalPx - halfHandle);
-      return clamp(boundaryPx - halfHandle, 0, availablePx);
-    };
+      const rect = root.getBoundingClientRect();
+      const totalPx = orientation === "horizontal" ? rect.width : rect.height;
+      if (totalPx <= 0) {
+        return;
+      }
+      const availablePx = totalPx - handleSize;
+      if (availablePx <= 0) {
+        return;
+      }
+      const halfHandle = handleSize / 2;
+      const toPrimarySize = (cursorPx: number) => {
+        const boundaryPx = clamp(cursorPx, halfHandle, totalPx - halfHandle);
+        return clamp(boundaryPx - halfHandle, 0, availablePx);
+      };
 
-    const onMove = (event: PointerEvent) => {
-      const cursor = orientation === "horizontal" ? event.clientX - rect.left : event.clientY - rect.top;
-      const clampedCursor = clamp(cursor, 0, totalPx);
-      const primarySize = toPrimarySize(clampedCursor);
-      const secondarySize = availablePx - primarySize;
+      const onMove = (event: PointerEvent) => {
+        const cursor = orientation === "horizontal" ? event.clientX - rect.left : event.clientY - rect.top;
+        const clampedCursor = clamp(cursor, 0, totalPx);
+        const primarySize = toPrimarySize(clampedCursor);
+        const secondarySize = availablePx - primarySize;
 
-      if (mode === "separator") {
-        if (primarySize < collapseThreshold) {
+        if (mode === "separator") {
+          if (primarySize < collapseThreshold) {
+            updateState({
+              ...state,
+              primaryCollapsed: true,
+              secondaryCollapsed: false,
+              lastOpenRatio: state.ratio
+            });
+            return;
+          }
+
+          if (secondarySize < collapseThreshold) {
+            updateState({
+              ...state,
+              primaryCollapsed: false,
+              secondaryCollapsed: true,
+              lastOpenRatio: state.ratio
+            });
+            return;
+          }
+
+          const nextRatio = clampRatioWithMinimums(
+            primarySize / availablePx,
+            availablePx,
+            minPrimarySize,
+            minSecondarySize
+          );
+
           updateState({
-            ...state,
-            primaryCollapsed: true,
-            secondaryCollapsed: false,
-            lastOpenRatio: state.ratio
-          });
-          return;
-        }
-
-        if (secondarySize < collapseThreshold) {
-          updateState({
-            ...state,
+            ratio: nextRatio,
+            lastOpenRatio: nextRatio,
             primaryCollapsed: false,
-            secondaryCollapsed: true,
-            lastOpenRatio: state.ratio
+            secondaryCollapsed: false
           });
           return;
         }
 
-        const nextRatio = clampRatioWithMinimums(
-          primarySize / availablePx,
-          availablePx,
-          minPrimarySize,
-          minSecondarySize
-        );
+        if (mode === "rail-primary") {
+          if (primarySize < minPrimarySize) {
+            return;
+          }
+          const nextRatio = clampRatioWithMinimums(
+            primarySize / availablePx,
+            availablePx,
+            minPrimarySize,
+            minSecondarySize
+          );
 
+          updateState({
+            ratio: nextRatio,
+            lastOpenRatio: nextRatio,
+            primaryCollapsed: false,
+            secondaryCollapsed: false
+          });
+          return;
+        }
+
+        if (mode === "rail-secondary") {
+          if (secondarySize < minSecondarySize) {
+            return;
+          }
+          const nextRatio = clampRatioWithMinimums(
+            primarySize / availablePx,
+            availablePx,
+            minPrimarySize,
+            minSecondarySize
+          );
+          updateState({
+            ratio: nextRatio,
+            lastOpenRatio: nextRatio,
+            primaryCollapsed: false,
+            secondaryCollapsed: false
+          });
+        }
+      };
+
+      const onUp = () => {
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", onUp);
+      };
+
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", onUp);
+
+      startEvent.preventDefault();
+    },
+    [
+      orientation,
+      handleSize,
+      collapseThreshold,
+      updateState,
+      state,
+      minPrimarySize,
+      minSecondarySize
+    ]
+  );
+
+  const onSeparatorKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLDivElement>) => {
+      const step = 0.02;
+      const horizontal = orientation === "horizontal";
+
+      if (event.key === "Home") {
+        event.preventDefault();
         updateState({
-          ratio: nextRatio,
-          lastOpenRatio: nextRatio,
+          ratio: resetRatio,
+          lastOpenRatio: resetRatio,
           primaryCollapsed: false,
           secondaryCollapsed: false
         });
         return;
       }
 
-      if (mode === "rail-primary") {
-        if (primarySize < minPrimarySize) {
-          return;
-        }
-        const nextRatio = clampRatioWithMinimums(
-          primarySize / availablePx,
-          availablePx,
-          minPrimarySize,
-          minSecondarySize
-        );
+      const isDecrease =
+        (horizontal && event.key === "ArrowLeft") || (!horizontal && event.key === "ArrowUp");
+      const isIncrease =
+        (horizontal && event.key === "ArrowRight") || (!horizontal && event.key === "ArrowDown");
 
-        updateState({
-          ratio: nextRatio,
-          lastOpenRatio: nextRatio,
-          primaryCollapsed: false,
-          secondaryCollapsed: false
-        });
+      if (!isDecrease && !isIncrease) {
         return;
       }
 
-      if (mode === "rail-secondary") {
-        if (secondarySize < minSecondarySize) {
-          return;
-        }
-        const nextRatio = clampRatioWithMinimums(
-          primarySize / availablePx,
-          availablePx,
-          minPrimarySize,
-          minSecondarySize
-        );
-        updateState({
-          ratio: nextRatio,
-          lastOpenRatio: nextRatio,
-          primaryCollapsed: false,
-          secondaryCollapsed: false
-        });
-      }
-    };
-
-    const onUp = () => {
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-    };
-
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
-
-    startEvent.preventDefault();
-  };
-
-  const onSeparatorKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    const step = 0.02;
-    const horizontal = orientation === "horizontal";
-
-    if (event.key === "Home") {
       event.preventDefault();
+
+      const nextRatio = clamp(state.ratio + (isIncrease ? step : -step), 0.1, 0.9);
       updateState({
-        ratio: resetRatio,
-        lastOpenRatio: resetRatio,
+        ratio: nextRatio,
+        lastOpenRatio: nextRatio,
         primaryCollapsed: false,
         secondaryCollapsed: false
       });
-      return;
-    }
+    },
+    [orientation, resetRatio, state.ratio, updateState]
+  );
 
-    const isDecrease =
-      (horizontal && event.key === "ArrowLeft") || (!horizontal && event.key === "ArrowUp");
-    const isIncrease =
-      (horizontal && event.key === "ArrowRight") || (!horizontal && event.key === "ArrowDown");
+  const onPrimaryRailDragStart = useCallback(
+    (event: ReactPointerEvent<HTMLElement>) => runPointerDrag("rail-primary", event),
+    [runPointerDrag]
+  );
 
-    if (!isDecrease && !isIncrease) {
-      return;
-    }
+  const onSecondaryRailDragStart = useCallback(
+    (event: ReactPointerEvent<HTMLElement>) => runPointerDrag("rail-secondary", event),
+    [runPointerDrag]
+  );
 
-    event.preventDefault();
+  const onSeparatorPointerDown = useCallback(
+    (event: ReactPointerEvent<HTMLElement>) => runPointerDrag("separator", event),
+    [runPointerDrag]
+  );
 
-    const nextRatio = clamp(state.ratio + (isIncrease ? step : -step), 0.1, 0.9);
+  const onSeparatorDoubleClick = useCallback(() => {
     updateState({
-      ratio: nextRatio,
-      lastOpenRatio: nextRatio,
+      ratio: resetRatio,
+      lastOpenRatio: resetRatio,
       primaryCollapsed: false,
       secondaryCollapsed: false
     });
-  };
+  }, [resetRatio, updateState]);
 
   return (
     <div
@@ -300,7 +342,7 @@ export function SplitPane({
           side="start"
           label={primaryLabel}
           onToggle={expandPrimary}
-          onDragStart={(event) => runPointerDrag("rail-primary", event)}
+          onDragStart={onPrimaryRailDragStart}
         />
       ) : (
         <div className="split-pane-region split-pane-region-primary" style={bothOpen ? primaryStyle : undefined}>
@@ -315,16 +357,9 @@ export function SplitPane({
           aria-label={`${primaryLabel} and ${secondaryLabel} divider`}
           tabIndex={0}
           className="split-pane-handle"
-          onPointerDown={(event) => runPointerDrag("separator", event)}
+          onPointerDown={onSeparatorPointerDown}
           onKeyDown={onSeparatorKeyDown}
-          onDoubleClick={() =>
-            updateState({
-              ratio: resetRatio,
-              lastOpenRatio: resetRatio,
-              primaryCollapsed: false,
-              secondaryCollapsed: false
-            })
-          }
+          onDoubleClick={onSeparatorDoubleClick}
         />
       ) : null}
 
@@ -334,7 +369,7 @@ export function SplitPane({
           side="end"
           label={secondaryLabel}
           onToggle={expandSecondary}
-          onDragStart={(event) => runPointerDrag("rail-secondary", event)}
+          onDragStart={onSecondaryRailDragStart}
         />
       ) : (
         <div className="split-pane-region split-pane-region-secondary" style={bothOpen ? secondaryStyle : undefined}>

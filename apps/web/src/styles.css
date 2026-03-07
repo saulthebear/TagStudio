@@ -520,10 +520,7 @@ body {
 
 .split-pane-handle:hover::after,
 .split-pane-handle:hover::before,
-.split-pane-handle:focus-visible::after {
-  opacity: 1;
-}
-
+.split-pane-handle:focus-visible::after,
 .split-pane-handle:focus-visible::before {
   opacity: 1;
 }

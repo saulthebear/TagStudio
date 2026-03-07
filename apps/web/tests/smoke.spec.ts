@@ -89,6 +89,12 @@ async function dragSeparatorTo(page: Page, label: string, targetX: number, targe
   await page.mouse.up();
 }
 
+async function hasNoHorizontalOverflow(page: Page): Promise<boolean> {
+  return await page.evaluate(
+    () => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1
+  );
+}
+
 test("renders web foundation shell", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "TagStudio" })).toBeVisible();
@@ -652,7 +658,18 @@ test("supports add-tags modal create-and-add workflow", async ({ page }) => {
 });
 
 test("keeps split panes within bounds after collapse/expand and divider drags", async ({ page }) => {
-  await page.setViewportSize({ width: 1440, height: 900 });
+  const VIEWPORT_WIDTH = 1440;
+  const VIEWPORT_HEIGHT = 900;
+  const INITIAL_MAIN_DRAG_RATIO = 0.68;
+  const MAIN_SECONDARY_DRAG_OFFSET = 320;
+  const MAIN_PRIMARY_DRAG_OFFSET = 340;
+  const MAIN_MIN_SECONDARY_WIDTH = 298;
+  const MAIN_MIN_PRIMARY_WIDTH = 318;
+  const INSPECTOR_MIN_DRAG_OFFSET = 240;
+  const INSPECTOR_MIN_PREVIEW_HEIGHT = 218;
+  const INSPECTOR_MIN_METADATA_HEIGHT = 218;
+
+  await page.setViewportSize({ width: VIEWPORT_WIDTH, height: VIEWPORT_HEIGHT });
 
   const entries = [
     { id: 401, path: "images/sample.png", filename: "sample.png", suffix: "png", tag_ids: [] }
@@ -749,13 +766,11 @@ test("keeps split panes within bounds after collapse/expand and divider drags", 
   await expect(page.getByRole("separator", { name: mainDividerLabel })).toBeVisible();
 
   const mainSplitBox = requireBox(await page.locator(".main-split").boundingBox(), "main split container");
-  const firstDragTargetX = mainSplitBox.x + mainSplitBox.width * 0.68;
+  const firstDragTargetX = mainSplitBox.x + mainSplitBox.width * INITIAL_MAIN_DRAG_RATIO;
   const firstDragTargetY = mainSplitBox.y + mainSplitBox.height / 2;
   await dragSeparatorTo(page, mainDividerLabel, firstDragTargetX, firstDragTargetY);
 
-  const hasHorizontalOverflowAfterExpand = await page.evaluate(
-    () => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1
-  );
+  const hasHorizontalOverflowAfterExpand = await hasNoHorizontalOverflow(page);
   expect(hasHorizontalOverflowAfterExpand).toBe(true);
 
   const mainSecondaryWithinBounds = await page.evaluate(() => {
@@ -773,21 +788,26 @@ test("keeps split panes within bounds after collapse/expand and divider drags", 
   await dragSeparatorTo(
     page,
     mainDividerLabel,
-    mainSplitBox.x + mainSplitBox.width - 320,
+    mainSplitBox.x + mainSplitBox.width - MAIN_SECONDARY_DRAG_OFFSET,
     mainSplitBox.y + mainSplitBox.height / 2
   );
   const secondaryAtMinBounds = requireBox(
     await page.locator(".main-split > .split-pane-region-secondary").boundingBox(),
     "main secondary min-size region"
   );
-  expect(secondaryAtMinBounds.width).toBeGreaterThanOrEqual(298);
+  expect(secondaryAtMinBounds.width).toBeGreaterThanOrEqual(MAIN_MIN_SECONDARY_WIDTH);
 
-  await dragSeparatorTo(page, mainDividerLabel, mainSplitBox.x + 340, mainSplitBox.y + mainSplitBox.height / 2);
+  await dragSeparatorTo(
+    page,
+    mainDividerLabel,
+    mainSplitBox.x + MAIN_PRIMARY_DRAG_OFFSET,
+    mainSplitBox.y + mainSplitBox.height / 2
+  );
   const primaryAtMinBounds = requireBox(
     await page.locator(".main-split > .split-pane-region-primary").boundingBox(),
     "main primary min-size region"
   );
-  expect(primaryAtMinBounds.width).toBeGreaterThanOrEqual(318);
+  expect(primaryAtMinBounds.width).toBeGreaterThanOrEqual(MAIN_MIN_PRIMARY_WIDTH);
 
   const inspectorDividerLabel = "Preview and Metadata divider";
   await expect(page.getByRole("separator", { name: inspectorDividerLabel })).toBeVisible();
@@ -797,24 +817,24 @@ test("keeps split panes within bounds after collapse/expand and divider drags", 
   );
   const inspectorCenterX = inspectorSplitBox.x + inspectorSplitBox.width / 2;
 
-  await dragSeparatorTo(page, inspectorDividerLabel, inspectorCenterX, inspectorSplitBox.y + 240);
+  await dragSeparatorTo(page, inspectorDividerLabel, inspectorCenterX, inspectorSplitBox.y + INSPECTOR_MIN_DRAG_OFFSET);
   const previewAtMinBounds = requireBox(
     await page.locator(".inspector-split > .split-pane-region-primary").boundingBox(),
     "inspector preview min-size region"
   );
-  expect(previewAtMinBounds.height).toBeGreaterThanOrEqual(218);
+  expect(previewAtMinBounds.height).toBeGreaterThanOrEqual(INSPECTOR_MIN_PREVIEW_HEIGHT);
 
   await dragSeparatorTo(
     page,
     inspectorDividerLabel,
     inspectorCenterX,
-    inspectorSplitBox.y + inspectorSplitBox.height - 240
+    inspectorSplitBox.y + inspectorSplitBox.height - INSPECTOR_MIN_DRAG_OFFSET
   );
   const metadataAtMinBounds = requireBox(
     await page.locator(".inspector-split > .split-pane-region-secondary").boundingBox(),
     "inspector metadata min-size region"
   );
-  expect(metadataAtMinBounds.height).toBeGreaterThanOrEqual(218);
+  expect(metadataAtMinBounds.height).toBeGreaterThanOrEqual(INSPECTOR_MIN_METADATA_HEIGHT);
   const metadataWithinInspectorBounds = await page.evaluate(() => {
     const split = document.querySelector(".inspector-split") as HTMLElement | null;
     const metadata = split?.querySelector(":scope > .split-pane-region-secondary") as HTMLElement | null;
@@ -827,8 +847,6 @@ test("keeps split panes within bounds after collapse/expand and divider drags", 
   });
   expect(metadataWithinInspectorBounds).toBe(true);
 
-  const hasHorizontalOverflowAtEnd = await page.evaluate(
-    () => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1
-  );
+  const hasHorizontalOverflowAtEnd = await hasNoHorizontalOverflow(page);
   expect(hasHorizontalOverflowAtEnd).toBe(true);
 });
