@@ -1,4 +1,4 @@
-import { expect, test, type Route } from "@playwright/test";
+import { expect, test, type Locator, type Page, type Route } from "@playwright/test";
 
 const API_BASE_URL = "http://127.0.0.1:5987";
 
@@ -10,6 +10,59 @@ async function fulfillJson(route: Route, payload: unknown, status = 200): Promis
     contentType: "application/json",
     body: JSON.stringify(payload)
   });
+}
+
+async function expectDialogWithinViewport(
+  page: Page,
+  dialogLocator: Locator,
+  margin = 8
+) {
+  const viewport = page.viewportSize();
+  expect(viewport).not.toBeNull();
+  const bounds = await dialogLocator.boundingBox();
+  expect(bounds).not.toBeNull();
+  const box = bounds!;
+  expect(box.x).toBeGreaterThanOrEqual(margin);
+  expect(box.y).toBeGreaterThanOrEqual(margin);
+  expect(box.x + box.width).toBeLessThanOrEqual(viewport!.width - margin);
+  expect(box.y + box.height).toBeLessThanOrEqual(viewport!.height - margin);
+}
+
+async function dragDialogBy(
+  page: Page,
+  dialogLocator: Locator,
+  handleLocator: Locator,
+  delta: { x: number; y: number },
+  tolerance = 36
+) {
+  const before = await dialogLocator.boundingBox();
+  expect(before).not.toBeNull();
+  const handleBounds = await handleLocator.boundingBox();
+  expect(handleBounds).not.toBeNull();
+
+  const startX = handleBounds!.x + handleBounds!.width / 2;
+  const startY = handleBounds!.y + handleBounds!.height / 2;
+  await page.mouse.move(startX, startY);
+  await page.mouse.down();
+  await page.mouse.move(startX + delta.x, startY + delta.y);
+  await page.mouse.up();
+
+  await expect
+    .poll(async () => dialogLocator.boundingBox(), {
+      timeout: 2000
+    })
+    .not.toBeNull();
+
+  const after = await dialogLocator.boundingBox();
+  expect(after).not.toBeNull();
+  const movedX = after!.x - before!.x;
+  const movedY = after!.y - before!.y;
+  if (delta.x !== 0) {
+    expect(Math.abs(movedX - delta.x)).toBeLessThanOrEqual(tolerance);
+  }
+  if (delta.y !== 0) {
+    expect(Math.abs(movedY - delta.y)).toBeLessThanOrEqual(tolerance);
+  }
 }
 
 test("renders web foundation shell", async ({ page }) => {
@@ -259,4 +312,317 @@ test("applies top-bar filter menu toggles with live query sync and request flags
   await expect(
     page.getByText("Advanced query detected. Untagged token removal is conservative.")
   ).toBeVisible();
+});
+
+test("supports add-tags modal create-and-add workflow", async ({ page }) => {
+  const settingsPayload = {
+    sorting_mode: "file.date_added",
+    ascending: false,
+    show_hidden_entries: false,
+    page_size: 200,
+    layout: {
+      main_split_ratio: 0.78,
+      main_left_collapsed: false,
+      main_right_collapsed: false,
+      main_last_open_ratio: 0.78,
+      inspector_split_ratio: 0.52,
+      preview_collapsed: false,
+      metadata_collapsed: false,
+      inspector_last_open_ratio: 0.52,
+      mobile_active_pane: "grid"
+    }
+  };
+
+  const entryTagIds = new Map<number, Set<number>>([
+    [401, new Set<number>()],
+    [402, new Set<number>()]
+  ]);
+
+  const tags: Array<{
+    id: number;
+    name: string;
+    shorthand: string | null;
+    aliases: string[];
+    parent_ids: number[];
+    color_namespace: string | null;
+    color_slug: string | null;
+    disambiguation_id: number | null;
+    is_category: boolean;
+    is_hidden: boolean;
+  }> = [
+    {
+      id: 11,
+      name: "Favorite",
+      shorthand: null,
+      aliases: [],
+      parent_ids: [],
+      color_namespace: "tagstudio-standard",
+      color_slug: "yellow",
+      disambiguation_id: null,
+      is_category: false,
+      is_hidden: false
+    }
+  ];
+  let nextTagId = 1000;
+  const createdTagNames: string[] = [];
+  const addTagRequests: Array<{ entry_ids: number[]; tag_ids: number[] }> = [];
+
+  const entryResponse = (entryId: number) => {
+    const tagIds = [...(entryTagIds.get(entryId) ?? new Set<number>())];
+    return {
+      id: entryId,
+      path: `images/${entryId}.png`,
+      full_path: `/tmp/library/images/${entryId}.png`,
+      filename: `${entryId}.png`,
+      suffix: "png",
+      date_created: null,
+      date_modified: null,
+      date_added: null,
+      tags: tagIds
+        .map((tagId) => tags.find((tag) => tag.id === tagId))
+        .filter((tag): tag is (typeof tags)[number] => tag !== undefined),
+      fields: [],
+      is_favorite: false,
+      is_archived: false
+    };
+  };
+
+  await page.route(`${API_BASE_URL}/api/v1/**`, async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const { pathname, searchParams } = url;
+
+    if (pathname === "/api/v1/libraries/state") {
+      await fulfillJson(route, {
+        is_open: true,
+        library_path: "/tmp/library",
+        entries_count: 2,
+        tags_count: tags.length
+      });
+      return;
+    }
+
+    if (pathname === "/api/v1/settings") {
+      await fulfillJson(route, settingsPayload);
+      return;
+    }
+
+    if (pathname === "/api/v1/field-types") {
+      await fulfillJson(route, []);
+      return;
+    }
+
+    if (pathname === "/api/v1/tag-colors") {
+      await fulfillJson(route, [
+        {
+          namespace: "tagstudio-standard",
+          namespace_name: "TagStudio Standard",
+          colors: [
+            {
+              namespace: "tagstudio-standard",
+              namespace_name: "TagStudio Standard",
+              slug: "yellow",
+              name: "Yellow",
+              primary: "#facc15",
+              secondary: null,
+              color_border: false
+            }
+          ]
+        }
+      ]);
+      return;
+    }
+
+    if (pathname === "/api/v1/tags" && request.method() === "GET") {
+      const query = searchParams.get("query")?.trim().toLowerCase() ?? "";
+      const filtered = query
+        ? tags.filter(
+            (tag) =>
+              tag.name.toLowerCase().includes(query) ||
+              (tag.shorthand?.toLowerCase().includes(query) ?? false) ||
+              tag.aliases.some((alias) => alias.toLowerCase().includes(query))
+          )
+        : tags;
+      await fulfillJson(route, filtered);
+      return;
+    }
+
+    if (pathname === "/api/v1/tags" && request.method() === "POST") {
+      const payload = request.postDataJSON() as {
+        name: string;
+        shorthand?: string | null;
+        aliases?: string[];
+        parent_ids?: number[];
+        color_namespace?: string | null;
+        color_slug?: string | null;
+        disambiguation_id?: number | null;
+        is_category?: boolean;
+        is_hidden?: boolean;
+      };
+      const newTag = {
+        id: nextTagId++,
+        name: payload.name,
+        shorthand: payload.shorthand ?? null,
+        aliases: payload.aliases ?? [],
+        parent_ids: payload.parent_ids ?? [],
+        color_namespace: payload.color_namespace ?? null,
+        color_slug: payload.color_slug ?? null,
+        disambiguation_id: payload.disambiguation_id ?? null,
+        is_category: payload.is_category ?? false,
+        is_hidden: payload.is_hidden ?? false
+      };
+      tags.push(newTag);
+      createdTagNames.push(newTag.name);
+      await fulfillJson(route, newTag);
+      return;
+    }
+
+    if (pathname === "/api/v1/entries/tags:add" && request.method() === "POST") {
+      const payload = request.postDataJSON() as { entry_ids: number[]; tag_ids: number[] };
+      addTagRequests.push(payload);
+      for (const entryId of payload.entry_ids) {
+        const existing = entryTagIds.get(entryId) ?? new Set<number>();
+        for (const tagId of payload.tag_ids) {
+          existing.add(tagId);
+        }
+        entryTagIds.set(entryId, existing);
+      }
+      await fulfillJson(route, { success: true, changed: payload.entry_ids.length * payload.tag_ids.length });
+      return;
+    }
+
+    if (pathname === "/api/v1/search" && request.method() === "POST") {
+      await fulfillJson(route, {
+        total_count: 2,
+        ids: [401, 402],
+        entries: [
+          {
+            id: 401,
+            path: "images/401.png",
+            filename: "401.png",
+            suffix: "png",
+            tag_ids: [...(entryTagIds.get(401) ?? new Set<number>())]
+          },
+          {
+            id: 402,
+            path: "images/402.png",
+            filename: "402.png",
+            suffix: "png",
+            tag_ids: [...(entryTagIds.get(402) ?? new Set<number>())]
+          }
+        ]
+      });
+      return;
+    }
+
+    const entryMatch = /^\/api\/v1\/entries\/(\d+)$/.exec(pathname);
+    if (entryMatch && request.method() === "GET") {
+      const entryId = Number(entryMatch[1]);
+      await fulfillJson(route, entryResponse(entryId));
+      return;
+    }
+
+    const previewMatch = /^\/api\/v1\/entries\/(\d+)\/preview$/.exec(pathname);
+    if (previewMatch) {
+      await fulfillJson(route, {
+        entry_id: Number(previewMatch[1]),
+        preview_kind: "binary",
+        media_type: "application/octet-stream",
+        media_url: null,
+        text_excerpt: null,
+        supports_media_controls: false
+      });
+      return;
+    }
+
+    if (pathname === "/api/v1/libraries/open" || pathname === "/api/v1/libraries/create") {
+      await fulfillJson(route, {
+        is_open: true,
+        library_path: "/tmp/library",
+        entries_count: 2,
+        tags_count: tags.length
+      });
+      return;
+    }
+
+    await fulfillJson(route, { detail: `Unmocked endpoint: ${pathname}` }, 404);
+  });
+
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "Files" })).toBeVisible();
+
+  await page.locator(".thumb-card").first().click();
+  await expect(page.getByRole("button", { name: "Add Tag" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Add Tag" }).click();
+  const addTagsDialog = page.getByRole("dialog", { name: "Add tags" });
+  await expect(addTagsDialog).toBeVisible();
+  await expect(addTagsDialog.getByRole("button", { name: "Edit" })).toHaveCount(0);
+
+  const searchTags = page.getByPlaceholder("Search tags");
+  await searchTags.fill("game");
+  await expect(page.getByRole("button", { name: 'Create & Add "game"' })).toBeVisible();
+  await searchTags.press("Enter");
+
+  await expect(page.getByRole("dialog", { name: "Create tag" })).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Name" })).toHaveValue("game");
+  await page.getByRole("button", { name: "Save" }).click();
+
+  await expect.poll(() => createdTagNames.includes("game")).toBe(true);
+  await expect.poll(() => addTagRequests.some((payload) => payload.tag_ids.length === 1)).toBe(true);
+
+  const addTagsDragHandle = addTagsDialog.locator(".modal-drag-handle");
+  await expect(addTagsDragHandle).toBeVisible();
+  await expect(addTagsDialog).toHaveCSS("position", "fixed");
+  await expectDialogWithinViewport(page, addTagsDialog, 8);
+  await dragDialogBy(page, addTagsDialog, addTagsDragHandle, { x: -120, y: 0 });
+  await expectDialogWithinViewport(page, addTagsDialog, 8);
+  await expect(page.locator(".modal-layer-backdrop-dim")).toHaveCount(1);
+
+  await searchTags.press("Control+Enter");
+  const editTagDialog = page.getByRole("dialog", { name: "Edit tag" });
+  await expect(editTagDialog).toBeVisible();
+  await expect(page.locator(".modal-layer-backdrop-dim")).toHaveCount(1);
+  await page.mouse.click(24, 24);
+  await expect(editTagDialog).toHaveCount(0);
+  await expect(addTagsDialog).toBeVisible();
+
+  await searchTags.press("Control+Enter");
+  await expect(editTagDialog).toBeVisible();
+  const editDragHandle = editTagDialog.locator(".modal-drag-handle");
+  await dragDialogBy(page, editTagDialog, editDragHandle, { x: 90, y: 0 });
+  await expectDialogWithinViewport(page, editTagDialog, 8);
+
+  await editTagDialog.getByRole("button", { name: "Add Parent Tag(s)" }).click();
+  const parentPickerDialog = page.getByRole("dialog", { name: "Add parent tags" });
+  await expect(parentPickerDialog).toBeVisible();
+  await dragDialogBy(page, parentPickerDialog, parentPickerDialog.locator(".modal-drag-handle"), { x: 75, y: 0 });
+  await expectDialogWithinViewport(page, parentPickerDialog, 8);
+  await page.mouse.click(24, 24);
+  await expect(parentPickerDialog).toHaveCount(0);
+  await expect(editTagDialog).toBeVisible();
+
+  await editTagDialog.getByRole("button", { name: "No Color" }).click();
+  const colorPickerDialog = page.getByRole("dialog", { name: "Choose tag color" });
+  await expect(colorPickerDialog).toBeVisible();
+  await dragDialogBy(page, colorPickerDialog, colorPickerDialog.locator(".modal-drag-handle"), { x: -80, y: 0 });
+  await expectDialogWithinViewport(page, colorPickerDialog, 8);
+  await page.mouse.click(24, 24);
+  await expect(colorPickerDialog).toHaveCount(0);
+  await expect(editTagDialog).toBeVisible();
+  await editTagDialog.getByRole("button", { name: "Cancel" }).click();
+
+  await page.getByRole("button", { name: "Done" }).click();
+  const metadataChip = page.locator(".metadata-tag-chip").first();
+  await expect(metadataChip).toContainText("game");
+  await expect(page.locator(".metadata-tag-actions").getByRole("button", { name: "Edit" })).toHaveCount(0);
+
+  const chipRemoveButton = metadataChip.locator(".metadata-tag-chip-remove");
+  await expect(chipRemoveButton).toHaveCSS("opacity", "0");
+  await metadataChip.hover();
+  await expect(chipRemoveButton).toHaveCSS("opacity", "1");
+
+  await metadataChip.locator(".metadata-tag-chip-main").click();
+  await expect(page.getByRole("dialog", { name: "Edit tag" })).toBeVisible();
+  await page.getByRole("button", { name: "Cancel" }).click();
 });

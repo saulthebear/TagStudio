@@ -25,6 +25,8 @@ from tagstudio.api.schemas import (
     SettingsResponse,
     SettingsUpdateRequest,
     SuccessResponse,
+    TagColorNamespaceResponse,
+    TagColorResponse,
     TagCreateRequest,
     TagMutationRequest,
     TagMutationResponse,
@@ -36,8 +38,14 @@ from tagstudio.api.schemas import (
     ThumbnailPrewarmResponse,
     UpdateFieldRequest,
 )
-from tagstudio.api.serializers import serialize_entry, serialize_entry_summary, serialize_tag
+from tagstudio.api.serializers import (
+    serialize_entry,
+    serialize_entry_summary,
+    serialize_tag,
+    serialize_tag_color,
+)
 from tagstudio.api.state import ApiState
+from tagstudio.core.library.alchemy.constants import TAG_CHILDREN_ID_QUERY
 from tagstudio.core.library.alchemy.enums import BrowsingState, SortingModeEnum
 from tagstudio.core.library.alchemy.joins import TagParent
 from tagstudio.core.library.alchemy.library import Library, LibraryStatus
@@ -48,6 +56,7 @@ TEXT_SUFFIXES = {"txt", "md", "json", "toml", "yaml", "yml", "csv", "log", "py",
 VIDEO_SUFFIXES = {"mp4", "mov", "mkv", "webm", "avi", "m4v"}
 AUDIO_SUFFIXES = {"mp3", "wav", "ogg", "flac", "m4a"}
 IMAGE_SUFFIXES = {"jpg", "jpeg", "png", "gif", "webp", "bmp", "tif", "tiff", "jxl", "heic"}
+TAG_LIST_SOFT_CAP = 5000
 
 
 def create_router(*, state: ApiState, jobs: JobManager) -> APIRouter:
@@ -104,6 +113,45 @@ def create_router(*, state: ApiState, jobs: JobManager) -> APIRouter:
             }
         )
         return f"/api/v1/entries/{entry_id}/thumbnail?{params}"
+
+    def get_descendant_tag_ids(lib: Library, tag_id: int) -> set[int]:
+        if lib.engine is None:
+            return set()
+        with Session(lib.engine) as session:
+            return set(session.scalars(TAG_CHILDREN_ID_QUERY, {"tag_id": tag_id}))
+
+    def validate_parent_ids_for_tag(
+        lib: Library, *, tag_id: int | None, parent_ids: set[int]
+    ) -> set[int]:
+        if tag_id is not None and tag_id in parent_ids:
+            raise HTTPException(status_code=422, detail="A tag cannot be its own parent.")
+
+        for parent_id in parent_ids:
+            if lib.get_tag(parent_id) is None:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Parent tag {parent_id} does not exist.",
+                )
+
+        if tag_id is not None:
+            descendant_ids = get_descendant_tag_ids(lib, tag_id)
+            cycle_parent_ids = parent_ids.intersection(descendant_ids)
+            if cycle_parent_ids:
+                raise HTTPException(
+                    status_code=422,
+                    detail="Circular tag hierarchy is not allowed.",
+                )
+
+        return parent_ids
+
+    def validate_disambiguation(disambiguation_id: int | None, parent_ids: set[int]) -> None:
+        if disambiguation_id is None:
+            return
+        if disambiguation_id not in parent_ids:
+            raise HTTPException(
+                status_code=422,
+                detail="disambiguation_id must reference one of parent_ids.",
+            )
 
     @router.get("/health", response_model=HealthResponse)
     def health() -> HealthResponse:
@@ -163,17 +211,50 @@ def create_router(*, state: ApiState, jobs: JobManager) -> APIRouter:
             for field in field_types
         ]
 
-    @router.get("/tags", response_model=list[TagResponse])
-    def list_tags(query: str | None = None, limit: int = 200) -> list[TagResponse]:
+    @router.get("/tag-colors", response_model=list[TagColorNamespaceResponse])
+    def list_tag_colors() -> list[TagColorNamespaceResponse]:
         lib = get_library_or_error()
-        if limit < 1:
-            raise HTTPException(status_code=400, detail="limit must be >= 1")
+        color_groups = lib.tag_color_groups
+        payload: list[TagColorNamespaceResponse] = []
+        for namespace, colors in color_groups.items():
+            namespace_name = lib.get_namespace_name(namespace)
+            payload.append(
+                TagColorNamespaceResponse(
+                    namespace=namespace,
+                    namespace_name=namespace_name,
+                    colors=[
+                        TagColorResponse.model_validate(serialize_tag_color(namespace_name, color))
+                        for color in colors
+                    ],
+                )
+            )
+        return payload
+
+    @router.get("/tags", response_model=list[TagResponse])
+    def list_tags(
+        query: str | None = None,
+        limit: int = 200,
+        parent_for_tag_id: int | None = None,
+    ) -> list[TagResponse]:
+        lib = get_library_or_error()
+        if limit == 0 or limit < -1:
+            raise HTTPException(status_code=400, detail="limit must be -1 or >= 1")
+
+        effective_limit = TAG_LIST_SOFT_CAP if limit == -1 else min(limit, TAG_LIST_SOFT_CAP)
 
         if query:
-            direct_tags, ancestor_tags = lib.search_tags(query, limit=limit)
+            direct_tags, ancestor_tags = lib.search_tags(query, limit=effective_limit)
             tags = sorted(direct_tags | ancestor_tags)
         else:
-            tags = sorted(lib.tags)[:limit]
+            tags = sorted(lib.tags)
+
+        tags = tags[:effective_limit]
+
+        if parent_for_tag_id is not None:
+            if lib.get_tag(parent_for_tag_id) is None:
+                raise HTTPException(status_code=404, detail="Tag not found.")
+            disallowed_parent_ids = get_descendant_tag_ids(lib, parent_for_tag_id)
+            tags = [tag for tag in tags if tag.id not in disallowed_parent_ids]
 
         return [TagResponse.model_validate(serialize_tag(tag)) for tag in tags]
 
@@ -393,6 +474,13 @@ def create_router(*, state: ApiState, jobs: JobManager) -> APIRouter:
     @router.post("/tags", response_model=TagResponse)
     def create_tag(request: TagCreateRequest) -> TagResponse:
         lib = get_library_or_error()
+        parent_ids = validate_parent_ids_for_tag(
+            lib,
+            tag_id=None,
+            parent_ids=set(request.parent_ids),
+        )
+        validate_disambiguation(request.disambiguation_id, parent_ids)
+
         tag = Tag(
             name=request.name,
             shorthand=request.shorthand,
@@ -405,7 +493,7 @@ def create_router(*, state: ApiState, jobs: JobManager) -> APIRouter:
 
         created = lib.add_tag(
             tag=tag,
-            parent_ids=set(request.parent_ids),
+            parent_ids=parent_ids,
             alias_names=set(request.aliases),
             alias_ids=set(),
         )
@@ -422,40 +510,63 @@ def create_router(*, state: ApiState, jobs: JobManager) -> APIRouter:
         if lib.engine is None:
             raise HTTPException(status_code=409, detail="No library open.")
 
+        provided_fields = request.model_fields_set
+
         with Session(lib.engine) as session:
             tag = session.get(Tag, tag_id)
             if tag is None:
                 raise HTTPException(status_code=404, detail="Tag not found.")
 
-            if request.name is not None:
+            if "name" in provided_fields and request.name is None:
+                raise HTTPException(status_code=422, detail="name cannot be null.")
+            if "name" in provided_fields and request.name is not None:
                 tag.name = request.name
-            if request.shorthand is not None:
+            if "shorthand" in provided_fields:
                 tag.shorthand = request.shorthand
-            if request.color_namespace is not None:
+            if "color_namespace" in provided_fields:
                 tag.color_namespace = request.color_namespace
-            if request.color_slug is not None:
+            if "color_slug" in provided_fields:
                 tag.color_slug = request.color_slug
-            if request.disambiguation_id is not None:
-                tag.disambiguation_id = request.disambiguation_id
-            if request.is_category is not None:
+            if "is_category" in provided_fields and request.is_category is not None:
                 tag.is_category = request.is_category
-            if request.is_hidden is not None:
+            if "is_hidden" in provided_fields and request.is_hidden is not None:
                 tag.is_hidden = request.is_hidden
 
-            if request.parent_ids is not None:
-                parent_ids = set(request.parent_ids)
-                parent_ids.discard(tag_id)
-                session.execute(delete(TagParent).where(TagParent.child_id == tag_id))
-                for parent_id in parent_ids:
-                    session.add(TagParent(parent_id=parent_id, child_id=tag_id))
-                if tag.disambiguation_id not in parent_ids:
+            existing_parent_ids = {
+                parent_id
+                for (parent_id,) in session.execute(
+                    select(TagParent.parent_id).where(TagParent.child_id == tag_id)
+                ).all()
+            }
+            requested_parent_ids = (
+                set(request.parent_ids or []) if "parent_ids" in provided_fields else None
+            )
+            effective_parent_ids = (
+                requested_parent_ids if requested_parent_ids is not None else existing_parent_ids
+            )
+            effective_parent_ids = validate_parent_ids_for_tag(
+                lib,
+                tag_id=tag_id,
+                parent_ids=set(effective_parent_ids),
+            )
+
+            if "disambiguation_id" in provided_fields:
+                validate_disambiguation(request.disambiguation_id, effective_parent_ids)
+                tag.disambiguation_id = request.disambiguation_id
+            elif tag.disambiguation_id is not None and requested_parent_ids is not None:
+                if tag.disambiguation_id not in effective_parent_ids:
                     tag.disambiguation_id = None
 
-            if request.aliases is not None:
+            if requested_parent_ids is not None:
+                session.execute(delete(TagParent).where(TagParent.child_id == tag_id))
+                for parent_id in effective_parent_ids:
+                    session.add(TagParent(parent_id=parent_id, child_id=tag_id))
+
+            if "aliases" in provided_fields:
                 existing_aliases = session.scalars(
                     select(TagAlias).where(TagAlias.tag_id == tag_id)
                 ).all()
-                desired_aliases = {alias for alias in request.aliases if alias}
+                desired_aliases = {alias for alias in (request.aliases or []) if alias}
                 existing_by_name = {alias.name: alias for alias in existing_aliases}
 
                 for alias in existing_aliases:

@@ -76,6 +76,22 @@ class TagResponse(BaseModel):
     is_hidden: bool = False
 
 
+class TagColorResponse(BaseModel):
+    namespace: str
+    namespace_name: str
+    slug: str
+    name: str
+    primary: str
+    secondary: str | None = None
+    color_border: bool = False
+
+
+class TagColorNamespaceResponse(BaseModel):
+    namespace: str
+    namespace_name: str
+    colors: list[TagColorResponse] = Field(default_factory=list)
+
+
 class FieldResponse(BaseModel):
     id: int
     type_key: str

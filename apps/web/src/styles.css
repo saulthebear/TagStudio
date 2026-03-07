@@ -14,6 +14,7 @@
 }
 
 :root {
+  --modal-margin: 16px;
   --ui-control-radius: 0.75rem;
   --ui-control-border: var(--color-border-soft);
   --ui-control-bg: rgb(255 255 255 / 0.95);
@@ -513,16 +514,86 @@ body {
   padding: 1rem;
 }
 
+.modal-layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+
+.modal-layer-backdrop {
+  position: absolute;
+  inset: 0;
+}
+
+.modal-layer-backdrop-dim {
+  background: rgba(15, 23, 42, 0.38);
+}
+
+.modal-layer-backdrop-clear {
+  pointer-events: auto;
+  background: transparent;
+}
+
+.modal-layer-panel {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.modal-layer-panel > * {
+  pointer-events: auto;
+}
+
 .overlay-panel {
   width: min(700px, 100%);
   display: grid;
   gap: 0.7rem;
 }
 
+.modal-draggable-panel {
+  transform: translate3d(var(--modal-x, 0), var(--modal-y, 0), 0);
+  will-change: transform;
+}
+
 .overlay-panel-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
+}
+
+.modal-drag-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+.modal-drag-handle:active {
+  cursor: grabbing;
+}
+
+.modal-panel-dragging {
+  box-shadow:
+    0 20px 48px rgb(15 23 42 / 0.28),
+    0 2px 10px rgb(15 23 42 / 0.18);
+}
+
+body.modal-dragging {
+  user-select: none;
+}
+
+@media (hover: none) {
+  .metadata-tag-chip-remove {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .modal-drag-handle,
+  .modal-drag-handle:active {
+    cursor: default;
+  }
 }
 
 .settings-row {
@@ -634,4 +705,312 @@ body {
   .library-gate-controls {
     grid-template-columns: 1fr;
   }
+}
+
+.metadata-tag-actions {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.metadata-tag-actions-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.metadata-tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.metadata-tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  width: max-content;
+  max-width: 100%;
+  border: 1px solid var(--color-border-soft);
+  border-radius: 999px;
+  background: white;
+  padding: 0.18rem 0.28rem 0.18rem 0.5rem;
+}
+
+.metadata-tag-chip-main {
+  border: 0;
+  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0;
+  min-width: 0;
+  max-width: 100%;
+  cursor: pointer;
+  color: inherit;
+}
+
+.metadata-tag-chip-main:disabled {
+  cursor: default;
+  opacity: 0.72;
+}
+
+.metadata-tag-chip-label {
+  max-width: 16rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.metadata-tag-chip-remove {
+  border: 0;
+  background: transparent;
+  color: #64748b;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  line-height: 1;
+  padding: 0;
+  font-size: 0.9rem;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+
+.metadata-tag-chip:hover .metadata-tag-chip-remove,
+.metadata-tag-chip:focus-within .metadata-tag-chip-remove {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.metadata-tag-chip-remove:hover {
+  background: color-mix(in oklab, #ef4444 12%, white 88%);
+  color: #991b1b;
+}
+
+.metadata-tag-chip-remove:disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.metadata-tag-partial {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 0.4rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  background: color-mix(in oklab, #f59e0b 16%, white 84%);
+  color: #b45309;
+}
+
+.add-tags-panel {
+  width: min(760px, calc(100vw - (2 * var(--modal-margin))));
+  max-height: min(92vh, 860px);
+  overflow: hidden;
+}
+
+.add-tags-controls {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.add-tags-limit-row {
+  grid-template-columns: auto minmax(120px, 180px);
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.add-tags-list-shell {
+  border: 1px solid var(--color-border-soft);
+  border-radius: 0.75rem;
+  overflow: hidden;
+  background: white;
+}
+
+.add-tags-row,
+.add-tags-create-row {
+  width: 100%;
+  min-height: 44px;
+  border: 0;
+  border-bottom: 1px solid color-mix(in oklab, var(--color-border-soft) 70%, white 30%);
+  background: transparent;
+  text-align: left;
+}
+
+.add-tags-row {
+  display: block;
+  padding: 0.15rem 0.4rem;
+}
+
+.add-tags-row-main {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.45rem 0.55rem;
+  border-radius: 0.6rem;
+  cursor: pointer;
+}
+
+.add-tags-row-main:disabled {
+  cursor: default;
+  opacity: 0.75;
+}
+
+.add-tags-row-state {
+  font-size: 0.78rem;
+  color: #475569;
+}
+
+.add-tags-create-row {
+  border: 2px dashed var(--color-border-strong);
+  margin: 0.4rem;
+  border-radius: 0.6rem;
+  padding: 0.55rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.add-tags-row-highlighted,
+.add-tags-row-highlighted .add-tags-row-main,
+.add-tags-create-row:hover,
+.add-tags-row-main:hover {
+  background: color-mix(in oklab, #3b82f6 12%, white 88%);
+}
+
+.tag-editor-panel {
+  width: min(760px, calc(100vw - (2 * var(--modal-margin))));
+  max-height: min(92vh, 880px);
+  overflow: auto;
+}
+
+.tag-editor-aliases {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.tag-editor-alias-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.4rem;
+}
+
+.tag-editor-parent-list {
+  border: 1px solid var(--color-border-soft);
+  border-radius: 0.6rem;
+  padding: 0.4rem;
+  max-height: 180px;
+  overflow: auto;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.tag-editor-parent-pill {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid var(--color-border-soft);
+  border-radius: 0.5rem;
+  padding: 0.3rem 0.4rem;
+}
+
+.tag-editor-empty {
+  margin: 0;
+  color: #64748b;
+}
+
+.tag-editor-hint {
+  margin: 0;
+  color: #334155;
+  font-size: 0.8rem;
+}
+
+.tag-editor-preview {
+  margin: 0;
+  color: #1d4ed8;
+  font-size: 0.8rem;
+}
+
+.tag-editor-suboverlay {
+  z-index: 60;
+}
+
+.tag-editor-subpanel {
+  width: min(640px, calc(100vw - (2 * var(--modal-margin))));
+  max-height: min(84vh, 720px);
+  overflow: auto;
+}
+
+.tag-editor-parent-controls {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.5rem;
+}
+
+.tag-editor-parent-candidates {
+  border: 1px solid var(--color-border-soft);
+  border-radius: 0.7rem;
+  overflow: auto;
+  max-height: 320px;
+}
+
+.tag-editor-candidate-row {
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid color-mix(in oklab, var(--color-border-soft) 70%, white 30%);
+  background: white;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.55rem 0.65rem;
+  cursor: pointer;
+}
+
+.tag-editor-candidate-row:hover {
+  background: color-mix(in oklab, #3b82f6 10%, white 90%);
+}
+
+.tag-editor-candidate-row:disabled {
+  opacity: 0.65;
+  cursor: default;
+}
+
+.tag-editor-color-grid {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.tag-editor-color-title {
+  margin: 0.4rem 0 0.2rem;
+  font-size: 0.85rem;
+  color: #334155;
+}
+
+.tag-editor-color-row {
+  width: 100%;
+  border: 1px solid var(--color-border-soft);
+  background: white;
+  border-radius: 0.6rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.5rem;
+  cursor: pointer;
+}
+
+.tag-editor-color-row:hover {
+  background: color-mix(in oklab, #3b82f6 10%, white 90%);
+}
+
+.tag-editor-color-swatch {
+  width: 1.2rem;
+  height: 1.2rem;
+  border-radius: 0.35rem;
+  border: 1px solid #334155;
+  flex: 0 0 auto;
 }

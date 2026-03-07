@@ -867,6 +867,31 @@
           }
         }
       }
+    },
+    "/api/v1/tag-colors": {
+      "get": {
+        "tags": [
+          "default"
+        ],
+        "summary": "List Tag Colors",
+        "operationId": "list_tag_colors_api_v1_tag_colors_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TagColorNamespaceResponse"
+                  },
+                  "title": "Response List Tag Colors Api V1 Tag Colors Get"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1183,8 +1208,8 @@
         "properties": {
           "main_split_ratio": {
             "type": "number",
-            "maximum": 1.0,
-            "minimum": 0.0,
+            "maximum": 1,
+            "minimum": 0,
             "title": "Main Split Ratio",
             "default": 0.78
           },
@@ -1200,15 +1225,15 @@
           },
           "main_last_open_ratio": {
             "type": "number",
-            "maximum": 1.0,
-            "minimum": 0.0,
+            "maximum": 1,
+            "minimum": 0,
             "title": "Main Last Open Ratio",
             "default": 0.78
           },
           "inspector_split_ratio": {
             "type": "number",
-            "maximum": 1.0,
-            "minimum": 0.0,
+            "maximum": 1,
+            "minimum": 0,
             "title": "Inspector Split Ratio",
             "default": 0.52
           },
@@ -1224,8 +1249,8 @@
           },
           "inspector_last_open_ratio": {
             "type": "number",
-            "maximum": 1.0,
-            "minimum": 0.0,
+            "maximum": 1,
+            "minimum": 0,
             "title": "Inspector Last Open Ratio",
             "default": 0.52
           },
@@ -1249,8 +1274,8 @@
             "anyOf": [
               {
                 "type": "number",
-                "maximum": 1.0,
-                "minimum": 0.0
+                "maximum": 1,
+                "minimum": 0
               },
               {
                 "type": "null"
@@ -1284,8 +1309,8 @@
             "anyOf": [
               {
                 "type": "number",
-                "maximum": 1.0,
-                "minimum": 0.0
+                "maximum": 1,
+                "minimum": 0
               },
               {
                 "type": "null"
@@ -1297,8 +1322,8 @@
             "anyOf": [
               {
                 "type": "number",
-                "maximum": 1.0,
-                "minimum": 0.0
+                "maximum": 1,
+                "minimum": 0
               },
               {
                 "type": "null"
@@ -1332,8 +1357,8 @@
             "anyOf": [
               {
                 "type": "number",
-                "maximum": 1.0,
-                "minimum": 0.0
+                "maximum": 1,
+                "minimum": 0
               },
               {
                 "type": "null"
@@ -1530,8 +1555,8 @@
           },
           "page_size": {
             "type": "integer",
-            "maximum": 2000.0,
-            "minimum": 1.0,
+            "maximum": 2000,
+            "minimum": 1,
             "title": "Page Size",
             "default": 200
           },
@@ -1600,8 +1625,8 @@
           },
           "page_size": {
             "type": "integer",
-            "maximum": 2000.0,
-            "minimum": 1.0,
+            "maximum": 2000,
+            "minimum": 1,
             "title": "Page Size",
             "default": 200
           },
@@ -1653,8 +1678,8 @@
             "anyOf": [
               {
                 "type": "integer",
-                "maximum": 2000.0,
-                "minimum": 1.0
+                "maximum": 2000,
+                "minimum": 1
               },
               {
                 "type": "null"
@@ -2248,6 +2273,82 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "TagColorResponse": {
+        "type": "object",
+        "title": "TagColorResponse",
+        "required": [
+          "namespace",
+          "namespace_name",
+          "slug",
+          "name",
+          "primary",
+          "color_border"
+        ],
+        "properties": {
+          "namespace": {
+            "type": "string",
+            "title": "Namespace"
+          },
+          "namespace_name": {
+            "type": "string",
+            "title": "Namespace Name"
+          },
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "primary": {
+            "type": "string",
+            "title": "Primary"
+          },
+          "secondary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Secondary"
+          },
+          "color_border": {
+            "type": "boolean",
+            "title": "Color Border",
+            "default": false
+          }
+        }
+      },
+      "TagColorNamespaceResponse": {
+        "type": "object",
+        "title": "TagColorNamespaceResponse",
+        "required": [
+          "namespace",
+          "namespace_name"
+        ],
+        "properties": {
+          "namespace": {
+            "type": "string",
+            "title": "Namespace"
+          },
+          "namespace_name": {
+            "type": "string",
+            "title": "Namespace Name"
+          },
+          "colors": {
+            "type": "array",
+            "title": "Colors",
+            "items": {
+              "$ref": "#/components/schemas/TagColorResponse"
+            },
+            "default": []
+          }
+        }
       }
     }
   }

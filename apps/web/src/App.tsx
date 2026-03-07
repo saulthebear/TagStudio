@@ -1,9 +1,16 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  type MouseEvent as ReactMouseEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState
+} from "react";
 
 import { ErrorPanel } from "@/components/ErrorPanel";
 import { InspectorPane } from "@/components/InspectorPane";
 import { LibraryGate } from "@/components/LibraryGate";
 import { LibrarySwitcherModal } from "@/components/LibrarySwitcherModal";
+import { ModalStackProvider } from "@/hooks/useModalStackDepth";
 import { RefreshStatusPanel } from "@/components/RefreshStatusPanel";
 import { SettingsModal } from "@/components/SettingsModal";
 import { SplitPane } from "@/components/SplitPane";
@@ -22,10 +29,13 @@ import {
   isFlatQuery,
   toggleUntaggedInQuery
 } from "@/lib/entry-filters";
+import { computeDesktopSelection } from "@/lib/tag-workflows";
 
 export function App() {
   const [uiError, setUiError] = useState<string | null>(null);
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
+  const [selectedEntryIds, setSelectedEntryIds] = useState<number[]>([]);
+  const [selectionAnchorId, setSelectionAnchorId] = useState<number | null>(null);
 
   const onClearError = useCallback(() => {
     setUiError(null);
@@ -114,30 +124,31 @@ export function App() {
 
   const {
     selectedEntry,
+    selectedEntryId,
     preview,
     fieldDrafts,
     setFieldDraft,
-    selectedTagId,
-    setSelectedTagId,
-    tagQuery,
-    setTagQuery,
     newFieldKey,
     setNewFieldKey,
     newFieldValue,
     setNewFieldValue,
-    tags,
+    allTags,
     fieldTypes,
-    tagsDisplay,
-    addTagPending,
     updateFieldPending,
+    tagMutationPending,
+    tagEditPending,
     refreshPending,
     refreshStatus,
     selectEntry,
-    addSelectedTag,
-    removeTagFromEntry,
+    clearSelection,
     saveField,
     applyField,
     refreshLibrary,
+    refreshSelectedEntry,
+    addTagToEntries,
+    removeTagFromEntries,
+    createTag,
+    updateTag,
     reconcileSelectionWithEntries
   } = useInspectorWorkflow({
     activeLibraryPath,
@@ -149,7 +160,15 @@ export function App() {
   });
 
   useEffect(() => {
+    setSelectedEntryIds([]);
+    setSelectionAnchorId(null);
+  }, [activeLibraryPath]);
+
+  useEffect(() => {
     reconcileSelectionWithEntries(entries);
+
+    const visibleEntryIds = new Set(entries.map((entry) => entry.id));
+    setSelectedEntryIds((prev) => prev.filter((entryId) => visibleEntryIds.has(entryId)));
   }, [entries, reconcileSelectionWithEntries]);
 
   useEffect(() => {
@@ -181,6 +200,11 @@ export function App() {
     [activeQuery, showHiddenEntries]
   );
 
+  const selectedEntries = useMemo(() => {
+    const selectedSet = new Set(selectedEntryIds);
+    return entries.filter((entry) => selectedSet.has(entry.id));
+  }, [entries, selectedEntryIds]);
+
   const handleSaveSettings = useCallback(() => {
     void saveSettingsDraft().then((savedDraft) => {
       if (!savedDraft) {
@@ -199,22 +223,57 @@ export function App() {
     });
   }, [activeQuery, executeSearch, saveSettingsDraft]);
 
+  const handleGridSelect = useCallback(
+    (entryId: number, event: ReactMouseEvent<HTMLButtonElement>) => {
+      if (isMobile) {
+        setSelectedEntryIds([entryId]);
+        setSelectionAnchorId(entryId);
+        selectEntry(entryId);
+        setMobileActivePane("preview");
+        return;
+      }
+
+      const nextSelection = computeDesktopSelection({
+        clickedId: entryId,
+        orderedIds: entries.map((entry) => entry.id),
+        selectedIds: selectedEntryIds,
+        activeId: selectedEntryId,
+        anchorId: selectionAnchorId,
+        ctrlOrMeta: event.metaKey || event.ctrlKey,
+        shift: event.shiftKey
+      });
+
+      setSelectedEntryIds(nextSelection.selectedIds);
+      setSelectionAnchorId(nextSelection.anchorId);
+      if (nextSelection.activeId === null) {
+        clearSelection();
+      } else {
+        selectEntry(nextSelection.activeId);
+      }
+    },
+    [
+      clearSelection,
+      entries,
+      isMobile,
+      selectEntry,
+      selectedEntryId,
+      selectedEntryIds,
+      selectionAnchorId,
+      setMobileActivePane
+    ]
+  );
+
   const gridPane = (
     <ThumbnailGridPane
       entries={entries}
       totalCount={totalCount}
-      selectedEntryId={selectedEntry?.id ?? null}
+      selectedEntryIds={selectedEntryIds}
       activeQuery={activeQuery}
       searchPending={searchPending}
       loadingMore={loadingMore}
       hasMore={hasMore}
       onLoadMore={loadMore}
-      onSelectEntry={(entryId) => {
-        selectEntry(entryId);
-        if (isMobile) {
-          setMobileActivePane("preview");
-        }
-      }}
+      onSelectEntry={handleGridSelect}
       getThumbnailUrl={(entryId, options) => api.getThumbnailUrl(entryId, options)}
     />
   );
@@ -222,24 +281,25 @@ export function App() {
   const inspectorPane = (
     <InspectorPane
       selectedEntry={selectedEntry}
+      selectedEntryIds={selectedEntryIds}
+      selectedEntries={selectedEntries}
       preview={preview}
       getMediaUrl={(entryId) => api.getMediaUrl(entryId)}
       getThumbnailUrl={(entryId, options) => api.getThumbnailUrl(entryId, options)}
       resolveApiUrl={(path) => api.resolveUrl(path)}
-      tagsDisplay={tagsDisplay}
-      tagQuery={tagQuery}
-      selectedTagId={selectedTagId}
       fieldDrafts={fieldDrafts}
       newFieldKey={newFieldKey}
       newFieldValue={newFieldValue}
-      availableTags={tags}
+      allTags={allTags}
       fieldTypes={fieldTypes}
-      addTagPending={addTagPending}
+      tagMutationPending={tagMutationPending}
+      tagEditPending={tagEditPending}
       updateFieldPending={updateFieldPending}
-      onTagQueryChange={setTagQuery}
-      onSelectedTagChange={setSelectedTagId}
-      onAddTag={addSelectedTag}
-      onRemoveTag={removeTagFromEntry}
+      onAddTagToEntries={addTagToEntries}
+      onRemoveTagFromEntries={removeTagFromEntries}
+      onCreateTag={createTag}
+      onUpdateTag={updateTag}
+      onRefreshSelection={refreshSelectedEntry}
       onFieldDraftChange={setFieldDraft}
       onSaveField={saveField}
       onNewFieldKeyChange={setNewFieldKey}
@@ -253,8 +313,9 @@ export function App() {
   );
 
   return (
-    <main className="app-shell app-shell-live">
-      {uiError ? <ErrorPanel message={uiError} /> : null}
+    <ModalStackProvider>
+      <main className="app-shell app-shell-live">
+        {uiError ? <ErrorPanel message={uiError} /> : null}
 
       {!isLibraryOpen ? (
         <LibraryGate
@@ -376,32 +437,33 @@ export function App() {
         </>
       )}
 
-      <LibrarySwitcherModal
-        open={libraryModalOpen}
-        libraryPath={libraryPath}
-        openPending={openPending}
-        onLibraryPathChange={setLibraryPath}
-        onOpen={openLibrary}
-        onCreate={createLibrary}
-        onClose={closeLibraryModal}
-      />
+        <LibrarySwitcherModal
+          open={libraryModalOpen}
+          libraryPath={libraryPath}
+          openPending={openPending}
+          onLibraryPathChange={setLibraryPath}
+          onOpen={openLibrary}
+          onCreate={createLibrary}
+          onClose={closeLibraryModal}
+        />
 
-      <SettingsModal
-        open={settingsOpen}
-        sortingMode={settingsDraft.sortingMode}
-        ascending={settingsDraft.ascending}
-        showHiddenEntries={settingsDraft.showHiddenEntries}
-        pageSize={settingsDraft.pageSize}
-        savePending={savePending}
-        onSortingModeChange={(value) => setSettingsDraft((prev) => ({ ...prev, sortingMode: value }))}
-        onAscendingChange={(value) => setSettingsDraft((prev) => ({ ...prev, ascending: value }))}
-        onShowHiddenChange={(value) =>
-          setSettingsDraft((prev) => ({ ...prev, showHiddenEntries: value }))
-        }
-        onPageSizeChange={(value) => setSettingsDraft((prev) => ({ ...prev, pageSize: value }))}
-        onSave={handleSaveSettings}
-        onClose={closeSettings}
-      />
-    </main>
+        <SettingsModal
+          open={settingsOpen}
+          sortingMode={settingsDraft.sortingMode}
+          ascending={settingsDraft.ascending}
+          showHiddenEntries={settingsDraft.showHiddenEntries}
+          pageSize={settingsDraft.pageSize}
+          savePending={savePending}
+          onSortingModeChange={(value) => setSettingsDraft((prev) => ({ ...prev, sortingMode: value }))}
+          onAscendingChange={(value) => setSettingsDraft((prev) => ({ ...prev, ascending: value }))}
+          onShowHiddenChange={(value) =>
+            setSettingsDraft((prev) => ({ ...prev, showHiddenEntries: value }))
+          }
+          onPageSizeChange={(value) => setSettingsDraft((prev) => ({ ...prev, pageSize: value }))}
+          onSave={handleSaveSettings}
+          onClose={closeSettings}
+        />
+      </main>
+    </ModalStackProvider>
   );
 }

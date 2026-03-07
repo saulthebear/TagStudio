@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Any
 
 from tagstudio.core.library.alchemy.fields import BaseField
-from tagstudio.core.library.alchemy.models import Entry, Tag
+from tagstudio.core.library.alchemy.models import Entry, Tag, TagColorGroup
 
 
 def _iso(value: Any) -> str | None:
@@ -26,6 +26,18 @@ def serialize_tag(tag: Tag) -> dict[str, Any]:
         "disambiguation_id": tag.disambiguation_id,
         "is_category": tag.is_category,
         "is_hidden": tag.is_hidden,
+    }
+
+
+def serialize_tag_color(namespace_name: str, color: TagColorGroup) -> dict[str, Any]:
+    return {
+        "namespace": color.namespace,
+        "namespace_name": namespace_name,
+        "slug": color.slug,
+        "name": color.name,
+        "primary": color.primary,
+        "secondary": color.secondary,
+        "color_border": color.color_border,
     }
 
 

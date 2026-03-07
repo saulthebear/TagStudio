@@ -77,6 +77,10 @@ def test_api_core_workflows() -> None:
             assert tags.status_code == 200
             assert any(tag["name"] == "foo" for tag in tags.json())
 
+            colors = client.get("/api/v1/tag-colors")
+            assert colors.status_code == 200
+            assert any(group["namespace"] == "tagstudio-standard" for group in colors.json())
+
             settings = client.get("/api/v1/settings")
             assert settings.status_code == 200
             assert settings.json()["page_size"] == 200
@@ -175,6 +179,96 @@ def test_api_core_workflows() -> None:
             delete_tag = client.delete(f"/api/v1/tags/{new_tag_id}")
             assert delete_tag.status_code == 200
             assert delete_tag.json()["success"] is True
+
+
+def test_tag_validation_and_parent_filtering() -> None:
+    with TemporaryDirectory() as tmp:
+        library_path = Path(tmp)
+        seed_library(library_path)
+
+        app = create_app()
+        with TestClient(app) as client:
+            open_res = client.post("/api/v1/libraries/open", json={"path": str(library_path)})
+            assert open_res.status_code == 200
+
+            parent = client.post("/api/v1/tags", json={"name": "parent"})
+            child = client.post("/api/v1/tags", json={"name": "child"})
+            grandchild = client.post("/api/v1/tags", json={"name": "grandchild"})
+            assert parent.status_code == 200
+            assert child.status_code == 200
+            assert grandchild.status_code == 200
+
+            parent_id = parent.json()["id"]
+            child_id = child.json()["id"]
+            grandchild_id = grandchild.json()["id"]
+
+            child_parent = client.patch(
+                f"/api/v1/tags/{child_id}",
+                json={"parent_ids": [parent_id]},
+            )
+            assert child_parent.status_code == 200
+
+            grandchild_parent = client.patch(
+                f"/api/v1/tags/{grandchild_id}",
+                json={"parent_ids": [child_id]},
+            )
+            assert grandchild_parent.status_code == 200
+
+            cycle = client.patch(f"/api/v1/tags/{parent_id}", json={"parent_ids": [child_id]})
+            assert cycle.status_code == 422
+            assert "Circular tag hierarchy" in cycle.json()["detail"]
+
+            bad_create_disam = client.post(
+                "/api/v1/tags",
+                json={
+                    "name": "invalid-disambiguation",
+                    "parent_ids": [parent_id],
+                    "disambiguation_id": child_id,
+                },
+            )
+            assert bad_create_disam.status_code == 422
+            assert "disambiguation_id" in bad_create_disam.json()["detail"]
+
+            bad_patch_disam = client.patch(
+                f"/api/v1/tags/{child_id}",
+                json={"disambiguation_id": grandchild_id},
+            )
+            assert bad_patch_disam.status_code == 422
+            assert "disambiguation_id" in bad_patch_disam.json()["detail"]
+
+            shorthand_set = client.patch(f"/api/v1/tags/{child_id}", json={"shorthand": "kid"})
+            assert shorthand_set.status_code == 200
+            assert shorthand_set.json()["shorthand"] == "kid"
+
+            shorthand_clear = client.patch(f"/api/v1/tags/{child_id}", json={"shorthand": None})
+            assert shorthand_clear.status_code == 200
+            assert shorthand_clear.json()["shorthand"] is None
+
+            disam_set = client.patch(
+                f"/api/v1/tags/{child_id}",
+                json={"disambiguation_id": parent_id},
+            )
+            assert disam_set.status_code == 200
+            assert disam_set.json()["disambiguation_id"] == parent_id
+
+            disam_clear = client.patch(
+                f"/api/v1/tags/{child_id}",
+                json={"disambiguation_id": None},
+            )
+            assert disam_clear.status_code == 200
+            assert disam_clear.json()["disambiguation_id"] is None
+
+            all_tags = client.get("/api/v1/tags?limit=-1")
+            assert all_tags.status_code == 200
+            assert len(all_tags.json()) >= 4
+            assert len(all_tags.json()) <= 5000
+
+            parent_filter = client.get(f"/api/v1/tags?parent_for_tag_id={parent_id}&limit=-1")
+            assert parent_filter.status_code == 200
+            filtered_ids = {tag["id"] for tag in parent_filter.json()}
+            assert parent_id not in filtered_ids
+            assert child_id not in filtered_ids
+            assert grandchild_id not in filtered_ids
 
 
 def test_refresh_job_sse() -> None:

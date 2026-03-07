@@ -18,6 +18,46 @@ export type TagResponse = {
   is_hidden: boolean;
 };
 
+export type TagColorResponse = {
+  namespace: string;
+  namespace_name: string;
+  slug: string;
+  name: string;
+  primary: string;
+  secondary: string | null;
+  color_border: boolean;
+};
+
+export type TagColorNamespaceResponse = {
+  namespace: string;
+  namespace_name: string;
+  colors: TagColorResponse[];
+};
+
+export type TagCreatePayload = {
+  name: string;
+  shorthand?: string | null;
+  aliases?: string[];
+  parent_ids?: number[];
+  color_namespace?: string | null;
+  color_slug?: string | null;
+  disambiguation_id?: number | null;
+  is_category?: boolean;
+  is_hidden?: boolean;
+};
+
+export type TagUpdatePayload = {
+  name?: string | null;
+  shorthand?: string | null;
+  aliases?: string[] | null;
+  parent_ids?: number[] | null;
+  color_namespace?: string | null;
+  color_slug?: string | null;
+  disambiguation_id?: number | null;
+  is_category?: boolean | null;
+  is_hidden?: boolean | null;
+};
+
 export type FieldResponse = {
   id: number;
   type_key: string;
@@ -237,10 +277,20 @@ export class TagStudioApiClient {
     return this.request("/api/v1/field-types");
   }
 
-  async getTags(query?: string): Promise<TagResponse[]> {
+  async getTagColors(): Promise<TagColorNamespaceResponse[]> {
+    return this.request("/api/v1/tag-colors");
+  }
+
+  async getTags(query?: string, limit?: number, parentForTagId?: number): Promise<TagResponse[]> {
     const params = new URLSearchParams();
     if (query?.trim()) {
       params.set("query", query.trim());
+    }
+    if (typeof limit === "number") {
+      params.set("limit", String(limit));
+    }
+    if (typeof parentForTagId === "number") {
+      params.set("parent_for_tag_id", String(parentForTagId));
     }
     const suffix = params.size > 0 ? `?${params}` : "";
     return this.request(`/api/v1/tags${suffix}`);
@@ -307,19 +357,16 @@ export class TagStudioApiClient {
     });
   }
 
-  async createTag(payload: {
-    name: string;
-    shorthand?: string | null;
-    aliases?: string[];
-    parent_ids?: number[];
-    color_namespace?: string | null;
-    color_slug?: string | null;
-    disambiguation_id?: number | null;
-    is_category?: boolean;
-    is_hidden?: boolean;
-  }): Promise<TagResponse> {
+  async createTag(payload: TagCreatePayload): Promise<TagResponse> {
     return this.request("/api/v1/tags", {
       method: "POST",
+      body: JSON.stringify(payload)
+    });
+  }
+
+  async updateTag(tagId: number, payload: TagUpdatePayload): Promise<TagResponse> {
+    return this.request(`/api/v1/tags/${tagId}`, {
+      method: "PATCH",
       body: JSON.stringify(payload)
     });
   }

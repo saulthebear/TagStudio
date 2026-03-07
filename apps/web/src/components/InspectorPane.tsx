@@ -1,15 +1,23 @@
 import {
   type EntryResponse,
+  type EntrySummaryResponse,
   type FieldTypeResponse,
   type PreviewResponse,
-  type TagResponse
+  type TagCreatePayload,
+  type TagResponse,
+  type TagUpdatePayload
 } from "@tagstudio/api-client";
 import { Button } from "@tagstudio/ui";
+import { useCallback, useMemo, useState } from "react";
 
+import { AddTagsModal } from "@/components/AddTagsModal";
 import { SplitPane, type SplitPaneState } from "@/components/SplitPane";
+import { TagEditorModal } from "@/components/TagEditorModal";
 
 type InspectorPaneProps = {
   selectedEntry: EntryResponse | null;
+  selectedEntryIds: number[];
+  selectedEntries: EntrySummaryResponse[];
   preview: PreviewResponse | undefined;
   getMediaUrl: (entryId: number) => string;
   getThumbnailUrl: (
@@ -21,20 +29,19 @@ type InspectorPaneProps = {
     }
   ) => string;
   resolveApiUrl: (path: string) => string;
-  tagsDisplay: string;
-  tagQuery: string;
-  selectedTagId: string;
   fieldDrafts: Record<string, string>;
   newFieldKey: string;
   newFieldValue: string;
-  availableTags: TagResponse[];
+  allTags: TagResponse[];
   fieldTypes: FieldTypeResponse[];
-  addTagPending: boolean;
+  tagMutationPending: boolean;
+  tagEditPending: boolean;
   updateFieldPending: boolean;
-  onTagQueryChange: (value: string) => void;
-  onSelectedTagChange: (value: string) => void;
-  onAddTag: () => void;
-  onRemoveTag: (tagId: number) => void;
+  onAddTagToEntries: (entryIds: number[], tagId: number) => Promise<void>;
+  onRemoveTagFromEntries: (entryIds: number[], tagId: number) => Promise<void>;
+  onCreateTag: (payload: TagCreatePayload) => Promise<TagResponse | null>;
+  onUpdateTag: (tagId: number, payload: TagUpdatePayload) => Promise<TagResponse | null>;
+  onRefreshSelection: () => Promise<void>;
   onFieldDraftChange: (fieldKey: string, value: string) => void;
   onSaveField: (fieldKey: string, value: string) => void;
   onNewFieldKeyChange: (value: string) => void;
@@ -46,26 +53,34 @@ type InspectorPaneProps = {
   mobileSection: "preview" | "metadata";
 };
 
+type AggregateTagRow = {
+  tagId: number;
+  count: number;
+  state: "all" | "partial";
+  tag: TagResponse | null;
+};
+
 export function InspectorPane({
   selectedEntry,
+  selectedEntryIds,
+  selectedEntries,
   preview,
   getMediaUrl,
   getThumbnailUrl,
   resolveApiUrl,
-  tagsDisplay,
-  tagQuery,
-  selectedTagId,
   fieldDrafts,
   newFieldKey,
   newFieldValue,
-  availableTags,
+  allTags,
   fieldTypes,
-  addTagPending,
+  tagMutationPending,
+  tagEditPending,
   updateFieldPending,
-  onTagQueryChange,
-  onSelectedTagChange,
-  onAddTag,
-  onRemoveTag,
+  onAddTagToEntries,
+  onRemoveTagFromEntries,
+  onCreateTag,
+  onUpdateTag,
+  onRefreshSelection,
   onFieldDraftChange,
   onSaveField,
   onNewFieldKeyChange,
@@ -94,20 +109,21 @@ export function InspectorPane({
       <h2 className="panel-title m-0">Metadata</h2>
       <MetadataContent
         selectedEntry={selectedEntry}
-        tagsDisplay={tagsDisplay}
-        tagQuery={tagQuery}
-        selectedTagId={selectedTagId}
+        selectedEntryIds={selectedEntryIds}
+        selectedEntries={selectedEntries}
         fieldDrafts={fieldDrafts}
         newFieldKey={newFieldKey}
         newFieldValue={newFieldValue}
-        availableTags={availableTags}
+        allTags={allTags}
         fieldTypes={fieldTypes}
-        addTagPending={addTagPending}
+        tagMutationPending={tagMutationPending}
+        tagEditPending={tagEditPending}
         updateFieldPending={updateFieldPending}
-        onTagQueryChange={onTagQueryChange}
-        onSelectedTagChange={onSelectedTagChange}
-        onAddTag={onAddTag}
-        onRemoveTag={onRemoveTag}
+        onAddTagToEntries={onAddTagToEntries}
+        onRemoveTagFromEntries={onRemoveTagFromEntries}
+        onCreateTag={onCreateTag}
+        onUpdateTag={onUpdateTag}
+        onRefreshSelection={onRefreshSelection}
         onFieldDraftChange={onFieldDraftChange}
         onSaveField={onSaveField}
         onNewFieldKeyChange={onNewFieldKeyChange}
@@ -215,20 +231,21 @@ function PreviewContent({
 
 type MetadataContentProps = {
   selectedEntry: EntryResponse | null;
-  tagsDisplay: string;
-  tagQuery: string;
-  selectedTagId: string;
+  selectedEntryIds: number[];
+  selectedEntries: EntrySummaryResponse[];
   fieldDrafts: Record<string, string>;
   newFieldKey: string;
   newFieldValue: string;
-  availableTags: TagResponse[];
+  allTags: TagResponse[];
   fieldTypes: FieldTypeResponse[];
-  addTagPending: boolean;
+  tagMutationPending: boolean;
+  tagEditPending: boolean;
   updateFieldPending: boolean;
-  onTagQueryChange: (value: string) => void;
-  onSelectedTagChange: (value: string) => void;
-  onAddTag: () => void;
-  onRemoveTag: (tagId: number) => void;
+  onAddTagToEntries: (entryIds: number[], tagId: number) => Promise<void>;
+  onRemoveTagFromEntries: (entryIds: number[], tagId: number) => Promise<void>;
+  onCreateTag: (payload: TagCreatePayload) => Promise<TagResponse | null>;
+  onUpdateTag: (tagId: number, payload: TagUpdatePayload) => Promise<TagResponse | null>;
+  onRefreshSelection: () => Promise<void>;
   onFieldDraftChange: (fieldKey: string, value: string) => void;
   onSaveField: (fieldKey: string, value: string) => void;
   onNewFieldKeyChange: (value: string) => void;
@@ -238,126 +255,227 @@ type MetadataContentProps = {
 
 function MetadataContent({
   selectedEntry,
-  tagsDisplay,
-  tagQuery,
-  selectedTagId,
+  selectedEntryIds,
+  selectedEntries,
   fieldDrafts,
   newFieldKey,
   newFieldValue,
-  availableTags,
+  allTags,
   fieldTypes,
-  addTagPending,
+  tagMutationPending,
+  tagEditPending,
   updateFieldPending,
-  onTagQueryChange,
-  onSelectedTagChange,
-  onAddTag,
-  onRemoveTag,
+  onAddTagToEntries,
+  onRemoveTagFromEntries,
+  onCreateTag,
+  onUpdateTag,
+  onRefreshSelection,
   onFieldDraftChange,
   onSaveField,
   onNewFieldKeyChange,
   onNewFieldValueChange,
   onApplyField
 }: MetadataContentProps) {
-  if (!selectedEntry) {
-    return <p className="text-sm text-slate-500">Select an entry to inspect tags and fields.</p>;
+  const [addTagsOpen, setAddTagsOpen] = useState(false);
+  const [editTag, setEditTag] = useState<TagResponse | null>(null);
+
+  const selectedCount = selectedEntryIds.length;
+
+  const tagById = useMemo(() => {
+    const map = new Map<number, TagResponse>();
+    for (const tag of allTags) {
+      map.set(tag.id, tag);
+    }
+    for (const tag of selectedEntry?.tags ?? []) {
+      if (!map.has(tag.id)) {
+        map.set(tag.id, tag);
+      }
+    }
+    return map;
+  }, [allTags, selectedEntry]);
+
+  const entryTagIdsByEntry = useMemo(() => {
+    const map = new Map<number, Set<number>>();
+    for (const entry of selectedEntries) {
+      map.set(entry.id, new Set(entry.tag_ids));
+    }
+    return map;
+  }, [selectedEntries]);
+
+  const aggregateTagRows = useMemo<AggregateTagRow[]>(() => {
+    const counts = new Map<number, number>();
+    for (const entry of selectedEntries) {
+      for (const tagId of entry.tag_ids) {
+        counts.set(tagId, (counts.get(tagId) ?? 0) + 1);
+      }
+    }
+
+    const rows: AggregateTagRow[] = [];
+    for (const [tagId, count] of counts.entries()) {
+      rows.push({
+        tagId,
+        count,
+        state: count === selectedCount ? "all" : "partial",
+        tag: tagById.get(tagId) ?? null
+      });
+    }
+
+    rows.sort((a, b) => {
+      const aName = a.tag?.name ?? String(a.tagId);
+      const bName = b.tag?.name ?? String(b.tagId);
+      return aName.localeCompare(bName);
+    });
+
+    return rows;
+  }, [selectedCount, selectedEntries, tagById]);
+
+  const removeTag = useCallback(async (tagId: number) => {
+    await onRemoveTagFromEntries(selectedEntryIds, tagId);
+    await onRefreshSelection();
+  }, [onRefreshSelection, onRemoveTagFromEntries, selectedEntryIds]);
+
+  if (selectedCount === 0) {
+    return <p className="text-sm text-slate-500">Select one or more entries to inspect metadata.</p>;
   }
+
+  const singleSelection = selectedCount === 1;
 
   return (
     <div className="metadata-content space-y-3 text-sm">
       <div>
-        <strong>Path:</strong> {selectedEntry.path}
+        <strong>Selection:</strong>{" "}
+        {singleSelection && selectedEntry
+          ? selectedEntry.path
+          : `${selectedCount} entries selected`}
       </div>
-      <div>
-        <strong>Tags:</strong> {tagsDisplay || "none"}
-      </div>
-      <div className="space-y-2">
-        <strong>Tag Actions</strong>
-        <div className="flex gap-2">
-          <input
-            className="w-full rounded-xl border border-[var(--color-border-soft)] bg-white/95 px-2 py-1 text-sm"
-            placeholder="Filter tags..."
-            value={tagQuery}
-            onChange={(event) => onTagQueryChange(event.target.value)}
-          />
-          <select
-            className="max-w-56 rounded-xl border border-[var(--color-border-soft)] bg-white/95 px-2 py-1 text-sm"
-            value={selectedTagId}
-            onChange={(event) => onSelectedTagChange(event.target.value)}
-          >
-            <option value="">Select tag</option>
-            {availableTags.map((tag) => (
-              <option key={tag.id} value={String(tag.id)}>
-                {tag.name}
-              </option>
-            ))}
-          </select>
-          <Button variant="secondary" disabled={!selectedTagId || addTagPending} onClick={onAddTag}>
-            Add
+
+      <div className="metadata-tag-actions">
+        <div className="metadata-tag-actions-header">
+          <strong>Tags</strong>
+          <Button size="sm" onClick={() => setAddTagsOpen(true)} disabled={tagMutationPending}>
+            Add Tag
           </Button>
         </div>
-        <div className="flex flex-wrap gap-2">
-          {selectedEntry.tags.map((tag) => (
-            <button
-              key={tag.id}
-              type="button"
-              className="rounded-xl border border-[var(--color-border-soft)] px-2 py-1 text-xs"
-              onClick={() => onRemoveTag(tag.id)}
-            >
-              Remove {tag.name}
-            </button>
-          ))}
-        </div>
-      </div>
-      <div>
-        <strong>Fields</strong>
-        <ul className="m-0 mt-1 list-none space-y-2 p-0">
-          {selectedEntry.fields.map((field) => (
-            <li key={field.id}>
-              <div className="mb-1 font-medium">{field.type_name}</div>
-              <div className="flex gap-2">
-                <input
-                  className="w-full rounded-xl border border-[var(--color-border-soft)] bg-white/95 px-2 py-1 text-sm"
-                  value={fieldDrafts[field.type_key] ?? ""}
-                  onChange={(event) => onFieldDraftChange(field.type_key, event.target.value)}
-                />
-                <Button
-                  variant="secondary"
-                  disabled={updateFieldPending}
-                  onClick={() => onSaveField(field.type_key, fieldDrafts[field.type_key] ?? "")}
+
+        <div className="metadata-tag-list">
+          {aggregateTagRows.length === 0 ? (
+            <p className="tag-editor-empty">No tags applied.</p>
+          ) : (
+            aggregateTagRows.map((row) => (
+              <div key={row.tagId} className="metadata-tag-chip">
+                <button
+                  type="button"
+                  className="metadata-tag-chip-main"
+                  onClick={() => {
+                    if (row.tag) {
+                      setEditTag(row.tag);
+                    }
+                  }}
+                  disabled={!row.tag || tagEditPending}
                 >
-                  Save
-                </Button>
+                  <span className="metadata-tag-chip-label">{row.tag?.name ?? `Tag #${row.tagId}`}</span>
+                  {row.state === "partial" ? <span className="metadata-tag-partial">Partial</span> : null}
+                </button>
+                <button
+                  type="button"
+                  className="metadata-tag-chip-remove"
+                  aria-label={`Remove ${row.tag?.name ?? `Tag #${row.tagId}`}`}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    void removeTag(row.tagId);
+                  }}
+                  disabled={tagMutationPending}
+                >
+                  ×
+                </button>
               </div>
-            </li>
-          ))}
-        </ul>
-      </div>
-      <div className="space-y-1">
-        <strong>Add/Update Field</strong>
-        <div className="flex gap-2">
-          <select
-            className="rounded-xl border border-[var(--color-border-soft)] bg-white/95 px-2 py-1 text-sm"
-            value={newFieldKey}
-            onChange={(event) => onNewFieldKeyChange(event.target.value)}
-          >
-            <option value="">Select field type</option>
-            {fieldTypes.map((fieldType) => (
-              <option key={fieldType.key} value={fieldType.key}>
-                {fieldType.name}
-              </option>
-            ))}
-          </select>
-          <input
-            className="w-full rounded-xl border border-[var(--color-border-soft)] bg-white/95 px-2 py-1 text-sm"
-            value={newFieldValue}
-            onChange={(event) => onNewFieldValueChange(event.target.value)}
-            placeholder="Field value"
-          />
-          <Button variant="secondary" disabled={!newFieldKey || updateFieldPending} onClick={onApplyField}>
-            Apply
-          </Button>
+            ))
+          )}
         </div>
       </div>
+
+      {singleSelection && selectedEntry ? (
+        <>
+          <div>
+            <strong>Fields</strong>
+            <ul className="m-0 mt-1 list-none space-y-2 p-0">
+              {selectedEntry.fields.map((field) => (
+                <li key={field.id}>
+                  <div className="mb-1 font-medium">{field.type_name}</div>
+                  <div className="flex gap-2">
+                    <input
+                      className="w-full rounded-xl border border-[var(--color-border-soft)] bg-white/95 px-2 py-1 text-sm"
+                      value={fieldDrafts[field.type_key] ?? ""}
+                      onChange={(event) => onFieldDraftChange(field.type_key, event.target.value)}
+                    />
+                    <Button
+                      variant="secondary"
+                      disabled={updateFieldPending}
+                      onClick={() => onSaveField(field.type_key, fieldDrafts[field.type_key] ?? "")}
+                    >
+                      Save
+                    </Button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div className="space-y-1">
+            <strong>Add/Update Field</strong>
+            <div className="flex gap-2">
+              <select
+                className="rounded-xl border border-[var(--color-border-soft)] bg-white/95 px-2 py-1 text-sm"
+                value={newFieldKey}
+                onChange={(event) => onNewFieldKeyChange(event.target.value)}
+              >
+                <option value="">Select field type</option>
+                {fieldTypes.map((fieldType) => (
+                  <option key={fieldType.key} value={fieldType.key}>
+                    {fieldType.name}
+                  </option>
+                ))}
+              </select>
+              <input
+                className="w-full rounded-xl border border-[var(--color-border-soft)] bg-white/95 px-2 py-1 text-sm"
+                value={newFieldValue}
+                onChange={(event) => onNewFieldValueChange(event.target.value)}
+                placeholder="Field value"
+              />
+              <Button variant="secondary" disabled={!newFieldKey || updateFieldPending} onClick={onApplyField}>
+                Apply
+              </Button>
+            </div>
+          </div>
+        </>
+      ) : (
+        <p className="text-sm text-slate-500">Field editing is available when a single entry is selected.</p>
+      )}
+
+      <AddTagsModal
+        open={addTagsOpen}
+        selectedEntryIds={selectedEntryIds}
+        entryTagIdsByEntry={entryTagIdsByEntry}
+        onClose={() => {
+          setAddTagsOpen(false);
+          void onRefreshSelection();
+        }}
+        onAddTagToEntries={onAddTagToEntries}
+        onCreateTag={onCreateTag}
+        onUpdateTag={onUpdateTag}
+        onAfterTagChanged={onRefreshSelection}
+      />
+
+      <TagEditorModal
+        open={editTag !== null}
+        mode="edit"
+        tag={editTag}
+        onClose={() => setEditTag(null)}
+        onCreate={onCreateTag}
+        onUpdate={onUpdateTag}
+        onSaved={() => {
+          void onRefreshSelection();
+        }}
+      />
     </div>
   );
 }
