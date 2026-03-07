@@ -60,6 +60,18 @@ type AggregateTagRow = {
   tag: TagResponse | null;
 };
 
+const ANIMATED_IMAGE_SUFFIXES = new Set(["gif", "apng", "webp"]);
+const ANIMATED_IMAGE_MEDIA_TYPES = new Set(["image/gif", "image/apng", "image/webp"]);
+
+const normalizeSuffix = (suffix?: string | null): string => suffix?.trim().toLowerCase().replace(/^\./, "") ?? "";
+
+function isAnimatedFormat(suffix?: string | null, mediaType?: string | null): boolean {
+  return (
+    ANIMATED_IMAGE_SUFFIXES.has(normalizeSuffix(suffix)) ||
+    (mediaType != null && ANIMATED_IMAGE_MEDIA_TYPES.has(mediaType.toLowerCase()))
+  );
+}
+
 export function InspectorPane({
   selectedEntry,
   selectedEntryIds,
@@ -186,6 +198,15 @@ function PreviewContent({
   resolveApiUrl
 }: PreviewContentProps) {
   const hasSelectedEntry = selectedEntry !== null;
+  const animatedImageSource = useMemo(() => {
+    if (!hasSelectedEntry || preview?.preview_kind !== "image") {
+      return null;
+    }
+    if (!isAnimatedFormat(selectedEntry.suffix, preview.media_type)) {
+      return null;
+    }
+    return preview.media_url ? resolveApiUrl(preview.media_url) : getMediaUrl(selectedEntry.id);
+  }, [getMediaUrl, hasSelectedEntry, preview, resolveApiUrl, selectedEntry]);
 
   return (
     <div className="preview-content">
@@ -193,9 +214,10 @@ function PreviewContent({
       {hasSelectedEntry && preview?.preview_kind === "image" ? (
         <img
           src={
-            preview.thumbnail_url
+            animatedImageSource ??
+            (preview.thumbnail_url
               ? resolveApiUrl(preview.thumbnail_url)
-              : getThumbnailUrl(selectedEntry.id, { kind: "preview", fit: "contain" })
+              : getThumbnailUrl(selectedEntry.id, { kind: "preview", fit: "contain" }))
           }
           alt={selectedEntry.filename}
           className="inspector-image"
@@ -210,6 +232,10 @@ function PreviewContent({
               : getThumbnailUrl(selectedEntry.id, { kind: "preview", fit: "contain" })
           }
           preload="metadata"
+          autoPlay
+          loop
+          muted={true}
+          playsInline
           controls
           className="inspector-video"
         />
