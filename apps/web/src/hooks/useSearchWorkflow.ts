@@ -38,6 +38,8 @@ type UseSearchWorkflowResult = {
   hasMore: boolean;
   searchPending: boolean;
   loadingMore: boolean;
+  searchResultsStale: boolean;
+  markSearchResultsStale: () => void;
   executeSearch: ExecuteSearchFn;
   searchFromInput: () => void;
   loadMore: () => void;
@@ -67,6 +69,7 @@ export function useSearchWorkflow({
   const [searchPending, setSearchPending] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [needsInitialSearch, setNeedsInitialSearch] = useState(false);
+  const [searchResultsStale, setSearchResultsStale] = useState(false);
 
   useEffect(() => {
     setNeedsInitialSearch(activeLibraryPath !== null);
@@ -75,6 +78,7 @@ export function useSearchWorkflow({
     setNextPageIndex(0);
     setSearchInput("");
     setActiveQuery("");
+    setSearchResultsStale(false);
     prewarmedEntryIdsRef.current = new Set();
   }, [activeLibraryPath]);
 
@@ -175,6 +179,7 @@ export function useSearchWorkflow({
           setEntries((prev) => dedupeEntries([...prev, ...data.entries]));
         } else {
           setEntries(data.entries);
+          setSearchResultsStale(false);
         }
         prewarmEntries(data.entries);
       } catch (error) {
@@ -233,6 +238,10 @@ export function useSearchWorkflow({
 
   const hasMore = useMemo(() => entries.length < totalCount, [entries.length, totalCount]);
 
+  const markSearchResultsStale = useCallback(() => {
+    setSearchResultsStale(true);
+  }, []);
+
   return {
     searchInput,
     setSearchInput,
@@ -243,6 +252,8 @@ export function useSearchWorkflow({
     hasMore,
     searchPending,
     loadingMore,
+    searchResultsStale,
+    markSearchResultsStale,
     executeSearch,
     searchFromInput,
     loadMore

@@ -19,6 +19,7 @@ type UseInspectorWorkflowArgs = {
   isLibraryOpen: boolean;
   activeQuery: string;
   executeSearch: ExecuteSearchFn;
+  onSearchResultsStale: () => void;
   onError: (message: string) => void;
   onClearError: () => void;
 };
@@ -67,6 +68,7 @@ export function useInspectorWorkflow({
   isLibraryOpen,
   activeQuery,
   executeSearch,
+  onSearchResultsStale,
   onError,
   onClearError
 }: UseInspectorWorkflowArgs): UseInspectorWorkflowResult {
@@ -80,10 +82,6 @@ export function useInspectorWorkflow({
   const [newFieldKey, setNewFieldKey] = useState("");
   const [newFieldValue, setNewFieldValue] = useState("");
   const [refreshStatus, setRefreshStatus] = useState<JobEventPayload | null>(null);
-
-  const syncSearchResults = useCallback(async () => {
-    await executeSearch({ query: activeQuery, pageIndex: 0, append: false });
-  }, [activeQuery, executeSearch]);
 
   const refreshSelectedEntry = useCallback(async () => {
     if (!selectedEntryId) {
@@ -187,7 +185,7 @@ export function useInspectorWorkflow({
       }
       queryClient.invalidateQueries({ queryKey: ["tags"] });
       queryClient.invalidateQueries({ queryKey: ["library-state"] });
-      await syncSearchResults();
+      onSearchResultsStale();
     },
     onError: (error) => {
       onError(error instanceof Error ? error.message : "Failed to add tag.");
@@ -203,7 +201,7 @@ export function useInspectorWorkflow({
         await refreshSelectedEntry();
       }
       queryClient.invalidateQueries({ queryKey: ["library-state"] });
-      await syncSearchResults();
+      onSearchResultsStale();
     },
     onError: (error) => {
       onError(error instanceof Error ? error.message : "Failed to remove tag.");
@@ -212,10 +210,10 @@ export function useInspectorWorkflow({
 
   const createTagMutation = useMutation({
     mutationFn: (payload: TagCreatePayload) => api.createTag(payload),
-    onSuccess: async () => {
+    onSuccess: () => {
       onClearError();
       queryClient.invalidateQueries({ queryKey: ["tags"] });
-      await syncSearchResults();
+      onSearchResultsStale();
     },
     onError: (error) => {
       onError(error instanceof Error ? error.message : "Failed to create tag.");
@@ -231,7 +229,7 @@ export function useInspectorWorkflow({
         await refreshSelectedEntry();
       }
       queryClient.invalidateQueries({ queryKey: ["tags"] });
-      await syncSearchResults();
+      onSearchResultsStale();
     },
     onError: (error) => {
       onError(error instanceof Error ? error.message : "Failed to update tag.");

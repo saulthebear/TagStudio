@@ -294,17 +294,42 @@ function MetadataContent({
     return map;
   }, [allTags, selectedEntry]);
 
+  const selectedEntriesForMetadata = useMemo(() => {
+    if (!selectedEntry) {
+      return selectedEntries;
+    }
+
+    if (!selectedEntryIds.includes(selectedEntry.id)) {
+      return selectedEntries;
+    }
+
+    const selectedEntrySummary = {
+      id: selectedEntry.id,
+      path: selectedEntry.path,
+      filename: selectedEntry.filename,
+      suffix: selectedEntry.suffix,
+      tag_ids: selectedEntry.tags.map((tag) => tag.id)
+    };
+
+    const otherSelectedEntries = selectedEntries.filter((entry) => entry.id !== selectedEntry.id);
+
+    return [
+      ...otherSelectedEntries,
+      selectedEntrySummary
+    ];
+  }, [selectedEntries, selectedEntry, selectedEntryIds]);
+
   const entryTagIdsByEntry = useMemo(() => {
     const map = new Map<number, Set<number>>();
-    for (const entry of selectedEntries) {
+    for (const entry of selectedEntriesForMetadata) {
       map.set(entry.id, new Set(entry.tag_ids));
     }
     return map;
-  }, [selectedEntries]);
+  }, [selectedEntriesForMetadata]);
 
   const aggregateTagRows = useMemo<AggregateTagRow[]>(() => {
     const counts = new Map<number, number>();
-    for (const entry of selectedEntries) {
+    for (const entry of selectedEntriesForMetadata) {
       for (const tagId of entry.tag_ids) {
         counts.set(tagId, (counts.get(tagId) ?? 0) + 1);
       }
@@ -327,7 +352,7 @@ function MetadataContent({
     });
 
     return rows;
-  }, [selectedCount, selectedEntries, tagById]);
+  }, [selectedCount, selectedEntriesForMetadata, tagById]);
 
   const removeTag = useCallback(async (tagId: number) => {
     await onRemoveTagFromEntries(selectedEntryIds, tagId);

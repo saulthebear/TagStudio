@@ -12,6 +12,26 @@ async function fulfillJson(route: Route, payload: unknown, status = 200): Promis
   });
 }
 
+function createSettingsPayload() {
+  return {
+    sorting_mode: "file.date_added",
+    ascending: false,
+    show_hidden_entries: false,
+    page_size: 200,
+    layout: {
+      main_split_ratio: 0.78,
+      main_left_collapsed: false,
+      main_right_collapsed: false,
+      main_last_open_ratio: 0.78,
+      inspector_split_ratio: 0.52,
+      preview_collapsed: false,
+      metadata_collapsed: false,
+      inspector_last_open_ratio: 0.52,
+      mobile_active_pane: "grid"
+    }
+  };
+}
+
 async function expectDialogWithinViewport(
   page: Page,
   dialogLocator: Locator,
@@ -308,7 +328,7 @@ test("applies top-bar filter menu toggles with live query sync and request flags
   await expect.poll(() => searchRequests.length).toBe(1);
 
   const searchInput = page.getByPlaceholder("Search entries (e.g. tag:\"favorite\" or path:\"*.png\")");
-  const searchButton = page.getByRole("button", { name: "Search" });
+  const searchButton = page.locator(".top-filter-search-action");
   const filterButton = page.getByRole("button", { name: "Open filters menu" });
 
   await searchInput.fill("special:untagged");
@@ -342,6 +362,682 @@ test("applies top-bar filter menu toggles with live query sync and request flags
   await expect(
     page.getByText("Advanced query detected. Untagged token removal is conservative.")
   ).toBeVisible();
+});
+
+test("defers special:untagged result refresh until explicit search", async ({ page }) => {
+  const settingsPayload = createSettingsPayload();
+  const searchRequests: string[] = [];
+  const addTagRequests: Array<{ entry_ids: number[]; tag_ids: number[] }> = [];
+  const tags = [
+    {
+      id: 11,
+      name: "Favorite",
+      shorthand: null,
+      aliases: [],
+      parent_ids: [],
+      color_namespace: null,
+      color_slug: null,
+      disambiguation_id: null,
+      is_category: false,
+      is_hidden: false
+    }
+  ];
+  const entryTagIds = new Map<number, Set<number>>([
+    [601, new Set<number>()],
+    [602, new Set<number>()]
+  ]);
+  const entries = [
+    { id: 601, path: "images/untagged-a.png", filename: "untagged-a.png", suffix: "png" },
+    { id: 602, path: "images/untagged-b.png", filename: "untagged-b.png", suffix: "png" }
+  ];
+
+  const summarizeEntries = (query: string) => {
+    const normalized = query.trim();
+    return entries
+      .filter((entry) => {
+        if (!/\bspecial:untagged\b/i.test(normalized)) {
+          return true;
+        }
+        return (entryTagIds.get(entry.id)?.size ?? 0) === 0;
+      })
+      .map((entry) => ({
+        ...entry,
+        tag_ids: [...(entryTagIds.get(entry.id) ?? new Set<number>())]
+      }));
+  };
+
+  await page.route(`${API_BASE_URL}/api/v1/**`, async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const { pathname, searchParams } = url;
+
+    if (pathname === "/api/v1/libraries/state") {
+      await fulfillJson(route, {
+        is_open: true,
+        library_path: "/tmp/library",
+        entries_count: entries.length,
+        tags_count: tags.length
+      });
+      return;
+    }
+
+    if (pathname === "/api/v1/settings") {
+      await fulfillJson(route, settingsPayload);
+      return;
+    }
+
+    if (pathname === "/api/v1/field-types") {
+      await fulfillJson(route, []);
+      return;
+    }
+
+    if (pathname === "/api/v1/tags" && request.method() === "GET") {
+      const query = searchParams.get("query")?.trim().toLowerCase() ?? "";
+      const filtered = query
+        ? tags.filter((tag) => tag.name.toLowerCase().includes(query))
+        : tags;
+      await fulfillJson(route, filtered);
+      return;
+    }
+
+    if (pathname === "/api/v1/search" && request.method() === "POST") {
+      const payload = request.postDataJSON() as { query?: string };
+      const normalizedQuery = payload.query?.trim() ?? "";
+      searchRequests.push(normalizedQuery);
+      const summaries = summarizeEntries(normalizedQuery);
+      await fulfillJson(route, {
+        total_count: summaries.length,
+        ids: summaries.map((entry) => entry.id),
+        entries: summaries
+      });
+      return;
+    }
+
+    if (pathname === "/api/v1/entries/tags:add" && request.method() === "POST") {
+      const payload = request.postDataJSON() as { entry_ids: number[]; tag_ids: number[] };
+      addTagRequests.push(payload);
+      for (const entryId of payload.entry_ids) {
+        const current = entryTagIds.get(entryId) ?? new Set<number>();
+        for (const tagId of payload.tag_ids) {
+          current.add(tagId);
+        }
+        entryTagIds.set(entryId, current);
+      }
+      await fulfillJson(route, { success: true, changed: payload.entry_ids.length * payload.tag_ids.length });
+      return;
+    }
+
+    const entryMatch = /^\/api\/v1\/entries\/(\d+)$/.exec(pathname);
+    if (entryMatch && request.method() === "GET") {
+      const entryId = Number(entryMatch[1]);
+      const tagsForEntry = [...(entryTagIds.get(entryId) ?? new Set<number>())]
+        .map((tagId) => tags.find((tag) => tag.id === tagId))
+        .filter((tag): tag is (typeof tags)[number] => tag !== undefined);
+      await fulfillJson(route, {
+        id: entryId,
+        path: entries.find((entry) => entry.id === entryId)?.path ?? `${entryId}.png`,
+        full_path: `/tmp/library/${entryId}.png`,
+        filename: entries.find((entry) => entry.id === entryId)?.filename ?? `${entryId}.png`,
+        suffix: "png",
+        date_created: null,
+        date_modified: null,
+        date_added: null,
+        tags: tagsForEntry,
+        fields: [],
+        is_favorite: false,
+        is_archived: false
+      });
+      return;
+    }
+
+    const previewMatch = /^\/api\/v1\/entries\/(\d+)\/preview$/.exec(pathname);
+    if (previewMatch && request.method() === "GET") {
+      await fulfillJson(route, {
+        entry_id: Number(previewMatch[1]),
+        preview_kind: "binary",
+        media_type: "application/octet-stream",
+        media_url: null,
+        text_excerpt: null,
+        supports_media_controls: false
+      });
+      return;
+    }
+
+    if (pathname === "/api/v1/thumbnails/prewarm" && request.method() === "POST") {
+      await fulfillJson(route, { accepted: 0, skipped: 0 }, 202);
+      return;
+    }
+
+    await fulfillJson(route, { detail: `Unmocked endpoint: ${pathname}` }, 404);
+  });
+
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "Files" })).toBeVisible();
+
+  const searchInput = page.getByPlaceholder("Search entries (e.g. tag:\"favorite\" or path:\"*.png\")");
+  const searchButton = page.locator(".top-filter-search-action");
+
+  await searchInput.fill("special:untagged");
+  await searchButton.click();
+  await expect.poll(() => searchRequests.at(-1)).toBe("special:untagged");
+
+  await page.locator(".thumb-card").filter({ hasText: "untagged-a.png" }).click();
+  await page.getByRole("button", { name: "Add Tag" }).click();
+  await page.getByRole("button", { name: /Favorite/ }).first().click();
+  await expect.poll(() => addTagRequests.length).toBe(1);
+
+  const searchCountAfterMutation = searchRequests.length;
+  await expect.poll(() => searchRequests.length).toBe(searchCountAfterMutation);
+  await expect(page.locator(".top-filter-stale-pill")).toBeVisible();
+  await expect(searchButton).toHaveClass(/btn-search-stale/);
+
+  await page.getByRole("button", { name: "Done" }).click();
+  await expect(page.locator(".metadata-tag-chip").first()).toContainText("Favorite");
+
+  await page.locator(".top-filter-stale-pill").click();
+  await expect.poll(() => searchRequests.length).toBe(searchCountAfterMutation + 1);
+  await expect.poll(() => searchRequests.at(-1)).toBe("special:untagged");
+  await expect(page.locator(".top-filter-stale-pill")).toHaveCount(0);
+  await expect(searchButton).not.toHaveClass(/btn-search-stale/);
+  await expect(page.locator(".thumb-card").filter({ hasText: "untagged-a.png" })).toHaveCount(0);
+
+  await page.locator(".thumb-card").filter({ hasText: "untagged-b.png" }).click();
+  await page.getByRole("button", { name: "Add Tag" }).click();
+  await page.getByRole("button", { name: /Favorite/ }).first().click();
+  await expect.poll(() => addTagRequests.length).toBe(2);
+  await page.getByRole("button", { name: "Done" }).click();
+  await expect(page.locator(".top-filter-stale-pill")).toBeVisible();
+
+  const searchCountBeforeEnter = searchRequests.length;
+  await searchInput.press("Enter");
+  await expect.poll(() => searchRequests.length).toBe(searchCountBeforeEnter + 1);
+  await expect(page.getByText("No entries match this filter.")).toBeVisible();
+  await expect(page.locator(".top-filter-stale-pill")).toHaveCount(0);
+  await expect(searchButton).not.toHaveClass(/btn-search-stale/);
+});
+
+test("marks results stale for non-untagged tag changes until explicit search", async ({ page }) => {
+  const settingsPayload = createSettingsPayload();
+  const searchRequests: string[] = [];
+  const addTagRequests: Array<{ entry_ids: number[]; tag_ids: number[] }> = [];
+  const tags = [
+    {
+      id: 21,
+      name: "Reviewed",
+      shorthand: null,
+      aliases: [],
+      parent_ids: [],
+      color_namespace: null,
+      color_slug: null,
+      disambiguation_id: null,
+      is_category: false,
+      is_hidden: false
+    }
+  ];
+  const entryTagIds = new Map<number, Set<number>>([[701, new Set<number>()]]);
+
+  await page.route(`${API_BASE_URL}/api/v1/**`, async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const { pathname, searchParams } = url;
+
+    if (pathname === "/api/v1/libraries/state") {
+      await fulfillJson(route, {
+        is_open: true,
+        library_path: "/tmp/library",
+        entries_count: 1,
+        tags_count: 1
+      });
+      return;
+    }
+
+    if (pathname === "/api/v1/settings") {
+      await fulfillJson(route, settingsPayload);
+      return;
+    }
+
+    if (pathname === "/api/v1/field-types") {
+      await fulfillJson(route, []);
+      return;
+    }
+
+    if (pathname === "/api/v1/tags" && request.method() === "GET") {
+      const query = searchParams.get("query")?.trim().toLowerCase() ?? "";
+      const filtered = query ? tags.filter((tag) => tag.name.toLowerCase().includes(query)) : tags;
+      await fulfillJson(route, filtered);
+      return;
+    }
+
+    if (pathname === "/api/v1/search" && request.method() === "POST") {
+      const payload = request.postDataJSON() as { query?: string };
+      searchRequests.push(payload.query?.trim() ?? "");
+      await fulfillJson(route, {
+        total_count: 1,
+        ids: [701],
+        entries: [
+          {
+            id: 701,
+            path: "images/steady.png",
+            filename: "steady.png",
+            suffix: "png",
+            tag_ids: [...(entryTagIds.get(701) ?? new Set<number>())]
+          }
+        ]
+      });
+      return;
+    }
+
+    if (pathname === "/api/v1/entries/tags:add" && request.method() === "POST") {
+      const payload = request.postDataJSON() as { entry_ids: number[]; tag_ids: number[] };
+      addTagRequests.push(payload);
+      const current = entryTagIds.get(701) ?? new Set<number>();
+      for (const tagId of payload.tag_ids) {
+        current.add(tagId);
+      }
+      entryTagIds.set(701, current);
+      await fulfillJson(route, { success: true, changed: payload.entry_ids.length * payload.tag_ids.length });
+      return;
+    }
+
+    const entryMatch = /^\/api\/v1\/entries\/(\d+)$/.exec(pathname);
+    if (entryMatch && request.method() === "GET") {
+      const tagsForEntry = [...(entryTagIds.get(701) ?? new Set<number>())]
+        .map((tagId) => tags.find((tag) => tag.id === tagId))
+        .filter((tag): tag is (typeof tags)[number] => tag !== undefined);
+      await fulfillJson(route, {
+        id: 701,
+        path: "images/steady.png",
+        full_path: "/tmp/library/images/steady.png",
+        filename: "steady.png",
+        suffix: "png",
+        date_created: null,
+        date_modified: null,
+        date_added: null,
+        tags: tagsForEntry,
+        fields: [],
+        is_favorite: false,
+        is_archived: false
+      });
+      return;
+    }
+
+    if (pathname === "/api/v1/entries/701/preview" && request.method() === "GET") {
+      await fulfillJson(route, {
+        entry_id: 701,
+        preview_kind: "binary",
+        media_type: "application/octet-stream",
+        media_url: null,
+        text_excerpt: null,
+        supports_media_controls: false
+      });
+      return;
+    }
+
+    if (pathname === "/api/v1/thumbnails/prewarm" && request.method() === "POST") {
+      await fulfillJson(route, { accepted: 0, skipped: 0 }, 202);
+      return;
+    }
+
+    await fulfillJson(route, { detail: `Unmocked endpoint: ${pathname}` }, 404);
+  });
+
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "Files" })).toBeVisible();
+  await page.locator(".thumb-card").filter({ hasText: "steady.png" }).click();
+  await page.getByRole("button", { name: "Add Tag" }).click();
+  await page.getByRole("button", { name: /Reviewed/ }).first().click();
+  await expect.poll(() => addTagRequests.length).toBe(1);
+
+  const searchCountAfterMutation = searchRequests.length;
+  await expect.poll(() => searchRequests.length).toBe(searchCountAfterMutation);
+  await expect(page.locator(".top-filter-stale-pill")).toBeVisible();
+
+  await page.getByRole("button", { name: "Done" }).click();
+  await page.locator(".top-filter-search-action").click();
+  await expect.poll(() => searchRequests.length).toBe(searchCountAfterMutation + 1);
+  await expect(page.locator(".top-filter-stale-pill")).toHaveCount(0);
+});
+
+test("keeps stale hint visible when a manual search fails", async ({ page }) => {
+  const settingsPayload = createSettingsPayload();
+  const tags = [
+    {
+      id: 31,
+      name: "Queue",
+      shorthand: null,
+      aliases: [],
+      parent_ids: [],
+      color_namespace: null,
+      color_slug: null,
+      disambiguation_id: null,
+      is_category: false,
+      is_hidden: false
+    }
+  ];
+  const entryTagIds = new Map<number, Set<number>>([[801, new Set<number>()]]);
+  let failNextSearch = false;
+
+  await page.route(`${API_BASE_URL}/api/v1/**`, async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const { pathname, searchParams } = url;
+
+    if (pathname === "/api/v1/libraries/state") {
+      await fulfillJson(route, {
+        is_open: true,
+        library_path: "/tmp/library",
+        entries_count: 1,
+        tags_count: tags.length
+      });
+      return;
+    }
+
+    if (pathname === "/api/v1/settings") {
+      await fulfillJson(route, settingsPayload);
+      return;
+    }
+
+    if (pathname === "/api/v1/field-types") {
+      await fulfillJson(route, []);
+      return;
+    }
+
+    if (pathname === "/api/v1/tags" && request.method() === "GET") {
+      const query = searchParams.get("query")?.trim().toLowerCase() ?? "";
+      const filtered = query ? tags.filter((tag) => tag.name.toLowerCase().includes(query)) : tags;
+      await fulfillJson(route, filtered);
+      return;
+    }
+
+    if (pathname === "/api/v1/search" && request.method() === "POST") {
+      const payload = request.postDataJSON() as { query?: string };
+      const normalizedQuery = payload.query?.trim() ?? "";
+      if (failNextSearch && normalizedQuery === "special:untagged") {
+        failNextSearch = false;
+        await fulfillJson(route, { detail: "Simulated search failure" }, 500);
+        return;
+      }
+
+      const includeEntry = normalizedQuery === "special:untagged"
+        ? (entryTagIds.get(801)?.size ?? 0) === 0
+        : true;
+      const summaries = includeEntry
+        ? [
+            {
+              id: 801,
+              path: "images/error-case.png",
+              filename: "error-case.png",
+              suffix: "png",
+              tag_ids: [...(entryTagIds.get(801) ?? new Set<number>())]
+            }
+          ]
+        : [];
+      await fulfillJson(route, {
+        total_count: summaries.length,
+        ids: summaries.map((entry) => entry.id),
+        entries: summaries
+      });
+      return;
+    }
+
+    if (pathname === "/api/v1/entries/tags:add" && request.method() === "POST") {
+      const payload = request.postDataJSON() as { entry_ids: number[]; tag_ids: number[] };
+      const current = entryTagIds.get(801) ?? new Set<number>();
+      for (const tagId of payload.tag_ids) {
+        current.add(tagId);
+      }
+      entryTagIds.set(801, current);
+      await fulfillJson(route, { success: true, changed: payload.entry_ids.length * payload.tag_ids.length });
+      return;
+    }
+
+    if (pathname === "/api/v1/entries/801" && request.method() === "GET") {
+      const tagsForEntry = [...(entryTagIds.get(801) ?? new Set<number>())]
+        .map((tagId) => tags.find((tag) => tag.id === tagId))
+        .filter((tag): tag is (typeof tags)[number] => tag !== undefined);
+      await fulfillJson(route, {
+        id: 801,
+        path: "images/error-case.png",
+        full_path: "/tmp/library/images/error-case.png",
+        filename: "error-case.png",
+        suffix: "png",
+        date_created: null,
+        date_modified: null,
+        date_added: null,
+        tags: tagsForEntry,
+        fields: [],
+        is_favorite: false,
+        is_archived: false
+      });
+      return;
+    }
+
+    if (pathname === "/api/v1/entries/801/preview" && request.method() === "GET") {
+      await fulfillJson(route, {
+        entry_id: 801,
+        preview_kind: "binary",
+        media_type: "application/octet-stream",
+        media_url: null,
+        text_excerpt: null,
+        supports_media_controls: false
+      });
+      return;
+    }
+
+    if (pathname === "/api/v1/thumbnails/prewarm" && request.method() === "POST") {
+      await fulfillJson(route, { accepted: 0, skipped: 0 }, 202);
+      return;
+    }
+
+    await fulfillJson(route, { detail: `Unmocked endpoint: ${pathname}` }, 404);
+  });
+
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "Files" })).toBeVisible();
+
+  const searchInput = page.getByPlaceholder("Search entries (e.g. tag:\"favorite\" or path:\"*.png\")");
+  await searchInput.fill("special:untagged");
+  await page.getByRole("button", { name: "Search" }).click();
+
+  await page.locator(".thumb-card").filter({ hasText: "error-case.png" }).click();
+  await page.getByRole("button", { name: "Add Tag" }).click();
+  await page.getByRole("button", { name: /Queue/ }).first().click();
+  await page.getByRole("button", { name: "Done" }).click();
+  await expect(page.locator(".top-filter-stale-pill")).toBeVisible();
+
+  failNextSearch = true;
+  await page.locator(".top-filter-stale-pill").click();
+  await expect(page.getByText("Simulated search failure")).toBeVisible();
+  await expect(page.locator(".top-filter-stale-pill")).toBeVisible();
+  await expect(page.locator(".top-filter-search-action")).toHaveClass(/btn-search-stale/);
+});
+
+test("refresh completion clears stale state via non-append search", async ({ page }) => {
+  await page.addInitScript(`
+    (() => {
+      class MockEventSource {
+        constructor(url) {
+          this.url = url;
+          this.listeners = {};
+          setTimeout(() => {
+            const event = {
+              data: JSON.stringify({
+                job_id: "job-1",
+                status: "completed",
+                message: "done",
+                progress_current: 1,
+                progress_total: 1,
+                is_terminal: true
+              })
+            };
+            const handlers = this.listeners["job.completed"] || [];
+            handlers.forEach((handler) => handler(event));
+          }, 10);
+        }
+        addEventListener(type, callback) {
+          this.listeners[type] = this.listeners[type] || [];
+          this.listeners[type].push(callback);
+        }
+        close() {}
+      }
+      window.EventSource = MockEventSource;
+    })();
+  `);
+
+  const settingsPayload = createSettingsPayload();
+  const tags = [
+    {
+      id: 41,
+      name: "Needs Review",
+      shorthand: null,
+      aliases: [],
+      parent_ids: [],
+      color_namespace: null,
+      color_slug: null,
+      disambiguation_id: null,
+      is_category: false,
+      is_hidden: false
+    }
+  ];
+  const entryTagIds = new Map<number, Set<number>>([[901, new Set<number>()]]);
+  const searchRequests: string[] = [];
+  const refreshJobRequests: string[] = [];
+
+  await page.route(`${API_BASE_URL}/api/v1/**`, async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const { pathname, searchParams } = url;
+
+    if (pathname === "/api/v1/libraries/state") {
+      await fulfillJson(route, {
+        is_open: true,
+        library_path: "/tmp/library",
+        entries_count: 1,
+        tags_count: tags.length
+      });
+      return;
+    }
+
+    if (pathname === "/api/v1/settings") {
+      await fulfillJson(route, settingsPayload);
+      return;
+    }
+
+    if (pathname === "/api/v1/field-types") {
+      await fulfillJson(route, []);
+      return;
+    }
+
+    if (pathname === "/api/v1/tags" && request.method() === "GET") {
+      const query = searchParams.get("query")?.trim().toLowerCase() ?? "";
+      const filtered = query ? tags.filter((tag) => tag.name.toLowerCase().includes(query)) : tags;
+      await fulfillJson(route, filtered);
+      return;
+    }
+
+    if (pathname === "/api/v1/search" && request.method() === "POST") {
+      const payload = request.postDataJSON() as { query?: string };
+      const normalizedQuery = payload.query?.trim() ?? "";
+      searchRequests.push(normalizedQuery);
+      const includeEntry = normalizedQuery === "special:untagged"
+        ? (entryTagIds.get(901)?.size ?? 0) === 0
+        : true;
+      const summaries = includeEntry
+        ? [
+            {
+              id: 901,
+              path: "images/refresh-case.png",
+              filename: "refresh-case.png",
+              suffix: "png",
+              tag_ids: [...(entryTagIds.get(901) ?? new Set<number>())]
+            }
+          ]
+        : [];
+      await fulfillJson(route, {
+        total_count: summaries.length,
+        ids: summaries.map((entry) => entry.id),
+        entries: summaries
+      });
+      return;
+    }
+
+    if (pathname === "/api/v1/entries/tags:add" && request.method() === "POST") {
+      const payload = request.postDataJSON() as { entry_ids: number[]; tag_ids: number[] };
+      const current = entryTagIds.get(901) ?? new Set<number>();
+      for (const tagId of payload.tag_ids) {
+        current.add(tagId);
+      }
+      entryTagIds.set(901, current);
+      await fulfillJson(route, { success: true, changed: payload.entry_ids.length * payload.tag_ids.length });
+      return;
+    }
+
+    if (pathname === "/api/v1/jobs/refresh" && request.method() === "POST") {
+      refreshJobRequests.push(pathname);
+      await fulfillJson(route, { job_id: "job-1", status: "pending" });
+      return;
+    }
+
+    if (pathname === "/api/v1/entries/901" && request.method() === "GET") {
+      const tagsForEntry = [...(entryTagIds.get(901) ?? new Set<number>())]
+        .map((tagId) => tags.find((tag) => tag.id === tagId))
+        .filter((tag): tag is (typeof tags)[number] => tag !== undefined);
+      await fulfillJson(route, {
+        id: 901,
+        path: "images/refresh-case.png",
+        full_path: "/tmp/library/images/refresh-case.png",
+        filename: "refresh-case.png",
+        suffix: "png",
+        date_created: null,
+        date_modified: null,
+        date_added: null,
+        tags: tagsForEntry,
+        fields: [],
+        is_favorite: false,
+        is_archived: false
+      });
+      return;
+    }
+
+    if (pathname === "/api/v1/entries/901/preview" && request.method() === "GET") {
+      await fulfillJson(route, {
+        entry_id: 901,
+        preview_kind: "binary",
+        media_type: "application/octet-stream",
+        media_url: null,
+        text_excerpt: null,
+        supports_media_controls: false
+      });
+      return;
+    }
+
+    if (pathname === "/api/v1/thumbnails/prewarm" && request.method() === "POST") {
+      await fulfillJson(route, { accepted: 0, skipped: 0 }, 202);
+      return;
+    }
+
+    await fulfillJson(route, { detail: `Unmocked endpoint: ${pathname}` }, 404);
+  });
+
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "Files" })).toBeVisible();
+
+  const searchInput = page.getByPlaceholder("Search entries (e.g. tag:\"favorite\" or path:\"*.png\")");
+  await searchInput.fill("special:untagged");
+  await page.getByRole("button", { name: "Search" }).click();
+
+  await page.locator(".thumb-card").filter({ hasText: "refresh-case.png" }).click();
+  await page.getByRole("button", { name: "Add Tag" }).click();
+  await page.getByRole("button", { name: /Needs Review/ }).first().click();
+  await page.getByRole("button", { name: "Done" }).click();
+  await expect(page.locator(".top-filter-stale-pill")).toBeVisible();
+
+  const searchCountBeforeRefresh = searchRequests.length;
+  await page.locator(".top-filter-refresh-action").click();
+  await expect.poll(() => refreshJobRequests.length).toBe(1);
+  await expect.poll(() => searchRequests.length).toBe(searchCountBeforeRefresh + 1);
+  await expect(page.locator(".top-filter-stale-pill")).toHaveCount(0);
+  await expect(page.locator(".top-filter-search-action")).not.toHaveClass(/btn-search-stale/);
 });
 
 test("supports add-tags modal create-and-add workflow", async ({ page }) => {
