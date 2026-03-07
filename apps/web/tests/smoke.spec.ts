@@ -223,6 +223,178 @@ test("renders normalized image/video media tiles and falls back on media errors"
   await expect(brokenCard.locator(".thumb-media-icon")).toHaveText("WEBP");
 });
 
+test("uses media URLs for animated images and autoplays looping videos in preview", async ({ page }) => {
+  const entries = [
+    { id: 501, path: "images/anim-dot.GiF", filename: "anim-dot.GiF", suffix: ".GiF", tag_ids: [] },
+    { id: 502, path: "images/anim.APNG", filename: "anim.APNG", suffix: ".APNG", tag_ids: [] },
+    { id: 503, path: "images/anim.WebP", filename: "anim.WebP", suffix: ".WebP", tag_ids: [] },
+    { id: 504, path: "images/still.png", filename: "still.png", suffix: ".png", tag_ids: [] },
+    { id: 505, path: "videos/loop.mp4", filename: "loop.mp4", suffix: ".mp4", tag_ids: [] }
+  ];
+
+  const settingsPayload = {
+    sorting_mode: "file.date_added",
+    ascending: false,
+    show_hidden_entries: false,
+    page_size: 200,
+    layout: {
+      main_split_ratio: 0.78,
+      main_left_collapsed: false,
+      main_right_collapsed: false,
+      main_last_open_ratio: 0.78,
+      inspector_split_ratio: 0.52,
+      preview_collapsed: false,
+      metadata_collapsed: false,
+      inspector_last_open_ratio: 0.52,
+      mobile_active_pane: "grid"
+    }
+  };
+
+  const tinyPng = Buffer.from(TINY_PNG_BASE64, "base64");
+
+  await page.route(`${API_BASE_URL}/api/v1/**`, async (route) => {
+    const request = route.request();
+    const { pathname } = new URL(request.url());
+
+    if (pathname === "/api/v1/libraries/state") {
+      await fulfillJson(route, {
+        is_open: true,
+        library_path: "/tmp/library",
+        entries_count: entries.length,
+        tags_count: 0
+      });
+      return;
+    }
+
+    if (pathname === "/api/v1/settings") {
+      await fulfillJson(route, settingsPayload);
+      return;
+    }
+
+    if (pathname === "/api/v1/field-types") {
+      await fulfillJson(route, []);
+      return;
+    }
+
+    if (pathname === "/api/v1/tags") {
+      await fulfillJson(route, []);
+      return;
+    }
+
+    if (pathname === "/api/v1/search" && request.method() === "POST") {
+      await fulfillJson(route, {
+        total_count: entries.length,
+        ids: entries.map((entry) => entry.id),
+        entries
+      });
+      return;
+    }
+
+    if (pathname === "/api/v1/thumbnails/prewarm" && request.method() === "POST") {
+      await fulfillJson(route, { accepted: 0, skipped: 0 }, 202);
+      return;
+    }
+
+    const entryMatch = /^\/api\/v1\/entries\/(\d+)$/.exec(pathname);
+    if (entryMatch && request.method() === "GET") {
+      const entryId = Number(entryMatch[1]);
+      const entry = entries.find((item) => item.id === entryId);
+      if (!entry) {
+        await fulfillJson(route, { detail: "Entry not found." }, 404);
+        return;
+      }
+      await fulfillJson(route, {
+        ...entry,
+        full_path: `/tmp/library/${entry.path}`,
+        date_created: null,
+        date_modified: null,
+        date_added: null,
+        tags: [],
+        fields: [],
+        is_favorite: false,
+        is_archived: false
+      });
+      return;
+    }
+
+    const previewMatch = /^\/api\/v1\/entries\/(\d+)\/preview$/.exec(pathname);
+    if (previewMatch) {
+      const entryId = Number(previewMatch[1]);
+      const kind = entryId === 505 ? "video" : "image";
+      const mediaTypeMap: Record<number, string> = {
+        501: "IMAGE/GIF",
+        502: "image/APNG",
+        503: "image/webP",
+        504: "image/png",
+        505: "video/mp4"
+      };
+      await fulfillJson(route, {
+        entry_id: entryId,
+        preview_kind: kind,
+        media_type: mediaTypeMap[entryId] ?? "application/octet-stream",
+        media_url: `/api/v1/entries/${entryId}/media`,
+        thumbnail_url: `/api/v1/entries/${entryId}/thumbnail?size=768&fit=contain&kind=preview`,
+        poster_url:
+          kind === "video" ? `/api/v1/entries/${entryId}/thumbnail?size=768&fit=contain&kind=preview` : null,
+        text_excerpt: null,
+        supports_media_controls: kind === "video"
+      });
+      return;
+    }
+
+    await fulfillJson(route, { detail: `Unmocked endpoint: ${pathname}` }, 404);
+  });
+
+  await page.route(`${API_BASE_URL}/api/v1/entries/*/thumbnail**`, async (route) => {
+    await route.fulfill({ status: 200, contentType: "image/png", body: tinyPng });
+  });
+
+  await page.route(`${API_BASE_URL}/api/v1/entries/*/media`, async (route) => {
+    const match = /\/api\/v1\/entries\/(\d+)\/media$/.exec(new URL(route.request().url()).pathname);
+    const entryId = Number(match?.[1] ?? -1);
+    if (entryId === 505) {
+      await route.fulfill({ status: 200, contentType: "video/mp4", body: "not-real-video" });
+      return;
+    }
+    await route.fulfill({ status: 200, contentType: "image/png", body: tinyPng });
+  });
+
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "Files" })).toBeVisible();
+
+  const previewImage = page.locator(".preview-content .inspector-image");
+  const previewVideo = page.locator(".preview-content .inspector-video");
+
+  await page.locator(".thumb-card").filter({ hasText: "anim-dot.GiF" }).click();
+  await expect(previewImage).toHaveAttribute("src", /\/api\/v1\/entries\/501\/media/);
+
+  await page.locator(".thumb-card").filter({ hasText: "anim.APNG" }).click();
+  await expect(previewImage).toHaveAttribute("src", /\/api\/v1\/entries\/502\/media/);
+
+  await page.locator(".thumb-card").filter({ hasText: "anim.WebP" }).click();
+  await expect(previewImage).toHaveAttribute("src", /\/api\/v1\/entries\/503\/media/);
+
+  await page.locator(".thumb-card").filter({ hasText: "still.png" }).click();
+  await expect(previewImage).toHaveAttribute("src", /\/api\/v1\/entries\/504\/thumbnail/);
+
+  await page.locator(".thumb-card").filter({ hasText: "loop.mp4" }).click();
+  await expect(previewVideo).toBeVisible();
+  const videoState = await previewVideo.evaluate((node) => ({
+    autoplay: node.autoplay,
+    loop: node.loop,
+    muted: node.muted,
+    playsInline: node.playsInline,
+    hasMutedAttr: node.hasAttribute("muted")
+  }));
+  expect(videoState).toEqual({
+    autoplay: true,
+    loop: true,
+    muted: true,
+    playsInline: true,
+    hasMutedAttr: true
+  });
+});
+
 test("applies top-bar filter menu toggles with live query sync and request flags", async ({ page }) => {
   const entries = [
     { id: 301, path: "images/sample.webp", filename: "sample.webp", suffix: "webp", tag_ids: [] }
