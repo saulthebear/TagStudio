@@ -66,10 +66,10 @@ const ANIMATED_IMAGE_MEDIA_TYPES = new Set(["image/gif", "image/apng", "image/we
 const normalizeSuffix = (suffix?: string | null): string => suffix?.trim().toLowerCase().replace(/^\./, "") ?? "";
 
 function isAnimatedFormat(suffix?: string | null, mediaType?: string | null): boolean {
-  if (ANIMATED_IMAGE_SUFFIXES.has(normalizeSuffix(suffix))) {
-    return true;
-  }
-  return mediaType !== undefined && mediaType !== null && ANIMATED_IMAGE_MEDIA_TYPES.has(mediaType.toLowerCase());
+  return (
+    ANIMATED_IMAGE_SUFFIXES.has(normalizeSuffix(suffix)) ||
+    (mediaType != null && ANIMATED_IMAGE_MEDIA_TYPES.has(mediaType.toLowerCase()))
+  );
 }
 
 export function InspectorPane({
@@ -198,12 +198,15 @@ function PreviewContent({
   resolveApiUrl
 }: PreviewContentProps) {
   const hasSelectedEntry = selectedEntry !== null;
-  const animatedImageSource =
-    hasSelectedEntry && preview?.preview_kind === "image" && isAnimatedFormat(selectedEntry.suffix, preview.media_type)
-      ? preview.media_url
-        ? resolveApiUrl(preview.media_url)
-        : getMediaUrl(selectedEntry.id)
-      : null;
+  const animatedImageSource = useMemo(() => {
+    if (!hasSelectedEntry || preview?.preview_kind !== "image") {
+      return null;
+    }
+    if (!isAnimatedFormat(selectedEntry.suffix, preview.media_type)) {
+      return null;
+    }
+    return preview.media_url ? resolveApiUrl(preview.media_url) : getMediaUrl(selectedEntry.id);
+  }, [getMediaUrl, hasSelectedEntry, preview, resolveApiUrl, selectedEntry]);
 
   return (
     <div className="preview-content">
