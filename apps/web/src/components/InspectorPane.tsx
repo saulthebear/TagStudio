@@ -299,37 +299,23 @@ function MetadataContent({
       return selectedEntries;
     }
 
-    const selectedTagIds = selectedEntry.tags.map((tag) => tag.id);
-    let patched = false;
-    const nextEntries = selectedEntries.map((entry) => {
-      if (entry.id !== selectedEntry.id) {
-        return entry;
-      }
-
-      patched = true;
-      return {
-        ...entry,
-        tag_ids: selectedTagIds
-      };
-    });
-
-    if (patched) {
-      return nextEntries;
-    }
-
     if (!selectedEntryIds.includes(selectedEntry.id)) {
       return selectedEntries;
     }
 
+    const selectedEntrySummary = {
+      id: selectedEntry.id,
+      path: selectedEntry.path,
+      filename: selectedEntry.filename,
+      suffix: selectedEntry.suffix,
+      tag_ids: selectedEntry.tags.map((tag) => tag.id)
+    };
+
+    const otherSelectedEntries = selectedEntries.filter((entry) => entry.id !== selectedEntry.id);
+
     return [
-      ...selectedEntries,
-      {
-        id: selectedEntry.id,
-        path: selectedEntry.path,
-        filename: selectedEntry.filename,
-        suffix: selectedEntry.suffix,
-        tag_ids: selectedTagIds
-      }
+      ...otherSelectedEntries,
+      selectedEntrySummary
     ];
   }, [selectedEntries, selectedEntry, selectedEntryIds]);
 
