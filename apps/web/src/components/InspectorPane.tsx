@@ -404,7 +404,7 @@ function MetadataContent({
                   <div className="mb-1 font-medium">{field.type_name}</div>
                   <div className="flex gap-2">
                     <input
-                      className="w-full rounded-xl border border-[var(--color-border-soft)] bg-white/95 px-2 py-1 text-sm"
+                      className="min-w-0 flex-1 rounded-xl border border-[var(--color-border-soft)] bg-white/95 px-2 py-1 text-sm"
                       value={fieldDrafts[field.type_key] ?? ""}
                       onChange={(event) => onFieldDraftChange(field.type_key, event.target.value)}
                     />
@@ -436,7 +436,7 @@ function MetadataContent({
                 ))}
               </select>
               <input
-                className="w-full rounded-xl border border-[var(--color-border-soft)] bg-white/95 px-2 py-1 text-sm"
+                className="min-w-0 flex-1 rounded-xl border border-[var(--color-border-soft)] bg-white/95 px-2 py-1 text-sm"
                 value={newFieldValue}
                 onChange={(event) => onNewFieldValueChange(event.target.value)}
                 placeholder="Field value"
