@@ -1,7 +1,6 @@
-import { type TrashFailureReasonCode } from "@tagstudio/api-client";
+import { type SortingMode, type TrashFailureReasonCode } from "@tagstudio/api-client";
 import { Button } from "@tagstudio/ui";
 import {
-  type MouseEvent as ReactMouseEvent,
   useCallback,
   useEffect,
   useMemo,
@@ -16,20 +15,14 @@ import { LibrarySwitcherModal } from "@/components/LibrarySwitcherModal";
 import { RefreshStatusPanel } from "@/components/RefreshStatusPanel";
 import { SettingsModal } from "@/components/SettingsModal";
 import { SplitPane } from "@/components/SplitPane";
-import {
-  ThumbnailGridPane,
-  type ThumbnailContextMenuAction,
-  type ThumbnailContextMenuState
-} from "@/components/ThumbnailGridPane";
+import { ThumbnailGridPane } from "@/components/ThumbnailGridPane";
 import { TopFilterBar } from "@/components/TopFilterBar";
+import { useAppInteractions } from "@/hooks/useAppInteractions";
 import { useInspectorWorkflow } from "@/hooks/useInspectorWorkflow";
-import { useEntryContextActions } from "@/hooks/useEntryContextActions";
 import { useLibraryWorkflow } from "@/hooks/useLibraryWorkflow";
 import { ModalStackProvider } from "@/hooks/useModalStackDepth";
 import { useSearchWorkflow } from "@/hooks/useSearchWorkflow";
 import { useSettingsWorkflow } from "@/hooks/useSettingsWorkflow";
-import { useTrashActions } from "@/hooks/useTrashActions";
-import { useUndoState } from "@/hooks/useUndoState";
 import {
   formatAppliedFilterSummary,
   getActiveFilterCount,
@@ -38,8 +31,6 @@ import {
   isFlatQuery,
   toggleUntaggedInQuery
 } from "@/lib/entry-filters";
-import { TAG_ARCHIVED_ID, TAG_FAVORITE_ID } from "@/lib/reserved-tags";
-import { computeDesktopSelection } from "@/lib/tag-workflows";
 
 function formatTrashFailureReason(reasonCode: TrashFailureReasonCode): string {
   switch (reasonCode) {
@@ -60,28 +51,10 @@ function formatTrashFailureReason(reasonCode: TrashFailureReasonCode): string {
   }
 }
 
-function getFileManagerRevealLabel(): string {
-  if (typeof navigator === "undefined") {
-    return "Show in File Manager";
-  }
-
-  const platform = `${navigator.platform ?? ""} ${navigator.userAgent ?? ""}`.toLowerCase();
-  if (platform.includes("mac")) {
-    return "Show in Finder";
-  }
-  if (platform.includes("win")) {
-    return "Show in Explorer";
-  }
-  return "Show in File Manager";
-}
-
 export function App() {
   const [uiError, setUiError] = useState<string | null>(null);
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
-  const [selectedEntryIds, setSelectedEntryIds] = useState<number[]>([]);
-  const [selectionAnchorId, setSelectionAnchorId] = useState<number | null>(null);
   const [videoPreviewStartsMuted, setVideoPreviewStartsMuted] = useState(true);
-  const [contextActionPending, setContextActionPending] = useState(false);
 
   const onClearError = useCallback(() => {
     setUiError(null);
@@ -231,60 +204,6 @@ export function App() {
     });
   }, [activeQuery, executeSearch]);
 
-  const { undoState, clearUndo, queueUndo, runUndo } = useUndoState({
-    onUndoApplied: refreshVisibleEntries,
-    onError,
-    onClearError
-  });
-
-  const handleDeletedEntries = useCallback((deletedIds: Set<number>) => {
-    setSelectedEntryIds((prev) => prev.filter((entryId) => !deletedIds.has(entryId)));
-    setSelectionAnchorId((prev) => {
-      if (prev === null || !deletedIds.has(prev)) {
-        return prev;
-      }
-      return null;
-    });
-  }, []);
-
-  const {
-    skipTrashConfirmSession,
-    trashDialogState,
-    setTrashDialogState,
-    trashFailureMessagesByEntryId,
-    inactiveEntryIds,
-    clearTrashFailureHighlights,
-    resetTrashState,
-    trimInactiveByVisibleIds,
-    performTrash
-  } = useTrashActions({
-    confirmBeforeTrash,
-    setConfirmBeforeTrashPreference,
-    trashEntries,
-    selectedEntryId,
-    clearSelection,
-    formatTrashFailureReason,
-    onDeletedEntries: handleDeletedEntries,
-    onError,
-    onClearError
-  });
-
-  useEffect(() => {
-    setSelectedEntryIds([]);
-    setSelectionAnchorId(null);
-    setContextActionPending(false);
-    clearUndo();
-    resetTrashState();
-  }, [activeLibraryPath, clearUndo, resetTrashState]);
-
-  useEffect(() => {
-    reconcileSelectionWithEntries(entries);
-
-    const visibleEntryIds = new Set(entries.map((entry) => entry.id));
-    setSelectedEntryIds((prev) => prev.filter((entryId) => visibleEntryIds.has(entryId)));
-    trimInactiveByVisibleIds(visibleEntryIds);
-  }, [entries, reconcileSelectionWithEntries, trimInactiveByVisibleIds]);
-
   useEffect(() => {
     if (!settingsOpen) {
       return;
@@ -314,19 +233,58 @@ export function App() {
     [activeQuery, showHiddenEntries]
   );
 
+  const {
+    selectedEntryIds,
+    hasPasteableTags,
+    trashDialogState,
+    setTrashDialogState,
+    trashFailureMessagesByEntryId,
+    inactiveEntryIds,
+    clearTrashFailureHighlights,
+    isActionBusy,
+    undoState,
+    runUndo,
+    getContextMenuState,
+    handleContextMenuOpenTarget,
+    handleContextMenuAction,
+    confirmTrashDialog,
+    pasteTagsFromMetadata,
+    handleGridSelect
+  } = useAppInteractions({
+    activeLibraryPath,
+    activeQuery,
+    entries,
+    isMobile,
+    selectedEntryId,
+    selectEntry,
+    clearSelection,
+    reconcileSelectionWithEntries,
+    setMobileActivePane,
+    confirmBeforeTrash,
+    setConfirmBeforeTrashPreference,
+    addTagToEntries,
+    removeTagFromEntries,
+    applyTagMutationToEntries,
+    refreshVisibleEntries,
+    trashEntries,
+    openEntries,
+    revealEntry,
+    formatTrashFailureReason,
+    onError,
+    onClearError,
+    busyFlags: {
+      tagMutationPending,
+      trashPending,
+      shellActionPending,
+      refreshPending,
+      searchPending
+    }
+  });
+
   const selectedEntries = useMemo(() => {
     const selectedSet = new Set(selectedEntryIds);
     return entries.filter((entry) => selectedSet.has(entry.id));
   }, [entries, selectedEntryIds]);
-
-  const entryById = useMemo(() => {
-    return new Map(entries.map((entry) => [entry.id, entry]));
-  }, [entries]);
-
-  const revealLabel = useMemo(() => getFileManagerRevealLabel(), []);
-
-  const isActionBusy =
-    contextActionPending || tagMutationPending || trashPending || shellActionPending || refreshPending || searchPending;
 
   const handleSaveSettings = useCallback(() => {
     void saveSettingsDraft().then((savedDraft) => {
@@ -346,239 +304,65 @@ export function App() {
     });
   }, [activeQuery, executeSearch, saveSettingsDraft]);
 
-  const runContextAsyncAction = useCallback(
-    (action: () => Promise<void>) => {
-      if (isActionBusy) {
-        return;
-      }
-      setContextActionPending(true);
-      void action()
-        .catch((error) => {
-          onError(error instanceof Error ? error.message : "Action failed.");
-        })
-        .finally(() => {
-          setContextActionPending(false);
-        });
-    },
-    [isActionBusy, onError]
-  );
+  const handleSearch = useCallback(() => {
+    clearTrashFailureHighlights();
+    searchFromInput();
+  }, [clearTrashFailureHighlights, searchFromInput]);
 
-  const {
-    hasPasteableTags,
-    resetCopiedTagIds,
-    getContextMenuState: getEntryContextMenuState,
-    copyTagsFromEntries,
-    pasteTagsToEntries,
-    toggleReservedTagOnEntries,
-    openFilesForEntries,
-    revealFileInManager,
-    copyFilepathsFromEntries
-  } = useEntryContextActions({
-    entryById,
-    selectedEntryIds,
-    inactiveEntryIds,
-    revealLabel,
-    addTagToEntries,
-    removeTagFromEntries,
-    applyTagMutationToEntries,
-    queueUndo,
-    refreshVisibleEntries,
-    openEntries,
-    revealEntry,
-    activeLibraryPath,
-    onError,
-    onClearError
-  });
-
-  const getContextMenuState = useCallback(
-    (entryId: number): ThumbnailContextMenuState => {
-      return getEntryContextMenuState(entryId, isActionBusy);
-    },
-    [getEntryContextMenuState, isActionBusy]
-  );
-
-  useEffect(() => {
-    resetCopiedTagIds();
-  }, [activeLibraryPath, resetCopiedTagIds]);
-
-  const handleContextMenuOpenTarget = useCallback(
-    (entryId: number, targetEntryIds: number[]) => {
-      if (targetEntryIds.length === 1 && targetEntryIds[0] === entryId && !selectedEntryIds.includes(entryId)) {
-        setSelectedEntryIds([entryId]);
-        setSelectionAnchorId(entryId);
-        selectEntry(entryId);
-      }
-    },
-    [selectEntry, selectedEntryIds]
-  );
-
-  const handleContextMenuAction = useCallback(
-    (action: ThumbnailContextMenuAction, state: ThumbnailContextMenuState) => {
-      if (state.targetEntryIds.length === 0) {
-        return;
-      }
-
-      if (action === "open_file") {
-        runContextAsyncAction(async () => {
-          await openFilesForEntries(state.targetEntryIds);
-        });
-        return;
-      }
-
-      if (action === "reveal_file") {
-        runContextAsyncAction(async () => {
-          await revealFileInManager(state.contextEntryId);
-        });
-        return;
-      }
-
-      if (action === "copy_filepath") {
-        runContextAsyncAction(async () => {
-          await copyFilepathsFromEntries(state.targetEntryIds);
-        });
-        return;
-      }
-
-      if (action === "copy_tags") {
-        copyTagsFromEntries(state.targetEntryIds);
-        return;
-      }
-
-      if (action === "paste_tags") {
-        runContextAsyncAction(async () => {
-          await pasteTagsToEntries(state.targetEntryIds);
-        });
-        return;
-      }
-
-      if (action === "favorite_toggle") {
-        runContextAsyncAction(async () => {
-          const mode = state.favoriteMode === "favorite" ? "add" : "remove";
-          await toggleReservedTagOnEntries(
-            state.targetEntryIds,
-            TAG_FAVORITE_ID,
-            mode,
-            mode === "add" ? "Favorited entries" : "Unfavorited entries"
-          );
-        });
-        return;
-      }
-
-      if (action === "archive_toggle") {
-        runContextAsyncAction(async () => {
-          const mode = state.archiveMode === "archive" ? "add" : "remove";
-          await toggleReservedTagOnEntries(
-            state.targetEntryIds,
-            TAG_ARCHIVED_ID,
-            mode,
-            mode === "add" ? "Archived entries" : "Unarchived entries"
-          );
-        });
-        return;
-      }
-
-      if (action === "delete_to_trash") {
-        if (!confirmBeforeTrash || skipTrashConfirmSession) {
-          runContextAsyncAction(async () => {
-            await performTrash(state.targetEntryIds, {
-              skipForSession: false,
-              rememberForLibrary: false
-            });
-          });
-          return;
-        }
-
-        setTrashDialogState({
-          targetEntryIds: state.targetEntryIds,
-          skipForSession: false,
-          rememberForLibrary: false
-        });
-      }
-    },
-    [
-      confirmBeforeTrash,
-      copyFilepathsFromEntries,
-      copyTagsFromEntries,
-      openFilesForEntries,
-      pasteTagsToEntries,
-      performTrash,
-      revealFileInManager,
-      runContextAsyncAction,
-      skipTrashConfirmSession,
-      toggleReservedTagOnEntries
-    ]
-  );
-
-  const confirmTrashDialog = useCallback(() => {
-    if (!trashDialogState) {
-      return;
-    }
-
-    const currentDialogState = trashDialogState;
-    setTrashDialogState(null);
-    runContextAsyncAction(async () => {
-      await performTrash(currentDialogState.targetEntryIds, {
-        skipForSession: currentDialogState.skipForSession,
-        rememberForLibrary: currentDialogState.rememberForLibrary
-      });
-    });
-  }, [performTrash, runContextAsyncAction, trashDialogState]);
-
-  const pasteTagsFromMetadata = useCallback(
-    (targetEntryIds: number[]) => {
-      const activeTargetIds = targetEntryIds.filter((entryId) => !inactiveEntryIds.has(entryId));
-      if (activeTargetIds.length === 0) {
-        return;
-      }
-
-      runContextAsyncAction(async () => {
-        await pasteTagsToEntries(activeTargetIds);
-      });
-    },
-    [inactiveEntryIds, pasteTagsToEntries, runContextAsyncAction]
-  );
-
-  const handleGridSelect = useCallback(
-    (entryId: number, event: ReactMouseEvent<HTMLButtonElement>) => {
+  const handleSortingModeChange = useCallback(
+    (nextSortingMode: SortingMode) => {
       clearTrashFailureHighlights();
-
-      if (isMobile) {
-        setSelectedEntryIds([entryId]);
-        setSelectionAnchorId(entryId);
-        selectEntry(entryId);
-        setMobileActivePane("preview");
-        return;
-      }
-
-      const nextSelection = computeDesktopSelection({
-        clickedId: entryId,
-        orderedIds: entries.map((entry) => entry.id),
-        selectedIds: selectedEntryIds,
-        activeId: selectedEntryId,
-        anchorId: selectionAnchorId,
-        ctrlOrMeta: event.metaKey || event.ctrlKey,
-        shift: event.shiftKey
+      setSortingMode(nextSortingMode);
+      void executeSearch({
+        query: activeQuery,
+        pageIndex: 0,
+        append: false,
+        sortingMode: nextSortingMode
       });
-
-      setSelectedEntryIds(nextSelection.selectedIds);
-      setSelectionAnchorId(nextSelection.anchorId);
-      if (nextSelection.activeId === null) {
-        clearSelection();
-      } else {
-        selectEntry(nextSelection.activeId);
-      }
     },
-    [
-      clearSelection,
-      clearTrashFailureHighlights,
-      entries,
-      isMobile,
-      selectEntry,
-      selectedEntryId,
-      selectedEntryIds,
-      selectionAnchorId,
-      setMobileActivePane
-    ]
+    [activeQuery, clearTrashFailureHighlights, executeSearch, setSortingMode]
+  );
+
+  const handleAscendingChange = useCallback(
+    (nextAscending: boolean) => {
+      clearTrashFailureHighlights();
+      setAscending(nextAscending);
+      void executeSearch({
+        query: activeQuery,
+        pageIndex: 0,
+        append: false,
+        ascending: nextAscending
+      });
+    },
+    [activeQuery, clearTrashFailureHighlights, executeSearch, setAscending]
+  );
+
+  const handleUntaggedChange = useCallback(
+    (nextUntaggedChecked: boolean) => {
+      clearTrashFailureHighlights();
+      const nextSearchInput = toggleUntaggedInQuery(searchInput, nextUntaggedChecked);
+      setSearchInput(nextSearchInput);
+      void executeSearch({
+        query: nextSearchInput,
+        pageIndex: 0,
+        append: false
+      });
+    },
+    [clearTrashFailureHighlights, executeSearch, searchInput, setSearchInput]
+  );
+
+  const handleShowHiddenChange = useCallback(
+    (nextShowHiddenEntries: boolean) => {
+      clearTrashFailureHighlights();
+      setShowHiddenEntries(nextShowHiddenEntries);
+      void executeSearch({
+        query: activeQuery,
+        pageIndex: 0,
+        append: false,
+        showHiddenEntries: nextShowHiddenEntries
+      });
+    },
+    [activeQuery, clearTrashFailureHighlights, executeSearch, setShowHiddenEntries]
   );
 
   const gridPane = (
@@ -673,50 +457,11 @@ export function App() {
               refreshPending={refreshPending}
               searchResultsStale={searchResultsStale}
               onSearchInputChange={setSearchInput}
-              onSearch={() => {
-                clearTrashFailureHighlights();
-                searchFromInput();
-              }}
-              onSortingModeChange={(nextSortingMode) => {
-                clearTrashFailureHighlights();
-                setSortingMode(nextSortingMode);
-                void executeSearch({
-                  query: activeQuery,
-                  pageIndex: 0,
-                  append: false,
-                  sortingMode: nextSortingMode
-                });
-              }}
-              onAscendingChange={(nextAscending) => {
-                clearTrashFailureHighlights();
-                setAscending(nextAscending);
-                void executeSearch({
-                  query: activeQuery,
-                  pageIndex: 0,
-                  append: false,
-                  ascending: nextAscending
-                });
-              }}
-              onUntaggedChange={(nextUntaggedChecked) => {
-                clearTrashFailureHighlights();
-                const nextSearchInput = toggleUntaggedInQuery(searchInput, nextUntaggedChecked);
-                setSearchInput(nextSearchInput);
-                void executeSearch({
-                  query: nextSearchInput,
-                  pageIndex: 0,
-                  append: false
-                });
-              }}
-              onShowHiddenChange={(nextShowHiddenEntries) => {
-                clearTrashFailureHighlights();
-                setShowHiddenEntries(nextShowHiddenEntries);
-                void executeSearch({
-                  query: activeQuery,
-                  pageIndex: 0,
-                  append: false,
-                  showHiddenEntries: nextShowHiddenEntries
-                });
-              }}
+              onSearch={handleSearch}
+              onSortingModeChange={handleSortingModeChange}
+              onAscendingChange={handleAscendingChange}
+              onUntaggedChange={handleUntaggedChange}
+              onShowHiddenChange={handleShowHiddenChange}
               onOpenLibraryModal={openLibraryModal}
               onRefresh={refreshLibrary}
               onOpenSettings={openSettings}
