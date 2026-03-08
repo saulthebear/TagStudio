@@ -28,7 +28,6 @@ function toAbsoluteFilePath(libraryPath: string, relativePath: string): string {
 
 type UseEntryContextActionsArgs = {
   entryById: ReadonlyMap<number, EntrySummaryResponse>;
-  allTagIds: ReadonlySet<number>;
   selectedEntryIds: number[];
   inactiveEntryIds: ReadonlySet<number>;
   revealLabel: string;
@@ -64,7 +63,6 @@ type UseEntryContextActionsResult = {
 
 export function useEntryContextActions({
   entryById,
-  allTagIds,
   selectedEntryIds,
   inactiveEntryIds,
   revealLabel,
@@ -82,11 +80,8 @@ export function useEntryContextActions({
   const [copiedTagIds, setCopiedTagIds] = useState<number[]>([]);
 
   const usableCopiedTagIds = useMemo(
-    () =>
-      copiedTagIds.filter(
-        (tagId) => allTagIds.has(tagId) && !RESERVED_CONTEXT_TAG_IDS.has(tagId)
-      ),
-    [allTagIds, copiedTagIds]
+    () => copiedTagIds.filter((tagId) => !RESERVED_CONTEXT_TAG_IDS.has(tagId)),
+    [copiedTagIds]
   );
 
   const hasPasteableTags = usableCopiedTagIds.length > 0;

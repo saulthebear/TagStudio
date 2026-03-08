@@ -323,10 +323,6 @@ export function App() {
     return new Map(entries.map((entry) => [entry.id, entry]));
   }, [entries]);
 
-  const allTagIds = useMemo(() => {
-    return new Set(allTags.map((tag) => tag.id));
-  }, [allTags]);
-
   const revealLabel = useMemo(() => getFileManagerRevealLabel(), []);
 
   const isActionBusy =
@@ -379,7 +375,6 @@ export function App() {
     copyFilepathsFromEntries
   } = useEntryContextActions({
     entryById,
-    allTagIds,
     selectedEntryIds,
     inactiveEntryIds,
     revealLabel,
