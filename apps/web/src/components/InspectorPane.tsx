@@ -54,6 +54,8 @@ type InspectorPaneProps = {
   onSplitStateChange: (next: SplitPaneState) => void;
   disableSplit: boolean;
   mobileSection: "preview" | "metadata";
+  videoPreviewStartsMuted: boolean;
+  onVideoPreviewUnmuted: () => void;
 };
 
 type AggregateTagRow = {
@@ -104,7 +106,9 @@ export function InspectorPane({
   splitState,
   onSplitStateChange,
   disableSplit,
-  mobileSection
+  mobileSection,
+  videoPreviewStartsMuted,
+  onVideoPreviewUnmuted
 }: InspectorPaneProps) {
   const previewSection = (
     <div className="inspector-section">
@@ -115,6 +119,8 @@ export function InspectorPane({
         getMediaUrl={getMediaUrl}
         getThumbnailUrl={getThumbnailUrl}
         resolveApiUrl={resolveApiUrl}
+        videoPreviewStartsMuted={videoPreviewStartsMuted}
+        onVideoPreviewUnmuted={onVideoPreviewUnmuted}
       />
     </div>
   );
@@ -191,6 +197,8 @@ type PreviewContentProps = {
     }
   ) => string;
   resolveApiUrl: (path: string) => string;
+  videoPreviewStartsMuted: boolean;
+  onVideoPreviewUnmuted: () => void;
 };
 
 function PreviewContent({
@@ -198,7 +206,9 @@ function PreviewContent({
   preview,
   getMediaUrl,
   getThumbnailUrl,
-  resolveApiUrl
+  resolveApiUrl,
+  videoPreviewStartsMuted,
+  onVideoPreviewUnmuted
 }: PreviewContentProps) {
   const hasSelectedEntry = selectedEntry !== null;
   const animatedImageSource = useMemo(() => {
@@ -237,7 +247,12 @@ function PreviewContent({
           preload="metadata"
           autoPlay
           loop
-          muted={true}
+          muted={videoPreviewStartsMuted}
+          onVolumeChange={(event) => {
+            if (!event.currentTarget.muted) {
+              onVideoPreviewUnmuted();
+            }
+          }}
           playsInline
           controls
           className="inspector-video"
