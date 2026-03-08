@@ -1,24 +1,26 @@
+import { type SortingMode, type TrashFailureReasonCode } from "@tagstudio/api-client";
+import { Button } from "@tagstudio/ui";
 import {
-  type MouseEvent as ReactMouseEvent,
   useCallback,
   useEffect,
   useMemo,
   useState
 } from "react";
 
+import { api } from "@/api/client";
 import { ErrorPanel } from "@/components/ErrorPanel";
 import { InspectorPane } from "@/components/InspectorPane";
 import { LibraryGate } from "@/components/LibraryGate";
 import { LibrarySwitcherModal } from "@/components/LibrarySwitcherModal";
-import { ModalStackProvider } from "@/hooks/useModalStackDepth";
 import { RefreshStatusPanel } from "@/components/RefreshStatusPanel";
 import { SettingsModal } from "@/components/SettingsModal";
 import { SplitPane } from "@/components/SplitPane";
 import { ThumbnailGridPane } from "@/components/ThumbnailGridPane";
 import { TopFilterBar } from "@/components/TopFilterBar";
-import { api } from "@/api/client";
+import { useAppInteractions } from "@/hooks/useAppInteractions";
 import { useInspectorWorkflow } from "@/hooks/useInspectorWorkflow";
 import { useLibraryWorkflow } from "@/hooks/useLibraryWorkflow";
+import { ModalStackProvider } from "@/hooks/useModalStackDepth";
 import { useSearchWorkflow } from "@/hooks/useSearchWorkflow";
 import { useSettingsWorkflow } from "@/hooks/useSettingsWorkflow";
 import {
@@ -29,13 +31,29 @@ import {
   isFlatQuery,
   toggleUntaggedInQuery
 } from "@/lib/entry-filters";
-import { computeDesktopSelection } from "@/lib/tag-workflows";
+
+function formatTrashFailureReason(reasonCode: TrashFailureReasonCode): string {
+  switch (reasonCode) {
+    case "ENTRY_NOT_FOUND":
+      return "Entry no longer exists in the library.";
+    case "MISSING_ON_DISK":
+      return "File is missing on disk.";
+    case "NOT_A_FILE":
+      return "Path is not a regular file.";
+    case "PERMISSION_DENIED":
+      return "Permission denied while moving to Trash.";
+    case "OS_ERROR":
+      return "OS error while moving to Trash.";
+    case "UNKNOWN_ERROR":
+      return "Unknown error while moving to Trash.";
+    default:
+      return "Failed to move file to Trash.";
+  }
+}
 
 export function App() {
   const [uiError, setUiError] = useState<string | null>(null);
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
-  const [selectedEntryIds, setSelectedEntryIds] = useState<number[]>([]);
-  const [selectionAnchorId, setSelectionAnchorId] = useState<number | null>(null);
   const [videoPreviewStartsMuted, setVideoPreviewStartsMuted] = useState(true);
 
   const onClearError = useCallback(() => {
@@ -79,6 +97,8 @@ export function App() {
     showHiddenEntries,
     setShowHiddenEntries,
     pageSize,
+    confirmBeforeTrash,
+    setConfirmBeforeTrashPreference,
     settingsDraft,
     setSettingsDraft,
     settingsOpen,
@@ -112,6 +132,7 @@ export function App() {
     loadingMore,
     searchResultsStale,
     markSearchResultsStale,
+    applyTagMutationToEntries,
     executeSearch,
     searchFromInput,
     loadMore
@@ -148,6 +169,8 @@ export function App() {
     tagMutationPending,
     tagEditPending,
     refreshPending,
+    trashPending,
+    shellActionPending,
     refreshStatus,
     selectEntry,
     clearSelection,
@@ -155,6 +178,9 @@ export function App() {
     applyField,
     refreshLibrary,
     refreshSelectedEntry,
+    trashEntries,
+    openEntries,
+    revealEntry,
     addTagToEntries,
     removeTagFromEntries,
     createTag,
@@ -170,17 +196,13 @@ export function App() {
     onClearError
   });
 
-  useEffect(() => {
-    setSelectedEntryIds([]);
-    setSelectionAnchorId(null);
-  }, [activeLibraryPath]);
-
-  useEffect(() => {
-    reconcileSelectionWithEntries(entries);
-
-    const visibleEntryIds = new Set(entries.map((entry) => entry.id));
-    setSelectedEntryIds((prev) => prev.filter((entryId) => visibleEntryIds.has(entryId)));
-  }, [entries, reconcileSelectionWithEntries]);
+  const refreshVisibleEntries = useCallback(async () => {
+    await executeSearch({
+      query: activeQuery,
+      pageIndex: 0,
+      append: false
+    });
+  }, [activeQuery, executeSearch]);
 
   useEffect(() => {
     if (!settingsOpen) {
@@ -211,6 +233,54 @@ export function App() {
     [activeQuery, showHiddenEntries]
   );
 
+  const {
+    selectedEntryIds,
+    hasPasteableTags,
+    trashDialogState,
+    setTrashDialogState,
+    trashFailureMessagesByEntryId,
+    inactiveEntryIds,
+    clearTrashFailureHighlights,
+    isActionBusy,
+    undoState,
+    runUndo,
+    getContextMenuState,
+    handleContextMenuOpenTarget,
+    handleContextMenuAction,
+    confirmTrashDialog,
+    pasteTagsFromMetadata,
+    handleGridSelect
+  } = useAppInteractions({
+    activeLibraryPath,
+    activeQuery,
+    entries,
+    isMobile,
+    selectedEntryId,
+    selectEntry,
+    clearSelection,
+    reconcileSelectionWithEntries,
+    setMobileActivePane,
+    confirmBeforeTrash,
+    setConfirmBeforeTrashPreference,
+    addTagToEntries,
+    removeTagFromEntries,
+    applyTagMutationToEntries,
+    refreshVisibleEntries,
+    trashEntries,
+    openEntries,
+    revealEntry,
+    formatTrashFailureReason,
+    onError,
+    onClearError,
+    busyFlags: {
+      tagMutationPending,
+      trashPending,
+      shellActionPending,
+      refreshPending,
+      searchPending
+    }
+  });
+
   const selectedEntries = useMemo(() => {
     const selectedSet = new Set(selectedEntryIds);
     return entries.filter((entry) => selectedSet.has(entry.id));
@@ -234,44 +304,65 @@ export function App() {
     });
   }, [activeQuery, executeSearch, saveSettingsDraft]);
 
-  const handleGridSelect = useCallback(
-    (entryId: number, event: ReactMouseEvent<HTMLButtonElement>) => {
-      if (isMobile) {
-        setSelectedEntryIds([entryId]);
-        setSelectionAnchorId(entryId);
-        selectEntry(entryId);
-        setMobileActivePane("preview");
-        return;
-      }
+  const handleSearch = useCallback(() => {
+    clearTrashFailureHighlights();
+    searchFromInput();
+  }, [clearTrashFailureHighlights, searchFromInput]);
 
-      const nextSelection = computeDesktopSelection({
-        clickedId: entryId,
-        orderedIds: entries.map((entry) => entry.id),
-        selectedIds: selectedEntryIds,
-        activeId: selectedEntryId,
-        anchorId: selectionAnchorId,
-        ctrlOrMeta: event.metaKey || event.ctrlKey,
-        shift: event.shiftKey
+  const handleSortingModeChange = useCallback(
+    (nextSortingMode: SortingMode) => {
+      clearTrashFailureHighlights();
+      setSortingMode(nextSortingMode);
+      void executeSearch({
+        query: activeQuery,
+        pageIndex: 0,
+        append: false,
+        sortingMode: nextSortingMode
       });
-
-      setSelectedEntryIds(nextSelection.selectedIds);
-      setSelectionAnchorId(nextSelection.anchorId);
-      if (nextSelection.activeId === null) {
-        clearSelection();
-      } else {
-        selectEntry(nextSelection.activeId);
-      }
     },
-    [
-      clearSelection,
-      entries,
-      isMobile,
-      selectEntry,
-      selectedEntryId,
-      selectedEntryIds,
-      selectionAnchorId,
-      setMobileActivePane
-    ]
+    [activeQuery, clearTrashFailureHighlights, executeSearch, setSortingMode]
+  );
+
+  const handleAscendingChange = useCallback(
+    (nextAscending: boolean) => {
+      clearTrashFailureHighlights();
+      setAscending(nextAscending);
+      void executeSearch({
+        query: activeQuery,
+        pageIndex: 0,
+        append: false,
+        ascending: nextAscending
+      });
+    },
+    [activeQuery, clearTrashFailureHighlights, executeSearch, setAscending]
+  );
+
+  const handleUntaggedChange = useCallback(
+    (nextUntaggedChecked: boolean) => {
+      clearTrashFailureHighlights();
+      const nextSearchInput = toggleUntaggedInQuery(searchInput, nextUntaggedChecked);
+      setSearchInput(nextSearchInput);
+      void executeSearch({
+        query: nextSearchInput,
+        pageIndex: 0,
+        append: false
+      });
+    },
+    [clearTrashFailureHighlights, executeSearch, searchInput, setSearchInput]
+  );
+
+  const handleShowHiddenChange = useCallback(
+    (nextShowHiddenEntries: boolean) => {
+      clearTrashFailureHighlights();
+      setShowHiddenEntries(nextShowHiddenEntries);
+      void executeSearch({
+        query: activeQuery,
+        pageIndex: 0,
+        append: false,
+        showHiddenEntries: nextShowHiddenEntries
+      });
+    },
+    [activeQuery, clearTrashFailureHighlights, executeSearch, setShowHiddenEntries]
   );
 
   const gridPane = (
@@ -286,6 +377,12 @@ export function App() {
       onLoadMore={loadMore}
       onSelectEntry={handleGridSelect}
       getThumbnailUrl={(entryId, options) => api.getThumbnailUrl(entryId, options)}
+      contextMenuEnabled={!isMobile}
+      getContextMenuState={getContextMenuState}
+      onContextMenuOpenTarget={handleContextMenuOpenTarget}
+      onContextMenuAction={handleContextMenuAction}
+      trashFailureMessagesByEntryId={trashFailureMessagesByEntryId}
+      inactiveEntryIds={inactiveEntryIds}
     />
   );
 
@@ -306,8 +403,10 @@ export function App() {
       tagMutationPending={tagMutationPending}
       tagEditPending={tagEditPending}
       updateFieldPending={updateFieldPending}
+      canPasteTags={hasPasteableTags}
       onAddTagToEntries={addTagToEntries}
       onRemoveTagFromEntries={removeTagFromEntries}
+      onPasteTagsToEntries={pasteTagsFromMetadata}
       onCreateTag={createTag}
       onUpdateTag={updateTag}
       onRefreshSelection={refreshSelectedEntry}
@@ -325,131 +424,101 @@ export function App() {
     />
   );
 
+  const trashTargetCount = trashDialogState?.targetEntryIds.length ?? 0;
+
   return (
     <ModalStackProvider>
       <main className="app-shell app-shell-live">
         {uiError ? <ErrorPanel message={uiError} /> : null}
 
-      {!isLibraryOpen ? (
-        <LibraryGate
-          libraryPath={libraryPath}
-          openPending={openPending}
-          onLibraryPathChange={setLibraryPath}
-          onOpen={openLibrary}
-          onCreate={createLibrary}
-        />
-      ) : (
-        <>
-          <TopFilterBar
-            libraryPath={activeLibraryPath ?? ""}
-            searchInput={searchInput}
-            filterSummary={filterSummary}
-            sortingMode={sortingMode}
-            ascending={ascending}
-            untaggedChecked={liveUntaggedState.positive}
-            showUntaggedConflict={showUntaggedConflict}
-            showConservativeHint={showConservativeHint}
-            showHiddenEntries={showHiddenEntries}
-            activeFilterCount={activeFilterCount}
-            totalCount={totalCount}
-            searchPending={searchPending}
-            refreshPending={refreshPending}
-            searchResultsStale={searchResultsStale}
-            onSearchInputChange={setSearchInput}
-            onSearch={searchFromInput}
-            onSortingModeChange={(nextSortingMode) => {
-              setSortingMode(nextSortingMode);
-              void executeSearch({
-                query: activeQuery,
-                pageIndex: 0,
-                append: false,
-                sortingMode: nextSortingMode
-              });
-            }}
-            onAscendingChange={(nextAscending) => {
-              setAscending(nextAscending);
-              void executeSearch({
-                query: activeQuery,
-                pageIndex: 0,
-                append: false,
-                ascending: nextAscending
-              });
-            }}
-            onUntaggedChange={(nextUntaggedChecked) => {
-              const nextSearchInput = toggleUntaggedInQuery(searchInput, nextUntaggedChecked);
-              setSearchInput(nextSearchInput);
-              void executeSearch({
-                query: nextSearchInput,
-                pageIndex: 0,
-                append: false
-              });
-            }}
-            onShowHiddenChange={(nextShowHiddenEntries) => {
-              setShowHiddenEntries(nextShowHiddenEntries);
-              void executeSearch({
-                query: activeQuery,
-                pageIndex: 0,
-                append: false,
-                showHiddenEntries: nextShowHiddenEntries
-              });
-            }}
-            onOpenLibraryModal={openLibraryModal}
-            onRefresh={refreshLibrary}
-            onOpenSettings={openSettings}
+        {!isLibraryOpen ? (
+          <LibraryGate
+            libraryPath={libraryPath}
+            openPending={openPending}
+            onLibraryPathChange={setLibraryPath}
+            onOpen={openLibrary}
+            onCreate={createLibrary}
           />
+        ) : (
+          <>
+            <TopFilterBar
+              libraryPath={activeLibraryPath ?? ""}
+              searchInput={searchInput}
+              filterSummary={filterSummary}
+              sortingMode={sortingMode}
+              ascending={ascending}
+              untaggedChecked={liveUntaggedState.positive}
+              showUntaggedConflict={showUntaggedConflict}
+              showConservativeHint={showConservativeHint}
+              showHiddenEntries={showHiddenEntries}
+              activeFilterCount={activeFilterCount}
+              totalCount={totalCount}
+              searchPending={searchPending}
+              refreshPending={refreshPending}
+              searchResultsStale={searchResultsStale}
+              onSearchInputChange={setSearchInput}
+              onSearch={handleSearch}
+              onSortingModeChange={handleSortingModeChange}
+              onAscendingChange={handleAscendingChange}
+              onUntaggedChange={handleUntaggedChange}
+              onShowHiddenChange={handleShowHiddenChange}
+              onOpenLibraryModal={openLibraryModal}
+              onRefresh={refreshLibrary}
+              onOpenSettings={openSettings}
+            />
 
-          {refreshStatus ? <RefreshStatusPanel refreshStatus={refreshStatus} /> : null}
+            {refreshStatus ? <RefreshStatusPanel refreshStatus={refreshStatus} /> : null}
 
-          {isMobile ? (
-            <section className="mobile-pane-tabs panel">
-              <button
-                type="button"
-                className={`mobile-pane-tab ${mobileActivePane === "grid" ? "mobile-pane-tab-active" : ""}`}
-                onClick={() => setMobileActivePane("grid")}
-              >
-                Grid
-              </button>
-              <button
-                type="button"
-                className={`mobile-pane-tab ${mobileActivePane === "preview" ? "mobile-pane-tab-active" : ""}`}
-                onClick={() => setMobileActivePane("preview")}
-              >
-                Preview
-              </button>
-              <button
-                type="button"
-                className={`mobile-pane-tab ${mobileActivePane === "metadata" ? "mobile-pane-tab-active" : ""}`}
-                onClick={() => setMobileActivePane("metadata")}
-              >
-                Metadata
-              </button>
-            </section>
-          ) : null}
-
-          <section className="content-shell">
             {isMobile ? (
-              <div className="content-mobile-pane">{mobileActivePane === "grid" ? gridPane : inspectorPane}</div>
-            ) : (
-              <SplitPane
-                orientation="horizontal"
-                state={mainSplitState}
-                onStateChange={setMainSplitState}
-                primary={gridPane}
-                secondary={inspectorPane}
-                primaryLabel="File grid"
-                secondaryLabel="Inspector"
-                minPrimarySize={320}
-                minSecondarySize={300}
-                collapseThreshold={120}
-                resetRatio={0.78}
-                railSize={28}
-                handleSize={12}
-                className="main-split"
-              />
-            )}
-          </section>
-        </>
-      )}
+              <section className="mobile-pane-tabs panel">
+                <button
+                  type="button"
+                  className={`mobile-pane-tab ${mobileActivePane === "grid" ? "mobile-pane-tab-active" : ""}`}
+                  onClick={() => setMobileActivePane("grid")}
+                >
+                  Grid
+                </button>
+                <button
+                  type="button"
+                  className={`mobile-pane-tab ${mobileActivePane === "preview" ? "mobile-pane-tab-active" : ""}`}
+                  onClick={() => setMobileActivePane("preview")}
+                >
+                  Preview
+                </button>
+                <button
+                  type="button"
+                  className={`mobile-pane-tab ${mobileActivePane === "metadata" ? "mobile-pane-tab-active" : ""}`}
+                  onClick={() => setMobileActivePane("metadata")}
+                >
+                  Metadata
+                </button>
+              </section>
+            ) : null}
+
+            <section className="content-shell">
+              {isMobile ? (
+                <div className="content-mobile-pane">{mobileActivePane === "grid" ? gridPane : inspectorPane}</div>
+              ) : (
+                <SplitPane
+                  orientation="horizontal"
+                  state={mainSplitState}
+                  onStateChange={setMainSplitState}
+                  primary={gridPane}
+                  secondary={inspectorPane}
+                  primaryLabel="File grid"
+                  secondaryLabel="Inspector"
+                  minPrimarySize={320}
+                  minSecondarySize={300}
+                  collapseThreshold={120}
+                  resetRatio={0.78}
+                  railSize={28}
+                  handleSize={12}
+                  className="main-split"
+                />
+              )}
+            </section>
+          </>
+        )}
 
         <LibrarySwitcherModal
           open={libraryModalOpen}
@@ -467,6 +536,7 @@ export function App() {
           ascending={settingsDraft.ascending}
           showHiddenEntries={settingsDraft.showHiddenEntries}
           pageSize={settingsDraft.pageSize}
+          confirmBeforeTrash={settingsDraft.confirmBeforeTrash}
           savePending={savePending}
           onSortingModeChange={(value) => setSettingsDraft((prev) => ({ ...prev, sortingMode: value }))}
           onAscendingChange={(value) => setSettingsDraft((prev) => ({ ...prev, ascending: value }))}
@@ -474,9 +544,90 @@ export function App() {
             setSettingsDraft((prev) => ({ ...prev, showHiddenEntries: value }))
           }
           onPageSizeChange={(value) => setSettingsDraft((prev) => ({ ...prev, pageSize: value }))}
+          onConfirmBeforeTrashChange={(value) =>
+            setSettingsDraft((prev) => ({ ...prev, confirmBeforeTrash: value }))
+          }
           onSave={handleSaveSettings}
           onClose={closeSettings}
         />
+
+        {trashDialogState ? (
+          <div className="overlay" role="presentation" onClick={() => setTrashDialogState(null)}>
+            <div
+              className="overlay-panel panel trash-confirm-panel"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Delete confirmation"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <h2 className="panel-title mt-0">Move to Trash</h2>
+              <p className="trash-confirm-copy">
+                {trashTargetCount === 1
+                  ? "Move 1 selected entry to Trash?"
+                  : `Move ${trashTargetCount} selected entries to Trash?`}
+              </p>
+
+              <label className="settings-row settings-checkbox trash-confirm-checkbox">
+                <input
+                  className="toggle-base"
+                  type="checkbox"
+                  checked={trashDialogState.skipForSession}
+                  onChange={(event) =>
+                    setTrashDialogState((prev) =>
+                      prev
+                        ? {
+                            ...prev,
+                            skipForSession: event.target.checked,
+                            rememberForLibrary: event.target.checked ? prev.rememberForLibrary : false
+                          }
+                        : prev
+                    )
+                  }
+                />
+                <span>Don&apos;t ask again this session</span>
+              </label>
+
+              {trashDialogState.skipForSession ? (
+                <label className="settings-row settings-checkbox trash-confirm-checkbox">
+                  <input
+                    className="toggle-base"
+                    type="checkbox"
+                    checked={trashDialogState.rememberForLibrary}
+                    onChange={(event) =>
+                      setTrashDialogState((prev) =>
+                        prev
+                          ? {
+                              ...prev,
+                              rememberForLibrary: event.target.checked
+                            }
+                          : prev
+                      )
+                    }
+                  />
+                  <span>Also remember for this library</span>
+                </label>
+              ) : null}
+
+              <div className="overlay-panel-actions">
+                <Button variant="secondary" onClick={() => setTrashDialogState(null)}>
+                  Cancel
+                </Button>
+                <Button onClick={confirmTrashDialog} disabled={isActionBusy}>
+                  Move to Trash
+                </Button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {undoState ? (
+          <div className="undo-snackbar" role="status" aria-live="polite">
+            <span className="undo-snackbar-message">{undoState.message}</span>
+            <Button variant="secondary" size="sm" onClick={runUndo} disabled={undoState.pending}>
+              {undoState.pending ? "Undoing..." : "Undo"}
+            </Button>
+          </div>
+        ) : null}
       </main>
     </ModalStackProvider>
   );

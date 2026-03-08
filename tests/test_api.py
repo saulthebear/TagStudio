@@ -53,6 +53,197 @@ def get_entry_ids_by_filename(client: TestClient) -> dict[str, int]:
     return {item["filename"]: item["id"] for item in search.json()["entries"]}
 
 
+def test_entries_trash_partial_failure_keeps_failed_entries() -> None:
+    with TemporaryDirectory() as tmp:
+        library_path = Path(tmp)
+        seed_library(library_path)
+
+        app = create_app()
+        with TestClient(app) as client:
+            open_res = client.post("/api/v1/libraries/open", json={"path": str(library_path)})
+            assert open_res.status_code == 200
+
+            ids = get_entry_ids_by_filename(client)
+            foo_id = ids["foo.txt"]
+            thumb_id = ids["thumb.png"]
+
+            def _send2trash_side_effect(path: str | Path) -> None:
+                if Path(path).name == "foo.txt":
+                    raise PermissionError("simulated permission denied")
+
+            with patch("tagstudio.api.routes.send2trash", side_effect=_send2trash_side_effect):
+                trash = client.post(
+                    "/api/v1/entries:trash",
+                    json={"entry_ids": [foo_id, thumb_id]},
+                )
+
+            assert trash.status_code == 200
+            payload = trash.json()
+            assert payload["success"] is False
+            assert payload["deleted_count"] == 1
+            assert payload["deleted_entry_ids"] == [thumb_id]
+            assert payload["failed_count"] == 1
+            assert payload["failed_entries"] == [
+                {
+                    "entry_id": foo_id,
+                    "path": "foo.txt",
+                    "reason_code": "PERMISSION_DENIED",
+                }
+            ]
+
+            remaining = client.post("/api/v1/search", json={"query": ""})
+            assert remaining.status_code == 200
+            remaining_ids = set(remaining.json()["ids"])
+            assert foo_id in remaining_ids
+            assert thumb_id not in remaining_ids
+
+
+def test_entries_trash_reason_codes_for_missing_and_not_found() -> None:
+    with TemporaryDirectory() as tmp:
+        library_path = Path(tmp)
+        seed_library(library_path)
+
+        app = create_app()
+        with TestClient(app) as client:
+            open_res = client.post("/api/v1/libraries/open", json={"path": str(library_path)})
+            assert open_res.status_code == 200
+
+            ids = get_entry_ids_by_filename(client)
+            foo_id = ids["foo.txt"]
+            missing_entry_id = 999_999
+            (library_path / "foo.txt").unlink()
+
+            trash = client.post(
+                "/api/v1/entries:trash",
+                json={"entry_ids": [foo_id, missing_entry_id]},
+            )
+            assert trash.status_code == 200
+            payload = trash.json()
+
+            assert payload["success"] is False
+            assert payload["deleted_count"] == 0
+            assert payload["deleted_entry_ids"] == []
+            assert payload["failed_count"] == 2
+
+            failed_by_id = {item["entry_id"]: item for item in payload["failed_entries"]}
+            assert failed_by_id[foo_id]["reason_code"] == "MISSING_ON_DISK"
+            assert failed_by_id[foo_id]["path"] == "foo.txt"
+            assert failed_by_id[missing_entry_id]["reason_code"] == "ENTRY_NOT_FOUND"
+            assert failed_by_id[missing_entry_id]["path"] is None
+
+            remaining = client.post("/api/v1/search", json={"query": ""})
+            assert remaining.status_code == 200
+            remaining_ids = set(remaining.json()["ids"])
+            assert foo_id in remaining_ids
+
+
+def test_entries_trash_os_error_does_not_delete_file() -> None:
+    with TemporaryDirectory() as tmp:
+        library_path = Path(tmp)
+        seed_library(library_path)
+
+        app = create_app()
+        with TestClient(app) as client:
+            open_res = client.post("/api/v1/libraries/open", json={"path": str(library_path)})
+            assert open_res.status_code == 200
+
+            ids = get_entry_ids_by_filename(client)
+            foo_id = ids["foo.txt"]
+            foo_path = library_path / "foo.txt"
+
+            with patch(
+                "tagstudio.api.routes.send2trash",
+                side_effect=OSError("simulated os error"),
+            ):
+                trash = client.post("/api/v1/entries:trash", json={"entry_ids": [foo_id]})
+
+            assert trash.status_code == 200
+            payload = trash.json()
+            assert payload["success"] is False
+            assert payload["deleted_count"] == 0
+            assert payload["failed_count"] == 1
+            assert payload["failed_entries"][0]["reason_code"] == "OS_ERROR"
+            assert foo_path.exists() is True
+
+
+def test_entries_open_partial_failure_reports_reason_codes() -> None:
+    with TemporaryDirectory() as tmp:
+        library_path = Path(tmp)
+        seed_library(library_path)
+
+        app = create_app()
+        with TestClient(app) as client:
+            open_res = client.post("/api/v1/libraries/open", json={"path": str(library_path)})
+            assert open_res.status_code == 200
+
+            ids = get_entry_ids_by_filename(client)
+            foo_id = ids["foo.txt"]
+            missing_entry_id = 999_999
+
+            with (
+                patch("tagstudio.api.routes.sys.platform", "darwin"),
+                patch("tagstudio.api.routes.shutil.which", return_value="/usr/bin/open"),
+                patch("tagstudio.api.routes.silent_popen") as popen_mock,
+            ):
+                response = client.post(
+                    "/api/v1/entries:open",
+                    json={"entry_ids": [foo_id, missing_entry_id]},
+                )
+
+            assert response.status_code == 200
+            payload = response.json()
+            assert payload["success"] is False
+            assert payload["opened_count"] == 1
+            assert payload["opened_entry_ids"] == [foo_id]
+            assert payload["failed_count"] == 1
+            assert payload["failed_entries"] == [
+                {
+                    "entry_id": missing_entry_id,
+                    "path": None,
+                    "reason_code": "ENTRY_NOT_FOUND",
+                }
+            ]
+            assert popen_mock.call_count == 1
+
+
+def test_entries_reveal_success_and_missing_command() -> None:
+    with TemporaryDirectory() as tmp:
+        library_path = Path(tmp)
+        seed_library(library_path)
+
+        app = create_app()
+        with TestClient(app) as client:
+            open_res = client.post("/api/v1/libraries/open", json={"path": str(library_path)})
+            assert open_res.status_code == 200
+
+            ids = get_entry_ids_by_filename(client)
+            foo_id = ids["foo.txt"]
+            expected_path = str((library_path / "foo.txt").resolve())
+
+            with (
+                patch("tagstudio.api.routes.sys.platform", "darwin"),
+                patch("tagstudio.api.routes.shutil.which", return_value="/usr/bin/open"),
+                patch("tagstudio.api.routes.silent_popen") as popen_mock,
+            ):
+                reveal = client.post("/api/v1/entries:reveal", json={"entry_id": foo_id})
+
+            assert reveal.status_code == 200
+            assert reveal.json()["success"] is True
+            popen_mock.assert_called_once_with(
+                ["/usr/bin/open", "-R", expected_path],
+                close_fds=True,
+            )
+
+            with (
+                patch("tagstudio.api.routes.sys.platform", "darwin"),
+                patch("tagstudio.api.routes.shutil.which", return_value=None),
+            ):
+                reveal_no_command = client.post("/api/v1/entries:reveal", json={"entry_id": foo_id})
+
+            assert reveal_no_command.status_code == 501
+            assert "No file manager command is available." in reveal_no_command.json()["detail"]
+
+
 def test_api_core_workflows() -> None:
     with TemporaryDirectory() as tmp:
         library_path = Path(tmp)
@@ -90,6 +281,7 @@ def test_api_core_workflows() -> None:
             assert settings.json()["layout"]["main_split_ratio"] == 0.78
             assert settings.json()["layout"]["mobile_active_pane"] == "grid"
             assert settings.json()["thumbnails"]["grid_size"] >= 32
+            assert settings.json()["confirmations"]["confirm_before_trash"] is True
 
             updated_settings = client.patch(
                 "/api/v1/settings",
@@ -107,6 +299,9 @@ def test_api_core_workflows() -> None:
                         "preview_size": 720,
                         "quality": 78,
                     },
+                    "confirmations": {
+                        "confirm_before_trash": False,
+                    },
                 },
             )
             assert updated_settings.status_code == 200
@@ -117,6 +312,7 @@ def test_api_core_workflows() -> None:
             assert updated_settings.json()["layout"]["mobile_active_pane"] == "metadata"
             assert updated_settings.json()["thumbnails"]["grid_size"] == 224
             assert updated_settings.json()["thumbnails"]["preview_size"] == 720
+            assert updated_settings.json()["confirmations"]["confirm_before_trash"] is False
 
             partial_layout_update = client.patch(
                 "/api/v1/settings",

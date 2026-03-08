@@ -1,17 +1,23 @@
 import mimetypes
+import os
 import secrets
+import shutil
+import sys
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import FileResponse, StreamingResponse
+from send2trash import send2trash
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from tagstudio.api.jobs import JobManager
 from tagstudio.api.schemas import (
     EntryResponse,
+    EntryShellActionFailure,
+    EntryShellActionFailureReasonCode,
     FieldTypeResponse,
     HealthResponse,
     JobCreateResponse,
@@ -19,8 +25,11 @@ from tagstudio.api.schemas import (
     LibraryCreateRequest,
     LibraryOpenRequest,
     LibraryStateResponse,
+    OpenEntriesRequest,
+    OpenEntriesResponse,
     PreviewKind,
     PreviewResponse,
+    RevealEntryRequest,
     SearchRequest,
     SearchResponse,
     SettingsResponse,
@@ -37,6 +46,10 @@ from tagstudio.api.schemas import (
     ThumbnailKind,
     ThumbnailPrewarmRequest,
     ThumbnailPrewarmResponse,
+    TrashEntriesRequest,
+    TrashEntriesResponse,
+    TrashEntryFailure,
+    TrashFailureReasonCode,
     UpdateFieldRequest,
 )
 from tagstudio.api.serializers import (
@@ -52,6 +65,7 @@ from tagstudio.core.library.alchemy.joins import TagParent
 from tagstudio.core.library.alchemy.library import Library, LibraryStatus
 from tagstudio.core.library.alchemy.models import Tag, TagAlias
 from tagstudio.core.media.thumbnail_pipeline import ThumbnailUnsupportedError
+from tagstudio.core.utils.silent_subprocess import silent_popen
 
 TEXT_SUFFIXES = {"txt", "md", "json", "toml", "yaml", "yml", "csv", "log", "py", "ts", "tsx"}
 VIDEO_SUFFIXES = {"mp4", "mov", "mkv", "webm", "avi", "m4v"}
@@ -98,6 +112,81 @@ def create_router(*, state: ApiState, jobs: JobManager) -> APIRouter:
         except ValueError as exc:
             raise HTTPException(status_code=400, detail="Entry path escapes library root.") from exc
         return entry_path, str(entry.path)
+
+    def trash_file(path: Path) -> TrashFailureReasonCode | None:
+        try:
+            send2trash(path)
+            return None
+        except PermissionError:
+            return TrashFailureReasonCode.PERMISSION_DENIED
+        except FileNotFoundError:
+            return TrashFailureReasonCode.MISSING_ON_DISK
+        except OSError:
+            return TrashFailureReasonCode.OS_ERROR
+        except Exception:
+            return TrashFailureReasonCode.UNKNOWN_ERROR
+
+    def open_path_in_default_app(path: Path) -> EntryShellActionFailureReasonCode | None:
+        try:
+            if sys.platform == "win32":
+                os.startfile(path)  # type: ignore[attr-defined]
+                return None
+
+            command_name = "open" if sys.platform == "darwin" else "xdg-open"
+            command = shutil.which(command_name)
+            if command is None:
+                return EntryShellActionFailureReasonCode.COMMAND_NOT_FOUND
+            silent_popen([command, str(path)], close_fds=True)
+            return None
+        except PermissionError:
+            return EntryShellActionFailureReasonCode.PERMISSION_DENIED
+        except OSError:
+            return EntryShellActionFailureReasonCode.OS_ERROR
+        except Exception:
+            return EntryShellActionFailureReasonCode.UNKNOWN_ERROR
+
+    def reveal_path_in_file_manager(path: Path) -> EntryShellActionFailureReasonCode | None:
+        try:
+            if sys.platform == "win32":
+                command = f'explorer /select,"{path.resolve()}"'
+                silent_popen(command, shell=True, close_fds=True)
+                return None
+
+            if sys.platform == "darwin":
+                command = shutil.which("open")
+                if command is None:
+                    return EntryShellActionFailureReasonCode.COMMAND_NOT_FOUND
+                silent_popen([command, "-R", str(path)], close_fds=True)
+                return None
+
+            dbus_command = shutil.which("dbus-send")
+            if dbus_command is not None:
+                silent_popen(
+                    [
+                        dbus_command,
+                        "--session",
+                        "--dest=org.freedesktop.FileManager1",
+                        "--type=method_call",
+                        "/org/freedesktop/FileManager1",
+                        "org.freedesktop.FileManager1.ShowItems",
+                        f"array:string:file://{path.resolve()}",
+                        "string:",
+                    ],
+                    close_fds=True,
+                )
+                return None
+
+            open_command = shutil.which("xdg-open")
+            if open_command is None:
+                return EntryShellActionFailureReasonCode.COMMAND_NOT_FOUND
+            silent_popen([open_command, str(path.parent)], close_fds=True)
+            return None
+        except PermissionError:
+            return EntryShellActionFailureReasonCode.PERMISSION_DENIED
+        except OSError:
+            return EntryShellActionFailureReasonCode.OS_ERROR
+        except Exception:
+            return EntryShellActionFailureReasonCode.UNKNOWN_ERROR
 
     def build_thumbnail_url(
         entry_id: int,
@@ -195,6 +284,8 @@ def create_router(*, state: ApiState, jobs: JobManager) -> APIRouter:
             updates["layout"] = request.layout.model_dump(exclude_none=True)
         if request.thumbnails is not None:
             updates["thumbnails"] = request.thumbnails.model_dump(exclude_none=True)
+        if request.confirmations is not None:
+            updates["confirmations"] = request.confirmations.model_dump(exclude_none=True)
         return SettingsResponse.model_validate(state.update_web_settings(updates))
 
     @router.get("/field-types", response_model=list[FieldTypeResponse])
@@ -487,6 +578,165 @@ def create_router(*, state: ApiState, jobs: JobManager) -> APIRouter:
         success = lib.remove_tags_from_entries(request.entry_ids, request.tag_ids)
         changed = len(request.entry_ids) * len(request.tag_ids) if success else 0
         return TagMutationResponse(success=success, changed=changed)
+
+    @router.post("/entries:trash", response_model=TrashEntriesResponse)
+    def trash_entries(request: TrashEntriesRequest) -> TrashEntriesResponse:
+        lib = get_library_or_error()
+
+        deleted_entry_ids: list[int] = []
+        failed_entries: list[TrashEntryFailure] = []
+        seen: set[int] = set()
+
+        for entry_id in request.entry_ids:
+            if entry_id in seen:
+                continue
+            seen.add(entry_id)
+
+            try:
+                entry_path, relative_path = resolve_entry_file(lib, entry_id)
+            except HTTPException as exc:
+                reason = (
+                    TrashFailureReasonCode.ENTRY_NOT_FOUND
+                    if exc.status_code == 404
+                    else TrashFailureReasonCode.UNKNOWN_ERROR
+                )
+                failed_entries.append(
+                    TrashEntryFailure(entry_id=entry_id, path=None, reason_code=reason)
+                )
+                continue
+
+            if not entry_path.exists():
+                failed_entries.append(
+                    TrashEntryFailure(
+                        entry_id=entry_id,
+                        path=relative_path,
+                        reason_code=TrashFailureReasonCode.MISSING_ON_DISK,
+                    )
+                )
+                continue
+
+            if not entry_path.is_file():
+                failed_entries.append(
+                    TrashEntryFailure(
+                        entry_id=entry_id,
+                        path=relative_path,
+                        reason_code=TrashFailureReasonCode.NOT_A_FILE,
+                    )
+                )
+                continue
+
+            reason = trash_file(entry_path)
+            if reason is None:
+                deleted_entry_ids.append(entry_id)
+                continue
+
+            failed_entries.append(
+                TrashEntryFailure(
+                    entry_id=entry_id,
+                    path=relative_path,
+                    reason_code=reason,
+                )
+            )
+
+        if deleted_entry_ids:
+            lib.remove_entries(deleted_entry_ids)
+
+        return TrashEntriesResponse(
+            success=len(failed_entries) == 0,
+            deleted_entry_ids=deleted_entry_ids,
+            deleted_count=len(deleted_entry_ids),
+            failed_count=len(failed_entries),
+            failed_entries=failed_entries,
+        )
+
+    @router.post("/entries:open", response_model=OpenEntriesResponse)
+    def open_entries(request: OpenEntriesRequest) -> OpenEntriesResponse:
+        lib = get_library_or_error()
+
+        opened_entry_ids: list[int] = []
+        failed_entries: list[EntryShellActionFailure] = []
+        seen: set[int] = set()
+
+        for entry_id in request.entry_ids:
+            if entry_id in seen:
+                continue
+            seen.add(entry_id)
+
+            try:
+                entry_path, relative_path = resolve_entry_file(lib, entry_id)
+            except HTTPException as exc:
+                reason = (
+                    EntryShellActionFailureReasonCode.ENTRY_NOT_FOUND
+                    if exc.status_code == 404
+                    else EntryShellActionFailureReasonCode.UNKNOWN_ERROR
+                )
+                failed_entries.append(
+                    EntryShellActionFailure(entry_id=entry_id, path=None, reason_code=reason)
+                )
+                continue
+
+            if not entry_path.exists():
+                failed_entries.append(
+                    EntryShellActionFailure(
+                        entry_id=entry_id,
+                        path=relative_path,
+                        reason_code=EntryShellActionFailureReasonCode.MISSING_ON_DISK,
+                    )
+                )
+                continue
+
+            if not entry_path.is_file():
+                failed_entries.append(
+                    EntryShellActionFailure(
+                        entry_id=entry_id,
+                        path=relative_path,
+                        reason_code=EntryShellActionFailureReasonCode.NOT_A_FILE,
+                    )
+                )
+                continue
+
+            reason = open_path_in_default_app(entry_path)
+            if reason is None:
+                opened_entry_ids.append(entry_id)
+                continue
+
+            failed_entries.append(
+                EntryShellActionFailure(
+                    entry_id=entry_id,
+                    path=relative_path,
+                    reason_code=reason,
+                )
+            )
+
+        return OpenEntriesResponse(
+            success=len(failed_entries) == 0,
+            opened_entry_ids=opened_entry_ids,
+            opened_count=len(opened_entry_ids),
+            failed_count=len(failed_entries),
+            failed_entries=failed_entries,
+        )
+
+    @router.post("/entries:reveal", response_model=SuccessResponse)
+    def reveal_entry(request: RevealEntryRequest) -> SuccessResponse:
+        lib = get_library_or_error()
+        entry_path, _ = resolve_entry_file(lib, request.entry_id)
+
+        if not entry_path.exists():
+            raise HTTPException(status_code=404, detail="File is missing on disk.")
+        if not entry_path.is_file():
+            raise HTTPException(status_code=400, detail="Path is not a regular file.")
+
+        reason = reveal_path_in_file_manager(entry_path)
+        if reason is None:
+            return SuccessResponse(success=True)
+        if reason == EntryShellActionFailureReasonCode.COMMAND_NOT_FOUND:
+            raise HTTPException(status_code=501, detail="No file manager command is available.")
+        if reason == EntryShellActionFailureReasonCode.PERMISSION_DENIED:
+            raise HTTPException(
+                status_code=403,
+                detail="Permission denied while opening file manager.",
+            )
+        raise HTTPException(status_code=500, detail="Failed to reveal file in file manager.")
 
     @router.post("/tags", response_model=TagResponse)
     def create_tag(request: TagCreateRequest) -> TagResponse:

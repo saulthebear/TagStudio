@@ -1,4 +1,5 @@
 import { type EntrySummaryResponse } from "@tagstudio/api-client";
+import { Archive, Star } from "lucide-react";
 import {
   type MouseEvent as ReactMouseEvent,
   useCallback,
@@ -7,6 +8,28 @@ import {
   useRef,
   useState
 } from "react";
+
+import { TAG_ARCHIVED_ID, TAG_FAVORITE_ID } from "@/lib/reserved-tags";
+
+export type ThumbnailContextMenuState = {
+  contextEntryId: number;
+  targetEntryIds: number[];
+  canPaste: boolean;
+  favoriteMode: "favorite" | "unfavorite";
+  archiveMode: "archive" | "unarchive";
+  revealLabel: string;
+  disabled: boolean;
+};
+
+export type ThumbnailContextMenuAction =
+  | "open_file"
+  | "reveal_file"
+  | "copy_filepath"
+  | "copy_tags"
+  | "paste_tags"
+  | "favorite_toggle"
+  | "archive_toggle"
+  | "delete_to_trash";
 
 type ThumbnailGridPaneProps = {
   entries: EntrySummaryResponse[];
@@ -26,9 +49,27 @@ type ThumbnailGridPaneProps = {
       kind?: "grid" | "preview";
     }
   ) => string;
+  contextMenuEnabled: boolean;
+  getContextMenuState: (entryId: number) => ThumbnailContextMenuState;
+  onContextMenuOpenTarget: (entryId: number, targetEntryIds: number[]) => void;
+  onContextMenuAction: (action: ThumbnailContextMenuAction, state: ThumbnailContextMenuState) => void;
+  trashFailureMessagesByEntryId: ReadonlyMap<number, string>;
+  inactiveEntryIds: ReadonlySet<number>;
 };
 
 type MediaKind = "image" | "video" | "other";
+
+type ContextMenuRenderState = {
+  x: number;
+  y: number;
+  state: ThumbnailContextMenuState;
+  bounds: {
+    left: number;
+    right: number;
+    top: number;
+    bottom: number;
+  };
+};
 
 const IMAGE_SUFFIXES = new Set([
   "jpg",
@@ -92,10 +133,79 @@ export function ThumbnailGridPane({
   hasMore,
   onLoadMore,
   onSelectEntry,
-  getThumbnailUrl
+  getThumbnailUrl,
+  contextMenuEnabled,
+  getContextMenuState,
+  onContextMenuOpenTarget,
+  onContextMenuAction,
+  trashFailureMessagesByEntryId,
+  inactiveEntryIds
 }: ThumbnailGridPaneProps) {
+  const paneRef = useRef<HTMLElement | null>(null);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const contextMenuRef = useRef<HTMLDivElement | null>(null);
   const [failedMediaIds, setFailedMediaIds] = useState<Set<number>>(() => new Set());
+  const [contextMenu, setContextMenu] = useState<ContextMenuRenderState | null>(null);
+
+  const closeContextMenu = useCallback(() => {
+    setContextMenu(null);
+  }, []);
+
+  const getMenuBounds = useCallback(() => {
+    const pane = paneRef.current;
+    if (!pane) {
+      return {
+        left: 0,
+        right: window.innerWidth,
+        top: 0,
+        bottom: window.innerHeight
+      };
+    }
+
+    return {
+      left: 0,
+      right: pane.clientWidth,
+      top: 0,
+      bottom: pane.clientHeight
+    };
+  }, []);
+
+  const openContextMenu = useCallback(
+    (entryId: number, event: ReactMouseEvent<HTMLButtonElement>) => {
+      if (!contextMenuEnabled) {
+        return;
+      }
+
+      event.preventDefault();
+      const state = getContextMenuState(entryId);
+      onContextMenuOpenTarget(entryId, state.targetEntryIds);
+      const bounds = getMenuBounds();
+      const paneRect = paneRef.current?.getBoundingClientRect();
+      const rawX = paneRect ? event.clientX - paneRect.left : event.clientX;
+      const rawY = paneRect ? event.clientY - paneRect.top : event.clientY;
+      const nextX = Math.max(bounds.left, Math.min(rawX, bounds.right));
+      const nextY = Math.max(bounds.top, Math.min(rawY, bounds.bottom));
+
+      setContextMenu({
+        x: nextX,
+        y: nextY,
+        state,
+        bounds
+      });
+    },
+    [contextMenuEnabled, getContextMenuState, getMenuBounds, onContextMenuOpenTarget]
+  );
+
+  const triggerContextAction = useCallback(
+    (action: ThumbnailContextMenuAction) => {
+      if (!contextMenu) {
+        return;
+      }
+      onContextMenuAction(action, contextMenu.state);
+      closeContextMenu();
+    },
+    [closeContextMenu, contextMenu, onContextMenuAction]
+  );
 
   const markMediaFailed = useCallback((entryId: number) => {
     setFailedMediaIds((prev) => {
@@ -107,6 +217,83 @@ export function ThumbnailGridPane({
       return next;
     });
   }, []);
+
+  useEffect(() => {
+    if (!contextMenu) {
+      return;
+    }
+
+    const onPointerDown = (event: PointerEvent) => {
+      if (!contextMenuRef.current?.contains(event.target as Node)) {
+        closeContextMenu();
+      }
+    };
+
+    const onScroll = () => {
+      closeContextMenu();
+    };
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        closeContextMenu();
+      }
+    };
+
+    window.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("scroll", onScroll, true);
+    window.addEventListener("resize", onScroll);
+    window.addEventListener("keydown", onKeyDown);
+
+    return () => {
+      window.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("scroll", onScroll, true);
+      window.removeEventListener("resize", onScroll);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [closeContextMenu, contextMenu]);
+
+  useEffect(() => {
+    if (!contextMenu || !contextMenuRef.current) {
+      return;
+    }
+
+    const menuRect = contextMenuRef.current.getBoundingClientRect();
+    const availableMaxX = contextMenu.bounds.right - menuRect.width;
+    const availableMaxY = contextMenu.bounds.bottom - menuRect.height;
+    const minX = contextMenu.bounds.left;
+    const minY = contextMenu.bounds.top;
+    const nextX = availableMaxX >= minX ? Math.max(minX, Math.min(contextMenu.x, availableMaxX)) : minX;
+    const nextY = availableMaxY >= minY ? Math.max(minY, Math.min(contextMenu.y, availableMaxY)) : minY;
+
+    if (nextX === contextMenu.x && nextY === contextMenu.y) {
+      return;
+    }
+
+    setContextMenu((prev) => {
+      if (!prev) {
+        return prev;
+      }
+      return {
+        ...prev,
+        x: nextX,
+        y: nextY
+      };
+    });
+  }, [contextMenu]);
+
+  const contextMenuStyle = useMemo(() => {
+    if (!contextMenu) {
+      return undefined;
+    }
+    const availableWidth = Math.max(64, contextMenu.bounds.right - contextMenu.bounds.left);
+    const availableHeight = Math.max(64, contextMenu.bounds.bottom - contextMenu.bounds.top);
+    return {
+      left: contextMenu.x,
+      top: contextMenu.y,
+      maxWidth: availableWidth,
+      maxHeight: availableHeight
+    };
+  }, [contextMenu]);
 
   useEffect(() => {
     if (!hasMore || searchPending || loadingMore) {
@@ -160,7 +347,7 @@ export function ThumbnailGridPane({
   }, [activeQuery, totalCount]);
 
   return (
-    <section className="pane panel thumb-pane">
+    <section ref={paneRef} className="pane panel thumb-pane">
       <header className="thumb-pane-header">
         <h2 className="panel-title m-0">Files</h2>
         <p className="thumb-pane-subtitle m-0">{subtitle}</p>
@@ -176,15 +363,40 @@ export function ThumbnailGridPane({
             const selected = selectedEntryIds.includes(entry.id);
             const mediaKind = getMediaKind(entry.suffix);
             const showMedia = mediaKind !== "other" && !failedMediaIds.has(entry.id);
+            const isFavorite = entry.tag_ids.includes(TAG_FAVORITE_ID);
+            const isArchived = entry.tag_ids.includes(TAG_ARCHIVED_ID);
+            const isInactive = inactiveEntryIds.has(entry.id);
+            const trashFailureMessage = trashFailureMessagesByEntryId.get(entry.id);
+
             return (
               <button
                 key={entry.id}
                 type="button"
-                className={`thumb-card ${selected ? "thumb-card-selected" : ""}`}
+                className={[
+                  "thumb-card",
+                  selected ? "thumb-card-selected" : "",
+                  isArchived ? "thumb-card-archived" : "",
+                  isInactive ? "thumb-card-inactive" : "",
+                  trashFailureMessage ? "thumb-card-trash-failed" : ""
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
                 onClick={(event) => onSelectEntry(entry.id, event)}
+                onContextMenu={(event) => {
+                  if (isInactive) {
+                    return;
+                  }
+                  openContextMenu(entry.id, event);
+                }}
+                title={
+                  isInactive
+                    ? `${entry.path}\nMoved to Trash. Refresh search to remove this card.`
+                    : (trashFailureMessage ? `${entry.path}\n${trashFailureMessage}` : entry.path)
+                }
                 aria-selected={selected}
+                disabled={isInactive}
               >
-                <div className="thumb-media">
+                <div className={`thumb-media ${isArchived ? "thumb-media-archived" : ""}`}>
                   {showMedia ? (
                     <img
                       src={getThumbnailUrl(entry.id, { kind: "grid", fit: "cover" })}
@@ -195,12 +407,22 @@ export function ThumbnailGridPane({
                       onError={() => markMediaFailed(entry.id)}
                     />
                   ) : null}
+                  {!showMedia ? <span className="thumb-media-icon">{iconForSuffix(entry.suffix)}</span> : null}
+                  {isArchived ? (
+                    <span className="thumb-archive-badge" aria-label="Archived">
+                      <Archive size={12} />
+                    </span>
+                  ) : null}
+                  {isFavorite ? (
+                    <span className="thumb-favorite-badge" aria-label="Favorited">
+                      <Star size={12} fill="currentColor" />
+                    </span>
+                  ) : null}
                   {showMedia && mediaKind === "video" ? (
                     <span className="thumb-video-badge" aria-hidden="true">
                       ▶
                     </span>
                   ) : null}
-                  {!showMedia ? <span className="thumb-media-icon">{iconForSuffix(entry.suffix)}</span> : null}
                 </div>
                 <span className="thumb-label" title={entry.path}>
                   {entry.filename}
@@ -215,6 +437,99 @@ export function ThumbnailGridPane({
         {searchPending ? <p className="thumb-loading">Loading results...</p> : null}
         {loadingMore ? <p className="thumb-loading">Loading more...</p> : null}
       </div>
+
+      {contextMenu && contextMenuEnabled ? (
+        <div
+          ref={contextMenuRef}
+          className="thumb-context-menu"
+          role="menu"
+          style={contextMenuStyle}
+        >
+          <button
+            type="button"
+            role="menuitem"
+            className="thumb-context-menu-item"
+            disabled={contextMenu.state.disabled}
+            onClick={() => triggerContextAction("open_file")}
+          >
+            Open
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="thumb-context-menu-item"
+            disabled={contextMenu.state.disabled}
+            onClick={() => triggerContextAction("reveal_file")}
+          >
+            {contextMenu.state.revealLabel}
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="thumb-context-menu-item"
+            disabled={contextMenu.state.disabled}
+            onClick={() => triggerContextAction("copy_filepath")}
+          >
+            Copy Filepath
+          </button>
+
+          <div className="thumb-context-menu-separator" />
+
+          <button
+            type="button"
+            role="menuitem"
+            className="thumb-context-menu-item"
+            disabled={contextMenu.state.disabled}
+            onClick={() => triggerContextAction("copy_tags")}
+          >
+            Copy Tags
+          </button>
+          {contextMenu.state.canPaste ? (
+            <button
+              type="button"
+              role="menuitem"
+              className="thumb-context-menu-item"
+              disabled={contextMenu.state.disabled}
+              onClick={() => triggerContextAction("paste_tags")}
+            >
+              Paste Tags
+            </button>
+          ) : null}
+
+          <div className="thumb-context-menu-separator" />
+
+          <button
+            type="button"
+            role="menuitem"
+            className="thumb-context-menu-item"
+            disabled={contextMenu.state.disabled}
+            onClick={() => triggerContextAction("favorite_toggle")}
+          >
+            {contextMenu.state.favoriteMode === "favorite" ? "Favorite" : "Unfavorite"}
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="thumb-context-menu-item"
+            disabled={contextMenu.state.disabled}
+            onClick={() => triggerContextAction("archive_toggle")}
+          >
+            {contextMenu.state.archiveMode === "archive" ? "Archive" : "Unarchive"}
+          </button>
+
+          <div className="thumb-context-menu-separator" />
+
+          <button
+            type="button"
+            role="menuitem"
+            className="thumb-context-menu-item thumb-context-menu-item-danger"
+            disabled={contextMenu.state.disabled}
+            onClick={() => triggerContextAction("delete_to_trash")}
+          >
+            Delete to Trash
+          </button>
+        </div>
+      ) : null}
     </section>
   );
 }

@@ -726,6 +726,120 @@
         }
       }
     },
+    "/api/v1/entries:trash": {
+      "post": {
+        "summary": "Trash Entries",
+        "operationId": "trash_entries_api_v1_entries_trash_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TrashEntriesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrashEntriesResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/entries:open": {
+      "post": {
+        "summary": "Open Entries",
+        "operationId": "open_entries_api_v1_entries_open_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenEntriesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenEntriesResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/entries:reveal": {
+      "post": {
+        "summary": "Reveal Entry",
+        "operationId": "reveal_entry_api_v1_entries_reveal_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevealEntryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/tags/{tag_id}": {
       "patch": {
         "summary": "Update Tag",
@@ -909,6 +1023,34 @@
   },
   "components": {
     "schemas": {
+      "ConfirmationSettings": {
+        "properties": {
+          "confirm_before_trash": {
+            "type": "boolean",
+            "title": "Confirm Before Trash",
+            "default": true
+          }
+        },
+        "type": "object",
+        "title": "ConfirmationSettings"
+      },
+      "ConfirmationSettingsUpdateRequest": {
+        "properties": {
+          "confirm_before_trash": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirm Before Trash"
+          }
+        },
+        "type": "object",
+        "title": "ConfirmationSettingsUpdateRequest"
+      },
       "EntryResponse": {
         "properties": {
           "id": {
@@ -1004,6 +1146,47 @@
           "suffix"
         ],
         "title": "EntryResponse"
+      },
+      "EntryShellActionFailure": {
+        "properties": {
+          "entry_id": {
+            "type": "integer",
+            "title": "Entry Id"
+          },
+          "path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Path"
+          },
+          "reason_code": {
+            "$ref": "#/components/schemas/EntryShellActionFailureReasonCode"
+          }
+        },
+        "type": "object",
+        "required": [
+          "entry_id",
+          "reason_code"
+        ],
+        "title": "EntryShellActionFailure"
+      },
+      "EntryShellActionFailureReasonCode": {
+        "type": "string",
+        "enum": [
+          "ENTRY_NOT_FOUND",
+          "MISSING_ON_DISK",
+          "NOT_A_FILE",
+          "PERMISSION_DENIED",
+          "COMMAND_NOT_FOUND",
+          "OS_ERROR",
+          "UNKNOWN_ERROR"
+        ],
+        "title": "EntryShellActionFailureReasonCode"
       },
       "EntrySummaryResponse": {
         "properties": {
@@ -1459,6 +1642,57 @@
         ],
         "title": "LibraryStateResponse"
       },
+      "OpenEntriesRequest": {
+        "properties": {
+          "entry_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "maxItems": 5,
+            "title": "Entry Ids"
+          }
+        },
+        "type": "object",
+        "title": "OpenEntriesRequest"
+      },
+      "OpenEntriesResponse": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success"
+          },
+          "opened_entry_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Opened Entry Ids"
+          },
+          "opened_count": {
+            "type": "integer",
+            "title": "Opened Count",
+            "default": 0
+          },
+          "failed_count": {
+            "type": "integer",
+            "title": "Failed Count",
+            "default": 0
+          },
+          "failed_entries": {
+            "items": {
+              "$ref": "#/components/schemas/EntryShellActionFailure"
+            },
+            "type": "array",
+            "title": "Failed Entries"
+          }
+        },
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "title": "OpenEntriesResponse"
+      },
       "PreviewKind": {
         "type": "string",
         "enum": [
@@ -1547,6 +1781,19 @@
           "preview_kind"
         ],
         "title": "PreviewResponse"
+      },
+      "RevealEntryRequest": {
+        "properties": {
+          "entry_id": {
+            "type": "integer",
+            "title": "Entry Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "entry_id"
+        ],
+        "title": "RevealEntryRequest"
       },
       "SearchRequest": {
         "properties": {
@@ -1672,6 +1919,9 @@
           },
           "thumbnails": {
             "$ref": "#/components/schemas/ThumbnailSettings"
+          },
+          "confirmations": {
+            "$ref": "#/components/schemas/ConfirmationSettings"
           }
         },
         "type": "object",
@@ -1738,6 +1988,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/ThumbnailSettingsUpdateRequest"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "confirmations": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConfirmationSettingsUpdateRequest"
               },
               {
                 "type": "null"
@@ -2331,6 +2591,96 @@
         },
         "type": "object",
         "title": "ThumbnailSettingsUpdateRequest"
+      },
+      "TrashEntriesRequest": {
+        "properties": {
+          "entry_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Entry Ids"
+          }
+        },
+        "type": "object",
+        "title": "TrashEntriesRequest"
+      },
+      "TrashEntriesResponse": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success"
+          },
+          "deleted_entry_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Deleted Entry Ids"
+          },
+          "deleted_count": {
+            "type": "integer",
+            "title": "Deleted Count",
+            "default": 0
+          },
+          "failed_count": {
+            "type": "integer",
+            "title": "Failed Count",
+            "default": 0
+          },
+          "failed_entries": {
+            "items": {
+              "$ref": "#/components/schemas/TrashEntryFailure"
+            },
+            "type": "array",
+            "title": "Failed Entries"
+          }
+        },
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "title": "TrashEntriesResponse"
+      },
+      "TrashEntryFailure": {
+        "properties": {
+          "entry_id": {
+            "type": "integer",
+            "title": "Entry Id"
+          },
+          "path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Path"
+          },
+          "reason_code": {
+            "$ref": "#/components/schemas/TrashFailureReasonCode"
+          }
+        },
+        "type": "object",
+        "required": [
+          "entry_id",
+          "reason_code"
+        ],
+        "title": "TrashEntryFailure"
+      },
+      "TrashFailureReasonCode": {
+        "type": "string",
+        "enum": [
+          "ENTRY_NOT_FOUND",
+          "MISSING_ON_DISK",
+          "NOT_A_FILE",
+          "PERMISSION_DENIED",
+          "OS_ERROR",
+          "UNKNOWN_ERROR"
+        ],
+        "title": "TrashFailureReasonCode"
       },
       "UpdateFieldRequest": {
         "properties": {

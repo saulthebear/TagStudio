@@ -7,11 +7,13 @@ type SettingsModalProps = {
   ascending: boolean;
   showHiddenEntries: boolean;
   pageSize: number;
+  confirmBeforeTrash: boolean;
   savePending: boolean;
   onSortingModeChange: (value: SortingMode) => void;
   onAscendingChange: (value: boolean) => void;
   onShowHiddenChange: (value: boolean) => void;
   onPageSizeChange: (value: number) => void;
+  onConfirmBeforeTrashChange: (value: boolean) => void;
   onSave: () => void;
   onClose: () => void;
 };
@@ -28,11 +30,13 @@ export function SettingsModal({
   ascending,
   showHiddenEntries,
   pageSize,
+  confirmBeforeTrash,
   savePending,
   onSortingModeChange,
   onAscendingChange,
   onShowHiddenChange,
   onPageSizeChange,
+  onConfirmBeforeTrashChange,
   onSave,
   onClose
 }: SettingsModalProps) {
@@ -98,6 +102,16 @@ export function SettingsModal({
             onChange={(event) => onShowHiddenChange(event.target.checked)}
           />
           <span>Show hidden entries by default</span>
+        </label>
+
+        <label className="settings-row settings-checkbox">
+          <input
+            className="toggle-base"
+            type="checkbox"
+            checked={confirmBeforeTrash}
+            onChange={(event) => onConfirmBeforeTrashChange(event.target.checked)}
+          />
+          <span>Ask before moving files to Trash</span>
         </label>
 
         <div className="overlay-panel-actions">

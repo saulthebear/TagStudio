@@ -21,6 +21,7 @@ export type SettingsDraft = {
   ascending: boolean;
   showHiddenEntries: boolean;
   pageSize: number;
+  confirmBeforeTrash: boolean;
 };
 
 export const DEFAULT_MAIN_SPLIT: SplitPaneState = {
@@ -41,7 +42,8 @@ export const DEFAULT_DRAFT: SettingsDraft = {
   sortingMode: "file.date_added",
   ascending: false,
   showHiddenEntries: false,
-  pageSize: 200
+  pageSize: 200,
+  confirmBeforeTrash: true
 };
 
 export function dedupeEntries(entries: EntrySummaryResponse[]): EntrySummaryResponse[] {

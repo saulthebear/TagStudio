@@ -40,6 +40,7 @@ type UseSearchWorkflowResult = {
   loadingMore: boolean;
   searchResultsStale: boolean;
   markSearchResultsStale: () => void;
+  applyTagMutationToEntries: (entryIds: number[], tagId: number, mode: "add" | "remove") => void;
   executeSearch: ExecuteSearchFn;
   searchFromInput: () => void;
   loadMore: () => void;
@@ -262,6 +263,41 @@ export function useSearchWorkflow({
     setSearchResultsStale(true);
   }, []);
 
+  const applyTagMutationToEntries = useCallback(
+    (entryIds: number[], tagId: number, mode: "add" | "remove") => {
+      if (entryIds.length === 0) {
+        return;
+      }
+
+      const targetIds = new Set(entryIds);
+      setEntries((prev) =>
+        prev.map((entry) => {
+          if (!targetIds.has(entry.id)) {
+            return entry;
+          }
+
+          const hasTag = entry.tag_ids.includes(tagId);
+          if (mode === "add" && hasTag) {
+            return entry;
+          }
+          if (mode === "remove" && !hasTag) {
+            return entry;
+          }
+
+          const nextTagIds =
+            mode === "add"
+              ? [...entry.tag_ids, tagId]
+              : entry.tag_ids.filter((candidateTagId) => candidateTagId !== tagId);
+          return {
+            ...entry,
+            tag_ids: nextTagIds
+          };
+        })
+      );
+    },
+    []
+  );
+
   return {
     searchInput,
     setSearchInput,
@@ -274,6 +310,7 @@ export function useSearchWorkflow({
     loadingMore,
     searchResultsStale,
     markSearchResultsStale,
+    applyTagMutationToEntries,
     executeSearch,
     searchFromInput,
     loadMore

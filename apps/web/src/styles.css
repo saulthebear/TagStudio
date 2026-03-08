@@ -280,6 +280,7 @@ body {
 }
 
 .thumb-pane {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
@@ -333,6 +334,39 @@ body {
   background: color-mix(in oklab, #3b82f6 10%, white 90%);
 }
 
+.thumb-card-archived .thumb-label {
+  color: #475569;
+}
+
+.thumb-card-inactive {
+  opacity: 0.42;
+  filter: grayscale(0.92);
+  border-color: #cbd5e1;
+  background: color-mix(in oklab, #94a3b8 12%, white 88%);
+  cursor: not-allowed;
+}
+
+.thumb-card-inactive:hover {
+  border-color: #cbd5e1;
+  background: color-mix(in oklab, #94a3b8 12%, white 88%);
+}
+
+.thumb-card-inactive .thumb-media {
+  filter: grayscale(1) brightness(0.7);
+}
+
+.thumb-card-trash-failed {
+  box-shadow:
+    inset 0 0 0 2px rgb(220 38 38 / 0.72),
+    0 0 0 1px rgb(220 38 38 / 0.35);
+}
+
+.thumb-card-selected.thumb-card-trash-failed {
+  box-shadow:
+    inset 0 0 0 2px rgb(220 38 38 / 0.85),
+    0 0 0 1px rgb(59 130 246 / 0.45);
+}
+
 .thumb-media {
   position: relative;
   width: 100%;
@@ -343,6 +377,10 @@ body {
   display: grid;
   place-items: center;
   overflow: hidden;
+}
+
+.thumb-media-archived {
+  filter: saturate(0.82) brightness(0.78);
 }
 
 .thumb-media-image,
@@ -364,6 +402,31 @@ body {
   padding: 0.25rem 0.45rem;
   border: 1px solid #334155;
   border-radius: 0.45rem;
+}
+
+.thumb-archive-badge,
+.thumb-favorite-badge {
+  position: absolute;
+  width: 1.45rem;
+  height: 1.45rem;
+  border-radius: 999px;
+  border: 1px solid rgb(255 255 255 / 0.35);
+  background: rgb(15 23 42 / 0.78);
+  color: #f8fafc;
+  display: grid;
+  place-items: center;
+  line-height: 1;
+}
+
+.thumb-archive-badge {
+  left: 0.45rem;
+  top: 0.45rem;
+}
+
+.thumb-favorite-badge {
+  right: 0.45rem;
+  top: 0.45rem;
+  color: #facc15;
 }
 
 .thumb-video-badge {
@@ -392,6 +455,60 @@ body {
 
 .thumb-grid-sentinel {
   height: 1px;
+}
+
+.thumb-context-menu {
+  position: absolute;
+  z-index: 80;
+  width: 240px;
+  max-width: calc(100% - 1px);
+  max-height: calc(100% - 1px);
+  border-radius: 0.7rem;
+  border: 1px solid var(--color-border-soft);
+  background: white;
+  box-shadow:
+    0 20px 40px rgb(15 23 42 / 0.2),
+    0 4px 14px rgb(15 23 42 / 0.14);
+  padding: 0.35rem;
+  display: grid;
+  gap: 0.2rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.thumb-context-menu-item {
+  width: 100%;
+  text-align: left;
+  border: 0;
+  border-radius: 0.5rem;
+  background: transparent;
+  color: #0f172a;
+  padding: 0.42rem 0.55rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.thumb-context-menu-item:hover:not(:disabled) {
+  background: color-mix(in oklab, #3b82f6 10%, white 90%);
+}
+
+.thumb-context-menu-item:disabled {
+  color: #64748b;
+  cursor: default;
+}
+
+.thumb-context-menu-item-danger {
+  color: #b91c1c;
+}
+
+.thumb-context-menu-item-danger:hover:not(:disabled) {
+  background: color-mix(in oklab, #ef4444 12%, white 88%);
+}
+
+.thumb-context-menu-separator {
+  height: 1px;
+  margin: 0.2rem 0;
+  background: color-mix(in oklab, var(--color-border-soft) 70%, white 30%);
 }
 
 .thumb-empty,
@@ -675,6 +792,20 @@ body {
   gap: 0.5rem;
 }
 
+.trash-confirm-panel {
+  width: min(560px, 100%);
+}
+
+.trash-confirm-copy {
+  margin: 0;
+  color: #334155;
+  font-size: 0.9rem;
+}
+
+.trash-confirm-checkbox {
+  margin-top: 0.1rem;
+}
+
 .modal-drag-handle {
   display: flex;
   align-items: center;
@@ -726,6 +857,31 @@ body.modal-dragging {
   grid-template-columns: auto 1fr;
   align-items: center;
   gap: 0.5rem;
+}
+
+.undo-snackbar {
+  position: fixed;
+  z-index: 90;
+  left: 50%;
+  bottom: max(0.8rem, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  min-width: min(460px, calc(100vw - 1.5rem));
+  max-width: min(640px, calc(100vw - 1.5rem));
+  border: 1px solid var(--color-border-soft);
+  border-radius: 0.75rem;
+  background: rgb(15 23 42 / 0.96);
+  color: #f8fafc;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 0.55rem 0.7rem;
+  box-shadow: 0 10px 32px rgb(15 23 42 / 0.34);
+}
+
+.undo-snackbar-message {
+  font-size: 0.84rem;
+  color: inherit;
 }
 
 .mobile-pane-tabs {
@@ -836,6 +992,12 @@ body.modal-dragging {
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
+}
+
+.metadata-tag-actions-buttons {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
 }
 
 .metadata-tag-list {
