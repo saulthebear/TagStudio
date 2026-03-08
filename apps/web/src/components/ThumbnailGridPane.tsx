@@ -63,6 +63,12 @@ type ContextMenuRenderState = {
   x: number;
   y: number;
   state: ThumbnailContextMenuState;
+  bounds: {
+    left: number;
+    right: number;
+    top: number;
+    bottom: number;
+  };
 };
 
 const IMAGE_SUFFIXES = new Set([
@@ -135,6 +141,7 @@ export function ThumbnailGridPane({
   trashFailureMessagesByEntryId,
   inactiveEntryIds
 }: ThumbnailGridPaneProps) {
+  const paneRef = useRef<HTMLElement | null>(null);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
   const [failedMediaIds, setFailedMediaIds] = useState<Set<number>>(() => new Set());
@@ -142,6 +149,24 @@ export function ThumbnailGridPane({
 
   const closeContextMenu = useCallback(() => {
     setContextMenu(null);
+  }, []);
+
+  const getMenuBounds = useCallback(() => {
+    const paneRect = paneRef.current?.getBoundingClientRect();
+    if (!paneRect) {
+      return {
+        left: 0,
+        right: window.innerWidth,
+        top: 0,
+        bottom: window.innerHeight
+      };
+    }
+    return {
+      left: paneRect.left,
+      right: paneRect.right,
+      top: paneRect.top,
+      bottom: paneRect.bottom
+    };
   }, []);
 
   const openContextMenu = useCallback(
@@ -153,14 +178,19 @@ export function ThumbnailGridPane({
       event.preventDefault();
       const state = getContextMenuState(entryId);
       onContextMenuOpenTarget(entryId, state.targetEntryIds);
+      const bounds = getMenuBounds();
+      const offset = 8;
+      const nextX = Math.max(bounds.left + offset, Math.min(event.clientX, bounds.right - offset));
+      const nextY = Math.max(bounds.top + offset, Math.min(event.clientY, bounds.bottom - offset));
 
       setContextMenu({
-        x: Math.max(8, event.clientX),
-        y: Math.max(8, event.clientY),
-        state
+        x: nextX,
+        y: nextY,
+        state,
+        bounds
       });
     },
-    [contextMenuEnabled, getContextMenuState, onContextMenuOpenTarget]
+    [contextMenuEnabled, getContextMenuState, getMenuBounds, onContextMenuOpenTarget]
   );
 
   const triggerContextAction = useCallback(
@@ -226,8 +256,12 @@ export function ThumbnailGridPane({
 
     const menuRect = contextMenuRef.current.getBoundingClientRect();
     const offset = 8;
-    const nextX = Math.max(offset, Math.min(contextMenu.x, window.innerWidth - menuRect.width - offset));
-    const nextY = Math.max(offset, Math.min(contextMenu.y, window.innerHeight - menuRect.height - offset));
+    const availableMaxX = contextMenu.bounds.right - menuRect.width - offset;
+    const availableMaxY = contextMenu.bounds.bottom - menuRect.height - offset;
+    const minX = contextMenu.bounds.left + offset;
+    const minY = contextMenu.bounds.top + offset;
+    const nextX = availableMaxX >= minX ? Math.max(minX, Math.min(contextMenu.x, availableMaxX)) : minX;
+    const nextY = availableMaxY >= minY ? Math.max(minY, Math.min(contextMenu.y, availableMaxY)) : minY;
 
     if (nextX === contextMenu.x && nextY === contextMenu.y) {
       return;
@@ -243,6 +277,21 @@ export function ThumbnailGridPane({
         y: nextY
       };
     });
+  }, [contextMenu]);
+
+  const contextMenuStyle = useMemo(() => {
+    if (!contextMenu) {
+      return undefined;
+    }
+    const offset = 8;
+    const availableWidth = Math.max(64, contextMenu.bounds.right - contextMenu.bounds.left - offset * 2);
+    const availableHeight = Math.max(64, contextMenu.bounds.bottom - contextMenu.bounds.top - offset * 2);
+    return {
+      left: contextMenu.x,
+      top: contextMenu.y,
+      maxWidth: availableWidth,
+      maxHeight: availableHeight
+    };
   }, [contextMenu]);
 
   useEffect(() => {
@@ -297,7 +346,7 @@ export function ThumbnailGridPane({
   }, [activeQuery, totalCount]);
 
   return (
-    <section className="pane panel thumb-pane">
+    <section ref={paneRef} className="pane panel thumb-pane">
       <header className="thumb-pane-header">
         <h2 className="panel-title m-0">Files</h2>
         <p className="thumb-pane-subtitle m-0">{subtitle}</p>
@@ -393,7 +442,7 @@ export function ThumbnailGridPane({
           ref={contextMenuRef}
           className="thumb-context-menu"
           role="menu"
-          style={{ left: contextMenu.x, top: contextMenu.y }}
+          style={contextMenuStyle}
         >
           <button
             type="button"
