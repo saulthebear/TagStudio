@@ -9,6 +9,8 @@ import { useEffect, useMemo, useState } from "react";
 
 import { api } from "@/api/client";
 import { useDraggableModalPosition } from "@/hooks/useDraggableModalPosition";
+import { useSearchInputFocus } from "@/hooks/useSearchInputFocus";
+import { useTagColors } from "@/hooks/useTagColors";
 
 type UseTagEditorWorkflowParams = {
   open: boolean;
@@ -88,6 +90,7 @@ export function useTagEditorWorkflow({
   const [parentLimit, setParentLimit] = useState(25);
   const [colorPickerOpen, setColorPickerOpen] = useState(false);
   const [savePending, setSavePending] = useState(false);
+  const { inputRef: parentSearchInputRef, focusInput: focusParentSearchInput } = useSearchInputFocus();
 
   useEffect(() => {
     if (!open) {
@@ -131,11 +134,7 @@ export function useTagEditorWorkflow({
     enabled: open && parentPickerOpen
   });
 
-  const tagColorsQuery = useQuery({
-    queryKey: ["tag-colors"],
-    queryFn: () => api.getTagColors(),
-    enabled: open
-  });
+  const tagColorsQuery = useTagColors(open);
 
   useEffect(() => {
     if (!open) {
@@ -157,6 +156,14 @@ export function useTagEditorWorkflow({
     setColorPickerOpen(false);
     setSavePending(false);
   }, [initialName, mode, open, tag]);
+
+  useEffect(() => {
+    if (!open || !parentPickerOpen) {
+      return;
+    }
+
+    focusParentSearchInput();
+  }, [focusParentSearchInput, open, parentPickerOpen]);
 
   const tagById = useMemo(() => {
     const map = new Map<number, TagResponse>();
@@ -282,6 +289,7 @@ export function useTagEditorWorkflow({
     parentPickerOpen,
     parentQuery,
     parentLimit,
+    parentSearchInputRef,
     colorPickerOpen,
     savePending,
     canSave,

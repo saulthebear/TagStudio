@@ -1,10 +1,17 @@
 import type { TagResponse } from "@tagstudio/api-client";
 import { useQuery } from "@tanstack/react-query";
-import { type KeyboardEventHandler, useEffect, useMemo, useState } from "react";
+import { type KeyboardEventHandler, useEffect, useMemo, useRef, useState } from "react";
 
 import { api } from "@/api/client";
 import { useDraggableModalPosition } from "@/hooks/useDraggableModalPosition";
-import { isEditShortcutKey, moveHighlightIndex, normalizeTagQuery, shouldShowCreateAndAdd } from "@/lib/tag-workflows";
+import { useSearchInputFocus } from "@/hooks/useSearchInputFocus";
+import {
+  isEditShortcutKey,
+  moveHighlightIndex,
+  normalizeTagQuery,
+  scoreTags,
+  shouldShowCreateAndAdd
+} from "@/lib/tag-workflows";
 
 export type AddTagsRow =
   | {
@@ -25,19 +32,11 @@ type UseAddTagsWorkflowParams = {
   onAfterTagChanged: () => Promise<void>;
 };
 
-function toSortedTags(tags: TagResponse[], query: string): TagResponse[] {
-  const sorted = [...tags].sort((a, b) => a.name.localeCompare(b.name));
-  const normalizedQuery = normalizeTagQuery(query);
-  if (!normalizedQuery) {
-    return sorted;
+function defaultHighlightIndex(rows: AddTagsRow[]): number {
+  if (rows.length > 1 && rows[0]?.kind === "create" && rows[1]?.kind === "tag") {
+    return 1;
   }
-
-  const priority = sorted
-    .filter((tag) => tag.name.toLowerCase().startsWith(normalizedQuery))
-    .sort((a, b) => a.name.length - b.name.length || a.name.localeCompare(b.name));
-
-  const rest = sorted.filter((tag) => !priority.some((priorityTag) => priorityTag.id === tag.id));
-  return [...priority, ...rest];
+  return 0;
 }
 
 export function useAddTagsWorkflow({
@@ -51,6 +50,7 @@ export function useAddTagsWorkflow({
   const [query, setQuery] = useState("");
   const [limit, setLimit] = useState(25);
   const [highlightedIndex, setHighlightedIndex] = useState(0);
+  const [autoHighlightTagMatch, setAutoHighlightTagMatch] = useState(true);
   const [pendingTagId, setPendingTagId] = useState<number | null>(null);
 
   const [editorOpen, setEditorOpen] = useState(false);
@@ -58,6 +58,21 @@ export function useAddTagsWorkflow({
   const [editorTag, setEditorTag] = useState<TagResponse | null>(null);
   const [editorInitialName, setEditorInitialName] = useState("");
   const [createAndAttach, setCreateAndAttach] = useState(false);
+  const { inputRef: searchInputRef, focusInput: focusSearchInput } = useSearchInputFocus();
+  const isMountedRef = useRef(true);
+
+  const clearSearchState = () => {
+    setQuery("");
+    setHighlightedIndex(0);
+    setAutoHighlightTagMatch(true);
+  };
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const { panelRef, panelStyle, dragHandleProps, isDragging } = useDraggableModalPosition({ open });
 
@@ -88,15 +103,16 @@ export function useAddTagsWorkflow({
     if (!open) {
       return;
     }
-    setQuery("");
+
+    clearSearchState();
     setLimit(25);
-    setHighlightedIndex(0);
     setPendingTagId(null);
     setEditorOpen(false);
     setEditorTag(null);
     setEditorInitialName("");
     setCreateAndAttach(false);
-  }, [open]);
+    focusSearchInput();
+  }, [focusSearchInput, open]);
 
   const membershipByTagId = useMemo(() => {
     const map = new Map<number, Set<number>>();
@@ -111,7 +127,7 @@ export function useAddTagsWorkflow({
     return map;
   }, [entryTagIdsByEntry, selectedEntryIds]);
 
-  const orderedTags = useMemo(() => toSortedTags(tagsQuery.data ?? [], query), [query, tagsQuery.data]);
+  const orderedTags = useMemo(() => scoreTags(tagsQuery.data ?? [], query), [query, tagsQuery.data]);
   const hasExactMatch = useMemo(() => !shouldShowCreateAndAdd(query, orderedTags), [orderedTags, query]);
 
   const rows = useMemo<AddTagsRow[]>(() => {
@@ -123,11 +139,26 @@ export function useAddTagsWorkflow({
     return nextRows;
   }, [hasExactMatch, orderedTags, query]);
 
+  const preferredHighlightIndex = useMemo(() => defaultHighlightIndex(rows), [rows]);
+
   useEffect(() => {
-    if (highlightedIndex >= rows.length) {
-      setHighlightedIndex(0);
+    if (rows.length === 0) {
+      if (highlightedIndex !== 0) {
+        setHighlightedIndex(0);
+      }
+      return;
     }
-  }, [highlightedIndex, rows.length]);
+
+    if (highlightedIndex >= rows.length) {
+      setHighlightedIndex(preferredHighlightIndex);
+      return;
+    }
+
+    if (autoHighlightTagMatch && highlightedIndex === 0 && preferredHighlightIndex > 0) {
+      setHighlightedIndex(preferredHighlightIndex);
+      setAutoHighlightTagMatch(false);
+    }
+  }, [autoHighlightTagMatch, highlightedIndex, preferredHighlightIndex, rows.length]);
 
   const openCreateEditor = (name: string) => {
     setEditorMode("create");
@@ -153,11 +184,25 @@ export function useAddTagsWorkflow({
     }
 
     setPendingTagId(tagId);
+    if (isMountedRef.current) {
+      clearSearchState();
+      focusSearchInput();
+    }
+    let addSucceeded = false;
     try {
       await onAddTagToEntries(targetEntryIds, tagId);
+      addSucceeded = true;
       await onAfterTagChanged();
+      await tagsQuery.refetch();
+    } catch (error) {
+      console.error("Failed to finish add tag workflow", error);
     } finally {
-      setPendingTagId(null);
+      if (isMountedRef.current) {
+        if (!addSucceeded) {
+          setAutoHighlightTagMatch(true);
+        }
+        setPendingTagId(null);
+      }
     }
   };
 
@@ -172,12 +217,14 @@ export function useAddTagsWorkflow({
   const onQueryKeyDown: KeyboardEventHandler<HTMLInputElement> = async (event) => {
     if (event.key === "ArrowDown") {
       event.preventDefault();
+      setAutoHighlightTagMatch(false);
       setHighlightedIndex((prev) => moveHighlightIndex(prev, rows.length, "down"));
       return;
     }
 
     if (event.key === "ArrowUp") {
       event.preventDefault();
+      setAutoHighlightTagMatch(false);
       setHighlightedIndex((prev) => moveHighlightIndex(prev, rows.length, "up"));
       return;
     }
@@ -204,6 +251,7 @@ export function useAddTagsWorkflow({
   const onQueryChange = (nextValue: string) => {
     setQuery(nextValue);
     setHighlightedIndex(0);
+    setAutoHighlightTagMatch(true);
   };
 
   const onTagSaved = (savedTag: TagResponse) => {
@@ -217,7 +265,12 @@ export function useAddTagsWorkflow({
       }
       await onAfterTagChanged();
       await tagsQuery.refetch();
+      if (isMountedRef.current) {
+        clearSearchState();
+        focusSearchInput();
+      }
     };
+
     void afterSave().catch((error) => {
       console.error("Failed to finish tag save workflow", error);
     });
@@ -228,6 +281,7 @@ export function useAddTagsWorkflow({
     panelStyle,
     dragHandleProps,
     isDragging,
+    searchInputRef,
     query,
     limit,
     highlightedIndex,

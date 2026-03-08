@@ -946,7 +946,7 @@ body.modal-dragging {
 }
 
 .add-tags-panel {
-  width: min(760px, calc(100vw - (2 * var(--modal-margin))));
+  width: min(620px, calc(100vw - (2 * var(--modal-margin))));
   max-height: min(92vh, 860px);
   overflow: hidden;
 }
@@ -991,9 +991,24 @@ body.modal-dragging {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 0.65rem;
   padding: 0.45rem 0.55rem;
   border-radius: 0.6rem;
   cursor: pointer;
+}
+
+.add-tags-row-label-chip {
+  display: inline-flex;
+  align-items: center;
+  max-width: min(100%, 26rem);
+  border: 1px solid var(--color-border-soft);
+  border-radius: 999px;
+  background: white;
+  color: #1e293b;
+  padding: 0.12rem 0.5rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .add-tags-row-main:disabled {
