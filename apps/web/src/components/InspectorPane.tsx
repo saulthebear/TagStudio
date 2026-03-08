@@ -8,7 +8,7 @@ import {
   type TagUpdatePayload
 } from "@tagstudio/api-client";
 import { Button } from "@tagstudio/ui";
-import { useCallback, useMemo, useState } from "react";
+import { type SyntheticEvent, useCallback, useMemo, useState } from "react";
 
 import { AddTagsModal } from "@/components/AddTagsModal";
 import { SplitPane, type SplitPaneState } from "@/components/SplitPane";
@@ -54,6 +54,8 @@ type InspectorPaneProps = {
   onSplitStateChange: (next: SplitPaneState) => void;
   disableSplit: boolean;
   mobileSection: "preview" | "metadata";
+  videoPreviewStartsMuted: boolean;
+  onVideoPreviewUnmuted: () => void;
 };
 
 type AggregateTagRow = {
@@ -104,7 +106,9 @@ export function InspectorPane({
   splitState,
   onSplitStateChange,
   disableSplit,
-  mobileSection
+  mobileSection,
+  videoPreviewStartsMuted,
+  onVideoPreviewUnmuted
 }: InspectorPaneProps) {
   const previewSection = (
     <div className="inspector-section">
@@ -115,6 +119,8 @@ export function InspectorPane({
         getMediaUrl={getMediaUrl}
         getThumbnailUrl={getThumbnailUrl}
         resolveApiUrl={resolveApiUrl}
+        videoPreviewStartsMuted={videoPreviewStartsMuted}
+        onVideoPreviewUnmuted={onVideoPreviewUnmuted}
       />
     </div>
   );
@@ -191,6 +197,8 @@ type PreviewContentProps = {
     }
   ) => string;
   resolveApiUrl: (path: string) => string;
+  videoPreviewStartsMuted: boolean;
+  onVideoPreviewUnmuted: () => void;
 };
 
 function PreviewContent({
@@ -198,7 +206,9 @@ function PreviewContent({
   preview,
   getMediaUrl,
   getThumbnailUrl,
-  resolveApiUrl
+  resolveApiUrl,
+  videoPreviewStartsMuted,
+  onVideoPreviewUnmuted
 }: PreviewContentProps) {
   const hasSelectedEntry = selectedEntry !== null;
   const animatedImageSource = useMemo(() => {
@@ -210,6 +220,11 @@ function PreviewContent({
     }
     return preview.media_url ? resolveApiUrl(preview.media_url) : getMediaUrl(selectedEntry.id);
   }, [getMediaUrl, hasSelectedEntry, preview, resolveApiUrl, selectedEntry]);
+  const handleVideoVolumeChange = useCallback((event: SyntheticEvent<HTMLVideoElement>) => {
+    if (!event.currentTarget.muted) {
+      onVideoPreviewUnmuted();
+    }
+  }, [onVideoPreviewUnmuted]);
 
   return (
     <div className="preview-content">
@@ -237,7 +252,8 @@ function PreviewContent({
           preload="metadata"
           autoPlay
           loop
-          muted={true}
+          muted={videoPreviewStartsMuted}
+          onVolumeChange={handleVideoVolumeChange}
           playsInline
           controls
           className="inspector-video"

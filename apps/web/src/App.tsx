@@ -36,6 +36,7 @@ export function App() {
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
   const [selectedEntryIds, setSelectedEntryIds] = useState<number[]>([]);
   const [selectionAnchorId, setSelectionAnchorId] = useState<number | null>(null);
+  const [videoPreviewStartsMuted, setVideoPreviewStartsMuted] = useState(true);
 
   const onClearError = useCallback(() => {
     setUiError(null);
@@ -43,6 +44,9 @@ export function App() {
 
   const onError = useCallback((message: string) => {
     setUiError(message);
+  }, []);
+  const handleVideoPreviewUnmuted = useCallback(() => {
+    setVideoPreviewStartsMuted(false);
   }, []);
 
   useEffect(() => {
@@ -316,6 +320,8 @@ export function App() {
       onSplitStateChange={setInspectorSplitState}
       disableSplit={isMobile}
       mobileSection={mobileActivePane === "metadata" ? "metadata" : "preview"}
+      videoPreviewStartsMuted={videoPreviewStartsMuted}
+      onVideoPreviewUnmuted={handleVideoPreviewUnmuted}
     />
   );
 

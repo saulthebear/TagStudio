@@ -249,7 +249,8 @@ test("uses media URLs for animated images and autoplays looping videos in previe
     { id: 502, path: "images/anim.APNG", filename: "anim.APNG", suffix: ".APNG", tag_ids: [] },
     { id: 503, path: "images/anim.WebP", filename: "anim.WebP", suffix: ".WebP", tag_ids: [] },
     { id: 504, path: "images/still.png", filename: "still.png", suffix: ".png", tag_ids: [] },
-    { id: 505, path: "videos/loop.mp4", filename: "loop.mp4", suffix: ".mp4", tag_ids: [] }
+    { id: 505, path: "videos/loop.mp4", filename: "loop.mp4", suffix: ".mp4", tag_ids: [] },
+    { id: 506, path: "videos/loop-two.mp4", filename: "loop-two.mp4", suffix: ".mp4", tag_ids: [] }
   ];
 
   const settingsPayload = {
@@ -340,13 +341,14 @@ test("uses media URLs for animated images and autoplays looping videos in previe
     const previewMatch = /^\/api\/v1\/entries\/(\d+)\/preview$/.exec(pathname);
     if (previewMatch) {
       const entryId = Number(previewMatch[1]);
-      const kind = entryId === 505 ? "video" : "image";
+      const kind = entryId === 505 || entryId === 506 ? "video" : "image";
       const mediaTypeMap: Record<number, string> = {
         501: "IMAGE/GIF",
         502: "image/APNG",
         503: "image/webP",
         504: "image/png",
-        505: "video/mp4"
+        505: "video/mp4",
+        506: "video/mp4"
       };
       await fulfillJson(route, {
         entry_id: entryId,
@@ -372,7 +374,7 @@ test("uses media URLs for animated images and autoplays looping videos in previe
   await page.route(`${API_BASE_URL}/api/v1/entries/*/media`, async (route) => {
     const match = /\/api\/v1\/entries\/(\d+)\/media$/.exec(new URL(route.request().url()).pathname);
     const entryId = Number(match?.[1] ?? -1);
-    if (entryId === 505) {
+    if (entryId === 505 || entryId === 506) {
       await route.fulfill({ status: 200, contentType: "video/mp4", body: "not-real-video" });
       return;
     }
@@ -411,7 +413,21 @@ test("uses media URLs for animated images and autoplays looping videos in previe
     loop: true,
     muted: true,
     playsInline: true,
-    hasMutedAttr: true
+    hasMutedAttr: false
+  });
+
+  await previewVideo.evaluate((node) => {
+    node.muted = false;
+    node.dispatchEvent(new Event("volumechange"));
+  });
+  await page.locator(".thumb-card").filter({ hasText: "loop-two.mp4" }).click();
+  const followupVideoState = await previewVideo.evaluate((node) => ({
+    muted: node.muted,
+    hasMutedAttr: node.hasAttribute("muted")
+  }));
+  expect(followupVideoState).toEqual({
+    muted: false,
+    hasMutedAttr: false
   });
 });
 
