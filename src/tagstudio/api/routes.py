@@ -1,7 +1,7 @@
 import mimetypes
 import os
-import shutil
 import secrets
+import shutil
 import sys
 from pathlib import Path
 from typing import Any
@@ -15,9 +15,9 @@ from sqlalchemy.orm import Session
 
 from tagstudio.api.jobs import JobManager
 from tagstudio.api.schemas import (
+    EntryResponse,
     EntryShellActionFailure,
     EntryShellActionFailureReasonCode,
-    EntryResponse,
     FieldTypeResponse,
     HealthResponse,
     JobCreateResponse,
@@ -35,10 +35,6 @@ from tagstudio.api.schemas import (
     SettingsResponse,
     SettingsUpdateRequest,
     SuccessResponse,
-    TrashEntriesRequest,
-    TrashEntriesResponse,
-    TrashEntryFailure,
-    TrashFailureReasonCode,
     TagColorNamespaceResponse,
     TagColorResponse,
     TagCreateRequest,
@@ -50,6 +46,10 @@ from tagstudio.api.schemas import (
     ThumbnailKind,
     ThumbnailPrewarmRequest,
     ThumbnailPrewarmResponse,
+    TrashEntriesRequest,
+    TrashEntriesResponse,
+    TrashEntryFailure,
+    TrashFailureReasonCode,
     UpdateFieldRequest,
 )
 from tagstudio.api.serializers import (
@@ -59,13 +59,13 @@ from tagstudio.api.serializers import (
     serialize_tag_color,
 )
 from tagstudio.api.state import ApiState
-from tagstudio.core.utils.silent_subprocess import silent_popen
 from tagstudio.core.library.alchemy.constants import TAG_CHILDREN_ID_QUERY
 from tagstudio.core.library.alchemy.enums import BrowsingState, SortingModeEnum
 from tagstudio.core.library.alchemy.joins import TagParent
 from tagstudio.core.library.alchemy.library import Library, LibraryStatus
 from tagstudio.core.library.alchemy.models import Tag, TagAlias
 from tagstudio.core.media.thumbnail_pipeline import ThumbnailUnsupportedError
+from tagstudio.core.utils.silent_subprocess import silent_popen
 
 TEXT_SUFFIXES = {"txt", "md", "json", "toml", "yaml", "yml", "csv", "log", "py", "ts", "tsx"}
 VIDEO_SUFFIXES = {"mp4", "mov", "mkv", "webm", "avi", "m4v"}
@@ -149,11 +149,7 @@ def create_router(*, state: ApiState, jobs: JobManager) -> APIRouter:
         try:
             if sys.platform == "win32":
                 command = f'explorer /select,"{path.resolve()}"'
-                silent_popen(
-                    command,
-                    shell=True,
-                    close_fds=True
-                )
+                silent_popen(command, shell=True, close_fds=True)
                 return None
 
             if sys.platform == "darwin":
@@ -736,7 +732,10 @@ def create_router(*, state: ApiState, jobs: JobManager) -> APIRouter:
         if reason == EntryShellActionFailureReasonCode.COMMAND_NOT_FOUND:
             raise HTTPException(status_code=501, detail="No file manager command is available.")
         if reason == EntryShellActionFailureReasonCode.PERMISSION_DENIED:
-            raise HTTPException(status_code=403, detail="Permission denied while opening file manager.")
+            raise HTTPException(
+                status_code=403,
+                detail="Permission denied while opening file manager.",
+            )
         raise HTTPException(status_code=500, detail="Failed to reveal file in file manager.")
 
     @router.post("/tags", response_model=TagResponse)

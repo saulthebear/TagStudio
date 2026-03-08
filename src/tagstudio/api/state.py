@@ -239,7 +239,9 @@ class ApiState:
         confirmations = settings.get("confirmations")
         if not isinstance(confirmations, dict):
             confirmations = deepcopy(DEFAULT_WEB_SETTINGS["confirmations"])
-        confirmations["confirm_before_trash"] = bool(confirmations.get("confirm_before_trash", True))
+        confirmations["confirm_before_trash"] = bool(
+            confirmations.get("confirm_before_trash", True)
+        )
 
         settings["layout"] = layout
         settings["thumbnails"] = thumbs

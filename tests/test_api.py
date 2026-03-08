@@ -151,7 +151,10 @@ def test_entries_trash_os_error_does_not_delete_file() -> None:
             foo_id = ids["foo.txt"]
             foo_path = library_path / "foo.txt"
 
-            with patch("tagstudio.api.routes.send2trash", side_effect=OSError("simulated os error")):
+            with patch(
+                "tagstudio.api.routes.send2trash",
+                side_effect=OSError("simulated os error"),
+            ):
                 trash = client.post("/api/v1/entries:trash", json={"entry_ids": [foo_id]})
 
             assert trash.status_code == 200
