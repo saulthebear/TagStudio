@@ -45,6 +45,9 @@ export function App() {
   const onError = useCallback((message: string) => {
     setUiError(message);
   }, []);
+  const handleVideoPreviewUnmuted = useCallback(() => {
+    setVideoPreviewStartsMuted(false);
+  }, []);
 
   useEffect(() => {
     const onResize = () => {
@@ -318,7 +321,7 @@ export function App() {
       disableSplit={isMobile}
       mobileSection={mobileActivePane === "metadata" ? "metadata" : "preview"}
       videoPreviewStartsMuted={videoPreviewStartsMuted}
-      onVideoPreviewUnmuted={() => setVideoPreviewStartsMuted(false)}
+      onVideoPreviewUnmuted={handleVideoPreviewUnmuted}
     />
   );
 

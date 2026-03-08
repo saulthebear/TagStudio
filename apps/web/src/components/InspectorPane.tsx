@@ -8,7 +8,7 @@ import {
   type TagUpdatePayload
 } from "@tagstudio/api-client";
 import { Button } from "@tagstudio/ui";
-import { useCallback, useMemo, useState } from "react";
+import { type SyntheticEvent, useCallback, useMemo, useState } from "react";
 
 import { AddTagsModal } from "@/components/AddTagsModal";
 import { SplitPane, type SplitPaneState } from "@/components/SplitPane";
@@ -220,6 +220,11 @@ function PreviewContent({
     }
     return preview.media_url ? resolveApiUrl(preview.media_url) : getMediaUrl(selectedEntry.id);
   }, [getMediaUrl, hasSelectedEntry, preview, resolveApiUrl, selectedEntry]);
+  const handleVideoVolumeChange = useCallback((event: SyntheticEvent<HTMLVideoElement>) => {
+    if (!event.currentTarget.muted) {
+      onVideoPreviewUnmuted();
+    }
+  }, [onVideoPreviewUnmuted]);
 
   return (
     <div className="preview-content">
@@ -248,11 +253,7 @@ function PreviewContent({
           autoPlay
           loop
           muted={videoPreviewStartsMuted}
-          onVolumeChange={(event) => {
-            if (!event.currentTarget.muted) {
-              onVideoPreviewUnmuted();
-            }
-          }}
+          onVolumeChange={handleVideoVolumeChange}
           playsInline
           controls
           className="inspector-video"
