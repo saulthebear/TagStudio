@@ -112,6 +112,7 @@ class ThumbnailPipeline:
 
         self._config_lock = threading.RLock()
         self._cache_max_bytes = 0
+        self._cache_size_bytes = 0
         self._grid_size = grid_size
         self._preview_size = preview_size
         self._quality = quality
@@ -125,6 +126,7 @@ class ThumbnailPipeline:
         )
 
         self._key_locks: dict[str, threading.Lock] = {}
+        self._key_lock_ref_counts: dict[str, int] = {}
         self._key_locks_lock = threading.Lock()
 
         self._queue: PriorityQueue[tuple[int, int, _QueuedTask]] = PriorityQueue()
@@ -142,6 +144,8 @@ class ThumbnailPipeline:
             )
             worker.start()
             self._workers.append(worker)
+
+        self._cache_size_bytes = self._scan_cache_total_bytes()
 
     def close(self) -> None:
         self._stop_event.set()
@@ -167,6 +171,7 @@ class ThumbnailPipeline:
                 self._preview_size = max(self.MIN_SIZE, min(self.MAX_SIZE, int(preview_size)))
             if quality is not None:
                 self._quality = max(self.MIN_QUALITY, min(self.MAX_QUALITY, int(quality)))
+        self._evict_if_needed()
 
     def get_default_size(self, kind: ThumbnailKind) -> int:
         with self._config_lock:
@@ -193,18 +198,27 @@ class ThumbnailPipeline:
             return cache_path
 
         key_lock = self._get_key_lock(key)
-        with key_lock:
-            if cache_path.exists():
-                self._touch(cache_path)
+        try:
+            with key_lock:
+                if cache_path.exists():
+                    self._touch(cache_path)
+                    return cache_path
+
+                image = self._render_thumbnail(entry_path, options)
+                if image is None:
+                    raise ThumbnailUnsupportedError(f"Unsupported thumbnail input: {entry_path}")
+
+                self._save_webp(cache_path, image)
+                try:
+                    size_bytes = cache_path.stat().st_size
+                except OSError:
+                    size_bytes = 0
+                with self._config_lock:
+                    self._cache_size_bytes += max(0, size_bytes)
+                self._evict_if_needed()
                 return cache_path
-
-            image = self._render_thumbnail(entry_path, options)
-            if image is None:
-                raise ThumbnailUnsupportedError(f"Unsupported thumbnail input: {entry_path}")
-
-            self._save_webp(cache_path, image)
-            self._evict_if_needed()
-            return cache_path
+        finally:
+            self._release_key_lock(key)
 
     def enqueue_prewarm(
         self,
@@ -312,7 +326,21 @@ class ThumbnailPipeline:
             if lock is None:
                 lock = threading.Lock()
                 self._key_locks[key] = lock
+                self._key_lock_ref_counts[key] = 0
+            self._key_lock_ref_counts[key] = self._key_lock_ref_counts.get(key, 0) + 1
             return lock
+
+    def _release_key_lock(self, key: str) -> None:
+        with self._key_locks_lock:
+            current = self._key_lock_ref_counts.get(key)
+            if current is None:
+                return
+            next_count = current - 1
+            if next_count <= 0:
+                self._key_lock_ref_counts.pop(key, None)
+                self._key_locks.pop(key, None)
+                return
+            self._key_lock_ref_counts[key] = next_count
 
     def _touch(self, path: Path) -> None:
         try:
@@ -329,18 +357,30 @@ class ThumbnailPipeline:
         image.save(tmp_path, format="WEBP", quality=self._quality, method=6)
         tmp_path.replace(target)
 
+    def _scan_cache_total_bytes(self) -> int:
+        total = 0
+        for cache_file in self.cache_root.rglob("*.webp"):
+            if not cache_file.is_file():
+                continue
+            try:
+                total += cache_file.stat().st_size
+            except OSError:
+                continue
+        return total
+
     def _evict_if_needed(self) -> None:
         with self._config_lock:
             max_bytes = self._cache_max_bytes
+            total_bytes = max(0, self._cache_size_bytes)
+        if total_bytes <= max_bytes:
+            return
 
         files = [
             cache_file for cache_file in self.cache_root.rglob("*.webp") if cache_file.is_file()
         ]
         if not files:
-            return
-
-        total_bytes = sum(cache_file.stat().st_size for cache_file in files)
-        if total_bytes <= max_bytes:
+            with self._config_lock:
+                self._cache_size_bytes = 0
             return
 
         files.sort(key=lambda item: item.stat().st_mtime)
@@ -354,6 +394,8 @@ class ThumbnailPipeline:
                 total_bytes -= size
             except OSError:
                 logger.debug("Unable to evict cache file.", path=str(cache_file))
+        with self._config_lock:
+            self._cache_size_bytes = max(0, total_bytes)
 
     def _render_thumbnail(self, entry_path: Path, options: ThumbnailOptions) -> Image.Image | None:
         media_type, _ = mimetypes.guess_type(str(entry_path))

@@ -7,6 +7,7 @@
 """TagStudio launcher."""
 
 import argparse
+import secrets
 import traceback
 
 import structlog
@@ -96,7 +97,19 @@ def main():
 
         from tagstudio.api.app import create_app
 
-        app = create_app(api_token=args.api_token)
+        api_token = args.api_token
+        if not api_token:
+            api_token = secrets.token_urlsafe(24)
+            logger.warning(
+                "No --api-token provided; generated runtime API token.",
+                api_token=api_token,
+            )
+
+        app = create_app(
+            api_token=api_token,
+            require_token=True,
+            allow_query_token=True,
+        )
         uvicorn.run(app, host=args.api_host, port=args.api_port, log_level="info")
         return
 

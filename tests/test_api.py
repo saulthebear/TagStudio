@@ -58,7 +58,7 @@ def test_entries_trash_partial_failure_keeps_failed_entries() -> None:
         library_path = Path(tmp)
         seed_library(library_path)
 
-        app = create_app()
+        app = create_app(require_token=False)
         with TestClient(app) as client:
             open_res = client.post("/api/v1/libraries/open", json={"path": str(library_path)})
             assert open_res.status_code == 200
@@ -103,7 +103,7 @@ def test_entries_trash_reason_codes_for_missing_and_not_found() -> None:
         library_path = Path(tmp)
         seed_library(library_path)
 
-        app = create_app()
+        app = create_app(require_token=False)
         with TestClient(app) as client:
             open_res = client.post("/api/v1/libraries/open", json={"path": str(library_path)})
             assert open_res.status_code == 200
@@ -142,7 +142,7 @@ def test_entries_trash_os_error_does_not_delete_file() -> None:
         library_path = Path(tmp)
         seed_library(library_path)
 
-        app = create_app()
+        app = create_app(require_token=False)
         with TestClient(app) as client:
             open_res = client.post("/api/v1/libraries/open", json={"path": str(library_path)})
             assert open_res.status_code == 200
@@ -171,7 +171,7 @@ def test_entries_open_partial_failure_reports_reason_codes() -> None:
         library_path = Path(tmp)
         seed_library(library_path)
 
-        app = create_app()
+        app = create_app(require_token=False)
         with TestClient(app) as client:
             open_res = client.post("/api/v1/libraries/open", json={"path": str(library_path)})
             assert open_res.status_code == 200
@@ -211,7 +211,7 @@ def test_entries_reveal_success_and_missing_command() -> None:
         library_path = Path(tmp)
         seed_library(library_path)
 
-        app = create_app()
+        app = create_app(require_token=False)
         with TestClient(app) as client:
             open_res = client.post("/api/v1/libraries/open", json={"path": str(library_path)})
             assert open_res.status_code == 200
@@ -249,7 +249,7 @@ def test_api_core_workflows() -> None:
         library_path = Path(tmp)
         seed_library(library_path)
 
-        app = create_app()
+        app = create_app(require_token=False)
         with TestClient(app) as client:
             res = client.get("/api/v1/health")
             assert res.status_code == 200
@@ -399,7 +399,7 @@ def test_search_random_seed_behavior() -> None:
         assert len(lib.add_entries(entries)) == len(entries)
         lib.close()
 
-        app = create_app()
+        app = create_app(require_token=False)
         with TestClient(app) as client:
             open_res = client.post("/api/v1/libraries/open", json={"path": str(library_path)})
             assert open_res.status_code == 200
@@ -486,7 +486,7 @@ def test_search_recently_added_uses_date_added_with_tie_breaks() -> None:
             ]
         lib.close()
 
-        app = create_app()
+        app = create_app(require_token=False)
         with TestClient(app) as client:
             open_res = client.post("/api/v1/libraries/open", json={"path": str(library_path)})
             assert open_res.status_code == 200
@@ -521,7 +521,7 @@ def test_tag_validation_and_parent_filtering() -> None:
         library_path = Path(tmp)
         seed_library(library_path)
 
-        app = create_app()
+        app = create_app(require_token=False)
         with TestClient(app) as client:
             open_res = client.post("/api/v1/libraries/open", json={"path": str(library_path)})
             assert open_res.status_code == 200
@@ -606,12 +606,134 @@ def test_tag_validation_and_parent_filtering() -> None:
             assert grandchild_id not in filtered_ids
 
 
+def test_tag_search_endpoint_paginates() -> None:
+    with TemporaryDirectory() as tmp:
+        library_path = Path(tmp)
+        seed_library(library_path)
+
+        app = create_app(require_token=False)
+        with TestClient(app) as client:
+            open_res = client.post("/api/v1/libraries/open", json={"path": str(library_path)})
+            assert open_res.status_code == 200
+
+            for index in range(35):
+                create = client.post(
+                    "/api/v1/tags",
+                    json={
+                        "name": f"paged-tag-{index:02d}",
+                        "color_namespace": "tagstudio-standard",
+                        "color_slug": "blue",
+                    },
+                )
+                assert create.status_code == 200
+
+            first_page = client.get("/api/v1/tags/search?limit=10&offset=0")
+            assert first_page.status_code == 200
+            first_payload = first_page.json()
+            assert first_payload["limit"] == 10
+            assert first_payload["offset"] == 0
+            assert len(first_payload["items"]) == 10
+            assert first_payload["total_count"] >= 35
+            assert first_payload["has_more"] is True
+
+            second_page = client.get("/api/v1/tags/search?limit=10&offset=10")
+            assert second_page.status_code == 200
+            second_payload = second_page.json()
+            assert second_payload["offset"] == 10
+            assert len(second_payload["items"]) == 10
+
+
+def test_tag_mutations_report_exact_changed_rows() -> None:
+    with TemporaryDirectory() as tmp:
+        library_path = Path(tmp)
+        seed_library(library_path)
+
+        app = create_app(require_token=False)
+        with TestClient(app) as client:
+            open_res = client.post("/api/v1/libraries/open", json={"path": str(library_path)})
+            assert open_res.status_code == 200
+
+            entry_ids = list(get_entry_ids_by_filename(client).values())[:2]
+            assert len(entry_ids) == 2
+
+            create_tag_res = client.post("/api/v1/tags", json={"name": "exact-changed"})
+            assert create_tag_res.status_code == 200
+            tag_id = create_tag_res.json()["id"]
+
+            mixed_add = client.post(
+                "/api/v1/entries/tags:add",
+                json={
+                    "entry_ids": [*entry_ids, 999_991],
+                    "tag_ids": [tag_id, 999_992],
+                },
+            )
+            assert mixed_add.status_code == 200
+            assert mixed_add.json()["changed"] == 2
+
+            duplicate_mixed_add = client.post(
+                "/api/v1/entries/tags:add",
+                json={
+                    "entry_ids": [*entry_ids, 999_991],
+                    "tag_ids": [tag_id, 999_992],
+                },
+            )
+            assert duplicate_mixed_add.status_code == 200
+            assert duplicate_mixed_add.json()["changed"] == 0
+
+            with patch("tagstudio.core.library.alchemy.library.MAX_SQL_VARIABLES", 4):
+                first_remove = client.post(
+                    "/api/v1/entries/tags:remove",
+                    json={
+                        "entry_ids": [*entry_ids, 999_993, 999_994],
+                        "tag_ids": [tag_id, 999_995, 999_996],
+                    },
+                )
+                assert first_remove.status_code == 200
+                assert first_remove.json()["changed"] == 2
+
+            second_remove = client.post(
+                "/api/v1/entries/tags:remove",
+                json={"entry_ids": entry_ids, "tag_ids": [tag_id]},
+            )
+            assert second_remove.status_code == 200
+            assert second_remove.json()["changed"] == 0
+
+
+def test_token_auth_can_be_required() -> None:
+    app = create_app(api_token="secret-token", require_token=True, allow_query_token=False)
+    with TestClient(app) as client:
+        health = client.get("/api/v1/health")
+        assert health.status_code == 200
+
+        unauthorized = client.get("/api/v1/libraries/state")
+        assert unauthorized.status_code == 401
+
+        authorized = client.get(
+            "/api/v1/libraries/state",
+            headers={"x-tagstudio-token": "secret-token"},
+        )
+        assert authorized.status_code == 200
+        assert authorized.json()["is_open"] is False
+
+        preflight = client.options(
+            "/api/v1/libraries/state",
+            headers={
+                "origin": "http://localhost:5173",
+                "access-control-request-method": "GET",
+            },
+        )
+        assert preflight.status_code in (200, 204)
+
+        query_param_rejected = client.get("/api/v1/libraries/state?token=secret-token")
+        assert query_param_rejected.status_code == 401
+
+
 def test_refresh_job_sse() -> None:
     with TemporaryDirectory() as tmp:
         library_path = Path(tmp)
         seed_library(library_path)
 
-        app = create_app()
+        app = create_app(require_token=False)
         with TestClient(app) as client:
             open_res = client.post("/api/v1/libraries/open", json={"path": str(library_path)})
             assert open_res.status_code == 200
@@ -654,7 +776,7 @@ def test_thumbnail_endpoints_and_cache_behavior() -> None:
         library_path = Path(tmp)
         seed_library(library_path)
 
-        app = create_app()
+        app = create_app(require_token=False)
         with TestClient(app) as client:
             open_res = client.post("/api/v1/libraries/open", json={"path": str(library_path)})
             assert open_res.status_code == 200
@@ -700,7 +822,7 @@ def test_thumbnail_prewarm_endpoint() -> None:
         library_path = Path(tmp)
         seed_library(library_path)
 
-        app = create_app()
+        app = create_app(require_token=False)
         with TestClient(app) as client:
             open_res = client.post("/api/v1/libraries/open", json={"path": str(library_path)})
             assert open_res.status_code == 200
@@ -726,7 +848,7 @@ def test_thumbnail_lock_is_released_after_generation_failure() -> None:
         library_path = Path(tmp)
         seed_library(library_path)
 
-        app = create_app()
+        app = create_app(require_token=False)
         with TestClient(app) as client:
             open_res = client.post("/api/v1/libraries/open", json={"path": str(library_path)})
             assert open_res.status_code == 200

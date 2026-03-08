@@ -301,8 +301,13 @@ body {
 .thumb-grid-scroll {
   min-height: 0;
   flex: 1;
-  overflow: auto;
+  overflow: hidden;
   padding-right: 0.35rem;
+}
+
+.thumb-grid-virtuoso {
+  min-height: 0;
+  height: 100%;
 }
 
 .thumb-grid {
@@ -310,6 +315,11 @@ body {
   gap: 0.55rem;
   grid-template-columns: repeat(auto-fill, minmax(clamp(120px, 16vw, 220px), 1fr));
   align-items: start;
+  padding-bottom: 0.3rem;
+}
+
+.thumb-grid-item {
+  min-width: 0;
 }
 
 .thumb-card {
@@ -451,10 +461,6 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.thumb-grid-sentinel {
-  height: 1px;
 }
 
 .thumb-context-menu {

@@ -87,9 +87,14 @@ jobs:
       - name: Check coverage
         uses: yedpodtrzitko/coverage@main
         with:
-          thresholdAll: 0.4
-          thresholdNew: 0.4
-          thresholdModified: 0.4
+          thresholdAll: 0.5
+          thresholdNew: 0.5
+          thresholdModified: 0.5
           coverageFile: coverage.xml
           token: ${{ secrets.GITHUB_TOKEN }}
           sourceDir: tagstudio/src
+
+      - name: Type-ignore debt summary
+        run: |
+          TYPE_IGNORE_COUNT=$(rg -n "type: ignore|pyright: ignore" src/tagstudio | wc -l)
+          echo "Type-ignore count: ${TYPE_IGNORE_COUNT}" >> "$GITHUB_STEP_SUMMARY"

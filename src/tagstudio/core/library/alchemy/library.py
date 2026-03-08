@@ -42,6 +42,7 @@ from sqlalchemy import (
     text,
     update,
 )
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import (
     InstanceState,
@@ -939,6 +940,11 @@ class Library:
         with Session(self.engine) as session:
             return unwrap(session.scalar(select(func.count(Entry.id))))
 
+    @property
+    def tags_count(self) -> int:
+        with Session(self.engine) as session:
+            return unwrap(session.scalar(select(func.count(Tag.id))))
+
     def all_entries(self, with_joins: bool = False) -> Iterator[Entry]:
         """Load entries without joins."""
         with Session(self.engine) as session:
@@ -1521,54 +1527,78 @@ class Library:
         Returns:
             The total number of tags added across all entries.
         """
-        total_added: int = 0
+        total_added = 0
         logger.info(
             "[Library][add_tags_to_entries]",
             entry_ids=entry_ids,
             tag_ids=tag_ids,
         )
 
-        entry_ids_ = [entry_ids] if isinstance(entry_ids, int) else entry_ids
-        tag_ids_ = [tag_ids] if isinstance(tag_ids, int) else tag_ids
+        entry_ids_ = sorted(set([entry_ids] if isinstance(entry_ids, int) else entry_ids))
+        tag_ids_ = sorted(set([tag_ids] if isinstance(tag_ids, int) else tag_ids))
+        if not entry_ids_ or not tag_ids_:
+            return 0
+
         with Session(self.engine, expire_on_commit=False) as session:
-            for tag_id in tag_ids_:
-                for entry_id in entry_ids_:
-                    try:
-                        session.add(TagEntry(tag_id=tag_id, entry_id=entry_id))
-                        total_added += 1
-                        session.commit()
-                    except IntegrityError:
-                        session.rollback()
+            existing_entry_ids: set[int] = set()
+            for index in range(0, len(entry_ids_), MAX_SQL_VARIABLES):
+                chunk = entry_ids_[index : index + MAX_SQL_VARIABLES]
+                existing_entry_ids.update(
+                    session.scalars(select(Entry.id).where(Entry.id.in_(chunk)))
+                )
+
+            existing_tag_ids: set[int] = set()
+            for index in range(0, len(tag_ids_), MAX_SQL_VARIABLES):
+                chunk = tag_ids_[index : index + MAX_SQL_VARIABLES]
+                existing_tag_ids.update(session.scalars(select(Tag.id).where(Tag.id.in_(chunk))))
+
+            if not existing_entry_ids or not existing_tag_ids:
+                return 0
+
+            values = [
+                {"tag_id": tag_id, "entry_id": entry_id}
+                for tag_id in sorted(existing_tag_ids)
+                for entry_id in sorted(existing_entry_ids)
+            ]
+            chunk_size = max(1, MAX_SQL_VARIABLES // 2)
+            for index in range(0, len(values), chunk_size):
+                chunk = values[index : index + chunk_size]
+                statement = sqlite_insert(TagEntry).values(chunk).prefix_with("OR IGNORE")
+                result = session.execute(statement)
+                total_added += max(0, int(result.rowcount or 0))
+            session.commit()
 
         return total_added
 
     def remove_tags_from_entries(
         self, entry_ids: int | list[int] | set[int], tag_ids: int | list[int] | set[int]
-    ) -> bool:
+    ) -> int:
         """Remove one or more tags from one or more entries."""
-        entry_ids_ = [entry_ids] if isinstance(entry_ids, int) else entry_ids
-        tag_ids_ = [tag_ids] if isinstance(tag_ids, int) else tag_ids
+        entry_ids_ = sorted(set([entry_ids] if isinstance(entry_ids, int) else entry_ids))
+        tag_ids_ = sorted(set([tag_ids] if isinstance(tag_ids, int) else tag_ids))
+        if not entry_ids_ or not tag_ids_:
+            return 0
+
+        entry_chunk_size = max(1, MAX_SQL_VARIABLES // 2)
+        tag_chunk_size = max(1, MAX_SQL_VARIABLES // 2)
+        total_removed = 0
         with Session(self.engine, expire_on_commit=False) as session:
             try:
-                for tag_id in tag_ids_:
-                    for entry_id in entry_ids_:
-                        tag_entry = session.scalars(
-                            select(TagEntry).where(
-                                and_(
-                                    TagEntry.tag_id == tag_id,
-                                    TagEntry.entry_id == entry_id,
-                                )
-                            )
-                        ).first()
-                        if tag_entry:
-                            session.delete(tag_entry)
-                            session.flush()
+                for tag_index in range(0, len(tag_ids_), tag_chunk_size):
+                    tag_chunk = tag_ids_[tag_index : tag_index + tag_chunk_size]
+                    for entry_index in range(0, len(entry_ids_), entry_chunk_size):
+                        entry_chunk = entry_ids_[entry_index : entry_index + entry_chunk_size]
+                        statement = delete(TagEntry).where(
+                            and_(TagEntry.tag_id.in_(tag_chunk), TagEntry.entry_id.in_(entry_chunk))
+                        )
+                        result = session.execute(statement)
+                        total_removed += max(0, int(result.rowcount or 0))
                 session.commit()
-                return True
+                return total_removed
             except IntegrityError as e:
                 logger.error(e)
                 session.rollback()
-                return False
+                return 0
 
     def add_color(self, color_group: TagColorGroup) -> TagColorGroup | None:
         with Session(self.engine, expire_on_commit=False) as session:

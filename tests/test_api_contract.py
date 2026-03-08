@@ -11,7 +11,7 @@ def test_openapi_paths_match_generated_client_contract(cwd: Path):
     with open(schema_path, encoding="utf-8") as f:
         contract_schema = json.load(f)
 
-    runtime_schema = create_app().openapi()
+    runtime_schema = create_app(require_token=False).openapi()
 
     contract_paths = set(contract_schema["paths"].keys())
     runtime_paths = set(runtime_schema["paths"].keys())

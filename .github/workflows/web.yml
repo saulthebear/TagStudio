@@ -19,8 +19,8 @@ on:
       - "bunfig.toml"
 
 jobs:
-  web-build:
-    name: Build Web Workspace
+  web-checks:
+    name: Web Workspace Checks
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
@@ -32,5 +32,20 @@ jobs:
       - name: Install dependencies
         run: bun install
 
+      - name: Typecheck web app
+        run: bun run --cwd apps/web typecheck
+
+      - name: Lint web app
+        run: bun run --cwd apps/web lint
+
+      - name: Unit tests
+        run: bun run --cwd apps/web test
+
       - name: Build web app
         run: bun run build:web
+
+      - name: Install Playwright Chromium
+        run: bunx playwright install --with-deps chromium
+
+      - name: E2E smoke
+        run: bun run --cwd apps/web e2e:smoke
