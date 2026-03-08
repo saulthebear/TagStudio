@@ -152,8 +152,8 @@ export function ThumbnailGridPane({
   }, []);
 
   const getMenuBounds = useCallback(() => {
-    const paneRect = paneRef.current?.getBoundingClientRect();
-    if (!paneRect) {
+    const pane = paneRef.current;
+    if (!pane) {
       return {
         left: 0,
         right: window.innerWidth,
@@ -161,11 +161,12 @@ export function ThumbnailGridPane({
         bottom: window.innerHeight
       };
     }
+
     return {
-      left: paneRect.left,
-      right: paneRect.right,
-      top: paneRect.top,
-      bottom: paneRect.bottom
+      left: 0,
+      right: pane.clientWidth,
+      top: 0,
+      bottom: pane.clientHeight
     };
   }, []);
 
@@ -179,9 +180,11 @@ export function ThumbnailGridPane({
       const state = getContextMenuState(entryId);
       onContextMenuOpenTarget(entryId, state.targetEntryIds);
       const bounds = getMenuBounds();
-      const offset = 8;
-      const nextX = Math.max(bounds.left + offset, Math.min(event.clientX, bounds.right - offset));
-      const nextY = Math.max(bounds.top + offset, Math.min(event.clientY, bounds.bottom - offset));
+      const paneRect = paneRef.current?.getBoundingClientRect();
+      const rawX = paneRect ? event.clientX - paneRect.left : event.clientX;
+      const rawY = paneRect ? event.clientY - paneRect.top : event.clientY;
+      const nextX = Math.max(bounds.left, Math.min(rawX, bounds.right));
+      const nextY = Math.max(bounds.top, Math.min(rawY, bounds.bottom));
 
       setContextMenu({
         x: nextX,
@@ -255,11 +258,10 @@ export function ThumbnailGridPane({
     }
 
     const menuRect = contextMenuRef.current.getBoundingClientRect();
-    const offset = 8;
-    const availableMaxX = contextMenu.bounds.right - menuRect.width - offset;
-    const availableMaxY = contextMenu.bounds.bottom - menuRect.height - offset;
-    const minX = contextMenu.bounds.left + offset;
-    const minY = contextMenu.bounds.top + offset;
+    const availableMaxX = contextMenu.bounds.right - menuRect.width;
+    const availableMaxY = contextMenu.bounds.bottom - menuRect.height;
+    const minX = contextMenu.bounds.left;
+    const minY = contextMenu.bounds.top;
     const nextX = availableMaxX >= minX ? Math.max(minX, Math.min(contextMenu.x, availableMaxX)) : minX;
     const nextY = availableMaxY >= minY ? Math.max(minY, Math.min(contextMenu.y, availableMaxY)) : minY;
 
@@ -283,9 +285,8 @@ export function ThumbnailGridPane({
     if (!contextMenu) {
       return undefined;
     }
-    const offset = 8;
-    const availableWidth = Math.max(64, contextMenu.bounds.right - contextMenu.bounds.left - offset * 2);
-    const availableHeight = Math.max(64, contextMenu.bounds.bottom - contextMenu.bounds.top - offset * 2);
+    const availableWidth = Math.max(64, contextMenu.bounds.right - contextMenu.bounds.left);
+    const availableHeight = Math.max(64, contextMenu.bounds.bottom - contextMenu.bounds.top);
     return {
       left: contextMenu.x,
       top: contextMenu.y,
