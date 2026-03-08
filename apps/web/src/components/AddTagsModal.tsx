@@ -52,16 +52,18 @@ export function AddTagsModal({
   });
   const tagColorsQuery = useTagColors(open);
   const tagDisplayContext = useMemo(() => {
-    const rowTags = workflow.rows.flatMap((row) => (row.kind === "tag" ? [row.tag] : []));
-    const fromRows = createTagDisplayContext(rowTags);
-    const tagById = new Map(fromRows.tagById);
+    const tagById = new Map<number, TagResponse>();
     for (const tag of allTags) {
       tagById.set(tag.id, tag);
     }
-    return {
-      tagById,
-      duplicateNames: fromRows.duplicateNames
-    };
+
+    for (const row of workflow.rows) {
+      if (row.kind === "tag") {
+        tagById.set(row.tag.id, row.tag);
+      }
+    }
+
+    return createTagDisplayContext([...tagById.values()]);
   }, [allTags, workflow.rows]);
   const tagColorLookup = useMemo(() => createTagColorLookup(tagColorsQuery.data), [tagColorsQuery.data]);
 
