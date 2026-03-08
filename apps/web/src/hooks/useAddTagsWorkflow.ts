@@ -6,6 +6,7 @@ import { api } from "@/api/client";
 import { useDraggableModalPosition } from "@/hooks/useDraggableModalPosition";
 import { useSearchInputFocus } from "@/hooks/useSearchInputFocus";
 import {
+  deriveTagApplicationState,
   isEditShortcutKey,
   moveHighlightIndex,
   normalizeTagQuery,
@@ -32,10 +33,38 @@ type UseAddTagsWorkflowParams = {
   onAfterTagChanged: () => Promise<void>;
 };
 
-function defaultHighlightIndex(rows: AddTagsRow[]): number {
-  if (rows.length > 1 && rows[0]?.kind === "create" && rows[1]?.kind === "tag") {
-    return 1;
+type DefaultHighlightIndexArgs = {
+  rows: AddTagsRow[];
+  selectedCount: number;
+  membershipByTagId: Map<number, Set<number>>;
+  pendingTagId: number | null;
+};
+
+function defaultHighlightIndex({
+  rows,
+  selectedCount,
+  membershipByTagId,
+  pendingTagId
+}: DefaultHighlightIndexArgs): number {
+  const firstActionableTagIndex = rows.findIndex((row) => {
+    if (row.kind !== "tag") {
+      return false;
+    }
+    if (pendingTagId === row.tag.id) {
+      return false;
+    }
+    const membership = membershipByTagId.get(row.tag.id)?.size ?? 0;
+    return deriveTagApplicationState(selectedCount, membership) !== "all";
+  });
+
+  if (rows[0]?.kind === "create") {
+    return firstActionableTagIndex >= 0 ? firstActionableTagIndex : 0;
   }
+
+  if (firstActionableTagIndex >= 0) {
+    return firstActionableTagIndex;
+  }
+
   return 0;
 }
 
@@ -139,7 +168,16 @@ export function useAddTagsWorkflow({
     return nextRows;
   }, [hasExactMatch, orderedTags, query]);
 
-  const preferredHighlightIndex = useMemo(() => defaultHighlightIndex(rows), [rows]);
+  const preferredHighlightIndex = useMemo(
+    () =>
+      defaultHighlightIndex({
+        rows,
+        selectedCount: selectedEntryIds.length,
+        membershipByTagId,
+        pendingTagId
+      }),
+    [membershipByTagId, pendingTagId, rows, selectedEntryIds.length]
+  );
 
   useEffect(() => {
     if (rows.length === 0) {
