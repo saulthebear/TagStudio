@@ -5,6 +5,7 @@ import {
   type EntrySummaryResponse,
   type FieldTypeResponse,
   type JobEventPayload,
+  type OpenEntriesResponse,
   type PreviewResponse,
   type TagCreatePayload,
   type TrashEntriesResponse,
@@ -43,6 +44,7 @@ type UseInspectorWorkflowResult = {
   tagEditPending: boolean;
   refreshPending: boolean;
   trashPending: boolean;
+  shellActionPending: boolean;
   refreshStatus: JobEventPayload | null;
   selectEntry: (entryId: number) => void;
   clearSelection: () => void;
@@ -51,6 +53,8 @@ type UseInspectorWorkflowResult = {
   refreshLibrary: () => void;
   refreshSelectedEntry: () => Promise<void>;
   trashEntries: (entryIds: number[]) => Promise<TrashEntriesResponse>;
+  openEntries: (entryIds: number[]) => Promise<OpenEntriesResponse>;
+  revealEntry: (entryId: number) => Promise<void>;
   addTagToEntries: (entryIds: number[], tagId: number) => Promise<void>;
   removeTagFromEntries: (entryIds: number[], tagId: number) => Promise<void>;
   createTag: (payload: TagCreatePayload) => Promise<TagResponse | null>;
@@ -285,6 +289,26 @@ export function useInspectorWorkflow({
     }
   });
 
+  const openEntriesMutation = useMutation({
+    mutationFn: (entryIds: number[]) => api.openEntries(entryIds),
+    onSuccess: () => {
+      onClearError();
+    },
+    onError: (error) => {
+      onError(error instanceof Error ? error.message : "Unable to open selected entries.");
+    }
+  });
+
+  const revealEntryMutation = useMutation({
+    mutationFn: (entryId: number) => api.revealEntry(entryId),
+    onSuccess: () => {
+      onClearError();
+    },
+    onError: (error) => {
+      onError(error instanceof Error ? error.message : "Unable to reveal file in file manager.");
+    }
+  });
+
   const selectEntry = useCallback(
     (entryId: number) => {
       setSelectedEntryId(entryId);
@@ -384,6 +408,20 @@ export function useInspectorWorkflow({
     [trashEntriesMutation]
   );
 
+  const openEntries = useCallback(
+    async (entryIds: number[]) => {
+      return await openEntriesMutation.mutateAsync(entryIds);
+    },
+    [openEntriesMutation]
+  );
+
+  const revealEntry = useCallback(
+    async (entryId: number) => {
+      await revealEntryMutation.mutateAsync(entryId);
+    },
+    [revealEntryMutation]
+  );
+
   const reconcileSelectionWithEntries = useCallback(
     (entries: EntrySummaryResponse[]) => {
       if (selectedEntryId === null) {
@@ -426,6 +464,7 @@ export function useInspectorWorkflow({
     tagEditPending: createTagMutation.isPending || updateTagMutation.isPending,
     refreshPending: refreshLibraryMutation.isPending,
     trashPending: trashEntriesMutation.isPending,
+    shellActionPending: openEntriesMutation.isPending || revealEntryMutation.isPending,
     refreshStatus,
     selectEntry,
     clearSelection,
@@ -433,6 +472,8 @@ export function useInspectorWorkflow({
     applyField,
     refreshLibrary,
     trashEntries,
+    openEntries,
+    revealEntry,
     refreshSelectedEntry,
     addTagToEntries,
     removeTagFromEntries,

@@ -12,14 +12,19 @@ import {
 import { TAG_ARCHIVED_ID, TAG_FAVORITE_ID } from "@/lib/reserved-tags";
 
 export type ThumbnailContextMenuState = {
+  contextEntryId: number;
   targetEntryIds: number[];
   canPaste: boolean;
   favoriteMode: "favorite" | "unfavorite";
   archiveMode: "archive" | "unarchive";
+  revealLabel: string;
   disabled: boolean;
 };
 
 export type ThumbnailContextMenuAction =
+  | "open_file"
+  | "reveal_file"
+  | "copy_filepath"
   | "copy_tags"
   | "paste_tags"
   | "favorite_toggle"
@@ -149,13 +154,11 @@ export function ThumbnailGridPane({
       const state = getContextMenuState(entryId);
       onContextMenuOpenTarget(entryId, state.targetEntryIds);
 
-      const offset = 8;
-      const menuWidth = 240;
-      const menuHeight = 264;
-      const x = Math.max(offset, Math.min(event.clientX, window.innerWidth - menuWidth - offset));
-      const y = Math.max(offset, Math.min(event.clientY, window.innerHeight - menuHeight - offset));
-
-      setContextMenu({ x, y, state });
+      setContextMenu({
+        x: Math.max(8, event.clientX),
+        y: Math.max(8, event.clientY),
+        state
+      });
     },
     [contextMenuEnabled, getContextMenuState, onContextMenuOpenTarget]
   );
@@ -215,6 +218,32 @@ export function ThumbnailGridPane({
       window.removeEventListener("keydown", onKeyDown);
     };
   }, [closeContextMenu, contextMenu]);
+
+  useEffect(() => {
+    if (!contextMenu || !contextMenuRef.current) {
+      return;
+    }
+
+    const menuRect = contextMenuRef.current.getBoundingClientRect();
+    const offset = 8;
+    const nextX = Math.max(offset, Math.min(contextMenu.x, window.innerWidth - menuRect.width - offset));
+    const nextY = Math.max(offset, Math.min(contextMenu.y, window.innerHeight - menuRect.height - offset));
+
+    if (nextX === contextMenu.x && nextY === contextMenu.y) {
+      return;
+    }
+
+    setContextMenu((prev) => {
+      if (!prev) {
+        return prev;
+      }
+      return {
+        ...prev,
+        x: nextX,
+        y: nextY
+      };
+    });
+  }, [contextMenu]);
 
   useEffect(() => {
     if (!hasMore || searchPending || loadingMore) {
@@ -371,19 +400,51 @@ export function ThumbnailGridPane({
             role="menuitem"
             className="thumb-context-menu-item"
             disabled={contextMenu.state.disabled}
-            onClick={() => triggerContextAction("copy_tags")}
+            onClick={() => triggerContextAction("open_file")}
           >
-            Copy Tags
+            Open
           </button>
           <button
             type="button"
             role="menuitem"
             className="thumb-context-menu-item"
-            disabled={!contextMenu.state.canPaste || contextMenu.state.disabled}
-            onClick={() => triggerContextAction("paste_tags")}
+            disabled={contextMenu.state.disabled}
+            onClick={() => triggerContextAction("reveal_file")}
           >
-            Paste Tags
+            {contextMenu.state.revealLabel}
           </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="thumb-context-menu-item"
+            disabled={contextMenu.state.disabled}
+            onClick={() => triggerContextAction("copy_filepath")}
+          >
+            Copy Filepath
+          </button>
+
+          <div className="thumb-context-menu-separator" />
+
+          <button
+            type="button"
+            role="menuitem"
+            className="thumb-context-menu-item"
+            disabled={contextMenu.state.disabled}
+            onClick={() => triggerContextAction("copy_tags")}
+          >
+            Copy Tags
+          </button>
+          {contextMenu.state.canPaste ? (
+            <button
+              type="button"
+              role="menuitem"
+              className="thumb-context-menu-item"
+              disabled={contextMenu.state.disabled}
+              onClick={() => triggerContextAction("paste_tags")}
+            >
+              Paste Tags
+            </button>
+          ) : null}
 
           <div className="thumb-context-menu-separator" />
 

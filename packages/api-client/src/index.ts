@@ -174,6 +174,29 @@ export type TrashEntriesResponse = {
   failed_entries: TrashEntryFailure[];
 };
 
+export type EntryShellActionFailureReasonCode =
+  | "ENTRY_NOT_FOUND"
+  | "MISSING_ON_DISK"
+  | "NOT_A_FILE"
+  | "PERMISSION_DENIED"
+  | "COMMAND_NOT_FOUND"
+  | "OS_ERROR"
+  | "UNKNOWN_ERROR";
+
+export type EntryShellActionFailure = {
+  entry_id: number;
+  path: string | null;
+  reason_code: EntryShellActionFailureReasonCode;
+};
+
+export type OpenEntriesResponse = {
+  success: boolean;
+  opened_entry_ids: number[];
+  opened_count: number;
+  failed_count: number;
+  failed_entries: EntryShellActionFailure[];
+};
+
 export type JobCreateResponse = {
   job_id: string;
   status: string;
@@ -429,6 +452,20 @@ export class TagStudioApiClient {
     return this.request("/api/v1/entries:trash", {
       method: "POST",
       body: JSON.stringify({ entry_ids: entryIds })
+    });
+  }
+
+  async openEntries(entryIds: number[]): Promise<OpenEntriesResponse> {
+    return this.request("/api/v1/entries:open", {
+      method: "POST",
+      body: JSON.stringify({ entry_ids: entryIds })
+    });
+  }
+
+  async revealEntry(entryId: number): Promise<{ success: boolean }> {
+    return this.request("/api/v1/entries:reveal", {
+      method: "POST",
+      body: JSON.stringify({ entry_id: entryId })
     });
   }
 

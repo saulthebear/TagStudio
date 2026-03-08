@@ -5,7 +5,6 @@ import {
   useCallback,
   useEffect,
   useMemo,
-  useRef,
   useState
 } from "react";
 
@@ -24,16 +23,13 @@ import {
 } from "@/components/ThumbnailGridPane";
 import { TopFilterBar } from "@/components/TopFilterBar";
 import { useInspectorWorkflow } from "@/hooks/useInspectorWorkflow";
+import { useEntryContextActions } from "@/hooks/useEntryContextActions";
 import { useLibraryWorkflow } from "@/hooks/useLibraryWorkflow";
 import { ModalStackProvider } from "@/hooks/useModalStackDepth";
 import { useSearchWorkflow } from "@/hooks/useSearchWorkflow";
 import { useSettingsWorkflow } from "@/hooks/useSettingsWorkflow";
-import {
-  collectTagUnionForEntries,
-  getTagMutationTargets,
-  getToggleModeForTag,
-  resolveContextTargetEntryIds
-} from "@/lib/context-actions";
+import { useTrashActions } from "@/hooks/useTrashActions";
+import { useUndoState } from "@/hooks/useUndoState";
 import {
   formatAppliedFilterSummary,
   getActiveFilterCount,
@@ -44,23 +40,6 @@ import {
 } from "@/lib/entry-filters";
 import { TAG_ARCHIVED_ID, TAG_FAVORITE_ID } from "@/lib/reserved-tags";
 import { computeDesktopSelection } from "@/lib/tag-workflows";
-
-const RESERVED_CONTEXT_TAG_IDS = new Set([TAG_ARCHIVED_ID, TAG_FAVORITE_ID]);
-const UNDO_TIMEOUT_MS = 6000;
-const TRASH_FAILURE_TIMEOUT_MS = 9000;
-
-type UndoState = {
-  token: number;
-  message: string;
-  pending: boolean;
-  undo: () => Promise<void>;
-};
-
-type TrashDialogState = {
-  targetEntryIds: number[];
-  skipForSession: boolean;
-  rememberForLibrary: boolean;
-};
 
 function formatTrashFailureReason(reasonCode: TrashFailureReasonCode): string {
   switch (reasonCode) {
@@ -81,25 +60,28 @@ function formatTrashFailureReason(reasonCode: TrashFailureReasonCode): string {
   }
 }
 
+function getFileManagerRevealLabel(): string {
+  if (typeof navigator === "undefined") {
+    return "Show in File Manager";
+  }
+
+  const platform = `${navigator.platform ?? ""} ${navigator.userAgent ?? ""}`.toLowerCase();
+  if (platform.includes("mac")) {
+    return "Show in Finder";
+  }
+  if (platform.includes("win")) {
+    return "Show in Explorer";
+  }
+  return "Show in File Manager";
+}
+
 export function App() {
   const [uiError, setUiError] = useState<string | null>(null);
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
   const [selectedEntryIds, setSelectedEntryIds] = useState<number[]>([]);
   const [selectionAnchorId, setSelectionAnchorId] = useState<number | null>(null);
   const [videoPreviewStartsMuted, setVideoPreviewStartsMuted] = useState(true);
-  const [copiedTagIds, setCopiedTagIds] = useState<number[]>([]);
-  const [skipTrashConfirmSession, setSkipTrashConfirmSession] = useState(false);
-  const [trashDialogState, setTrashDialogState] = useState<TrashDialogState | null>(null);
   const [contextActionPending, setContextActionPending] = useState(false);
-  const [undoState, setUndoState] = useState<UndoState | null>(null);
-  const [trashFailureMessagesByEntryId, setTrashFailureMessagesByEntryId] = useState<Map<number, string>>(
-    () => new Map()
-  );
-  const [inactiveEntryIds, setInactiveEntryIds] = useState<Set<number>>(() => new Set());
-
-  const undoTokenRef = useRef(0);
-  const undoTimeoutRef = useRef<number | null>(null);
-  const trashFailureTimeoutRef = useRef<number | null>(null);
 
   const onClearError = useCallback(() => {
     setUiError(null);
@@ -112,40 +94,6 @@ export function App() {
     setVideoPreviewStartsMuted(false);
   }, []);
 
-  const clearUndo = useCallback(() => {
-    if (undoTimeoutRef.current !== null) {
-      window.clearTimeout(undoTimeoutRef.current);
-      undoTimeoutRef.current = null;
-    }
-    setUndoState(null);
-  }, []);
-
-  const queueUndo = useCallback(
-    (message: string, undo: () => Promise<void>) => {
-      clearUndo();
-      const token = undoTokenRef.current + 1;
-      undoTokenRef.current = token;
-      setUndoState({
-        token,
-        message,
-        pending: false,
-        undo
-      });
-      undoTimeoutRef.current = window.setTimeout(() => {
-        setUndoState((prev) => (prev?.token === token ? null : prev));
-      }, UNDO_TIMEOUT_MS);
-    },
-    [clearUndo]
-  );
-
-  const clearTrashFailureHighlights = useCallback(() => {
-    if (trashFailureTimeoutRef.current !== null) {
-      window.clearTimeout(trashFailureTimeoutRef.current);
-      trashFailureTimeoutRef.current = null;
-    }
-    setTrashFailureMessagesByEntryId(new Map());
-  }, []);
-
   useEffect(() => {
     const onResize = () => {
       setIsMobile(window.innerWidth < 768);
@@ -153,17 +101,6 @@ export function App() {
 
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      if (undoTimeoutRef.current !== null) {
-        window.clearTimeout(undoTimeoutRef.current);
-      }
-      if (trashFailureTimeoutRef.current !== null) {
-        window.clearTimeout(trashFailureTimeoutRef.current);
-      }
-    };
   }, []);
 
   const {
@@ -260,6 +197,7 @@ export function App() {
     tagEditPending,
     refreshPending,
     trashPending,
+    shellActionPending,
     refreshStatus,
     selectEntry,
     clearSelection,
@@ -268,6 +206,8 @@ export function App() {
     refreshLibrary,
     refreshSelectedEntry,
     trashEntries,
+    openEntries,
+    revealEntry,
     addTagToEntries,
     removeTagFromEntries,
     createTag,
@@ -283,45 +223,67 @@ export function App() {
     onClearError
   });
 
+  const refreshVisibleEntries = useCallback(async () => {
+    await executeSearch({
+      query: activeQuery,
+      pageIndex: 0,
+      append: false
+    });
+  }, [activeQuery, executeSearch]);
+
+  const { undoState, clearUndo, queueUndo, runUndo } = useUndoState({
+    onUndoApplied: refreshVisibleEntries,
+    onError,
+    onClearError
+  });
+
+  const handleDeletedEntries = useCallback((deletedIds: Set<number>) => {
+    setSelectedEntryIds((prev) => prev.filter((entryId) => !deletedIds.has(entryId)));
+    setSelectionAnchorId((prev) => {
+      if (prev === null || !deletedIds.has(prev)) {
+        return prev;
+      }
+      return null;
+    });
+  }, []);
+
+  const {
+    skipTrashConfirmSession,
+    trashDialogState,
+    setTrashDialogState,
+    trashFailureMessagesByEntryId,
+    inactiveEntryIds,
+    clearTrashFailureHighlights,
+    resetTrashState,
+    trimInactiveByVisibleIds,
+    performTrash
+  } = useTrashActions({
+    confirmBeforeTrash,
+    setConfirmBeforeTrashPreference,
+    trashEntries,
+    selectedEntryId,
+    clearSelection,
+    formatTrashFailureReason,
+    onDeletedEntries: handleDeletedEntries,
+    onError,
+    onClearError
+  });
+
   useEffect(() => {
     setSelectedEntryIds([]);
     setSelectionAnchorId(null);
-    setCopiedTagIds([]);
-    setSkipTrashConfirmSession(false);
-    setTrashDialogState(null);
     setContextActionPending(false);
-    setInactiveEntryIds(new Set());
     clearUndo();
-    clearTrashFailureHighlights();
-  }, [activeLibraryPath, clearTrashFailureHighlights, clearUndo]);
+    resetTrashState();
+  }, [activeLibraryPath, clearUndo, resetTrashState]);
 
   useEffect(() => {
     reconcileSelectionWithEntries(entries);
 
     const visibleEntryIds = new Set(entries.map((entry) => entry.id));
     setSelectedEntryIds((prev) => prev.filter((entryId) => visibleEntryIds.has(entryId)));
-    setInactiveEntryIds((prev) => {
-      if (prev.size === 0) {
-        return prev;
-      }
-      const next = new Set<number>();
-      for (const entryId of prev) {
-        if (visibleEntryIds.has(entryId)) {
-          next.add(entryId);
-        }
-      }
-      if (next.size === prev.size) {
-        return prev;
-      }
-      return next;
-    });
-  }, [entries, reconcileSelectionWithEntries]);
-
-  useEffect(() => {
-    if (confirmBeforeTrash) {
-      setSkipTrashConfirmSession(false);
-    }
-  }, [confirmBeforeTrash]);
+    trimInactiveByVisibleIds(visibleEntryIds);
+  }, [entries, reconcileSelectionWithEntries, trimInactiveByVisibleIds]);
 
   useEffect(() => {
     if (!settingsOpen) {
@@ -365,16 +327,10 @@ export function App() {
     return new Set(allTags.map((tag) => tag.id));
   }, [allTags]);
 
-  const isActionBusy =
-    contextActionPending || tagMutationPending || trashPending || refreshPending || searchPending;
+  const revealLabel = useMemo(() => getFileManagerRevealLabel(), []);
 
-  const refreshVisibleEntries = useCallback(async () => {
-    await executeSearch({
-      query: activeQuery,
-      pageIndex: 0,
-      append: false
-    });
-  }, [activeQuery, executeSearch]);
+  const isActionBusy =
+    contextActionPending || tagMutationPending || trashPending || shellActionPending || refreshPending || searchPending;
 
   const handleSaveSettings = useCallback(() => {
     void saveSettingsDraft().then((savedDraft) => {
@@ -394,38 +350,6 @@ export function App() {
     });
   }, [activeQuery, executeSearch, saveSettingsDraft]);
 
-  const runUndo = useCallback(() => {
-    if (!undoState || undoState.pending) {
-      return;
-    }
-
-    const undoToken = undoState.token;
-    const undoAction = undoState.undo;
-    setUndoState((prev) => {
-      if (!prev || prev.token !== undoToken) {
-        return prev;
-      }
-      return {
-        ...prev,
-        pending: true
-      };
-    });
-
-    void undoAction()
-      .then(async () => {
-        await refreshVisibleEntries();
-        onClearError();
-      })
-      .catch((error) => {
-        onError(error instanceof Error ? error.message : "Undo failed.");
-      })
-      .finally(() => {
-        if (undoTokenRef.current === undoToken) {
-          clearUndo();
-        }
-      });
-  }, [clearUndo, onClearError, onError, refreshVisibleEntries, undoState]);
-
   const runContextAsyncAction = useCallback(
     (action: () => Promise<void>) => {
       if (isActionBusy) {
@@ -443,165 +367,44 @@ export function App() {
     [isActionBusy, onError]
   );
 
-  const copyTagsFromEntries = useCallback(
-    (targetEntryIds: number[]) => {
-      setCopiedTagIds(collectTagUnionForEntries(entryById, targetEntryIds, RESERVED_CONTEXT_TAG_IDS));
-      onClearError();
+  const {
+    hasPasteableTags,
+    resetCopiedTagIds,
+    getContextMenuState: getEntryContextMenuState,
+    copyTagsFromEntries,
+    pasteTagsToEntries,
+    toggleReservedTagOnEntries,
+    openFilesForEntries,
+    revealFileInManager,
+    copyFilepathsFromEntries
+  } = useEntryContextActions({
+    entryById,
+    allTagIds,
+    selectedEntryIds,
+    inactiveEntryIds,
+    revealLabel,
+    addTagToEntries,
+    removeTagFromEntries,
+    applyTagMutationToEntries,
+    queueUndo,
+    refreshVisibleEntries,
+    openEntries,
+    revealEntry,
+    activeLibraryPath,
+    onError,
+    onClearError
+  });
+
+  const getContextMenuState = useCallback(
+    (entryId: number): ThumbnailContextMenuState => {
+      return getEntryContextMenuState(entryId, isActionBusy);
     },
-    [entryById, onClearError]
+    [getEntryContextMenuState, isActionBusy]
   );
 
-  const pasteTagsToEntries = useCallback(
-    async (targetEntryIds: number[]) => {
-      const usableTagIds = copiedTagIds.filter(
-        (tagId) => allTagIds.has(tagId) && !RESERVED_CONTEXT_TAG_IDS.has(tagId)
-      );
-      if (usableTagIds.length === 0 || targetEntryIds.length === 0) {
-        return;
-      }
-
-      const addedByTag: Array<{ tagId: number; entryIds: number[] }> = [];
-
-      for (const tagId of usableTagIds) {
-        const missingEntryIds = getTagMutationTargets(entryById, targetEntryIds, tagId, "add");
-        if (missingEntryIds.length === 0) {
-          continue;
-        }
-        await addTagToEntries(missingEntryIds, tagId);
-        addedByTag.push({ tagId, entryIds: missingEntryIds });
-      }
-
-      if (addedByTag.length === 0) {
-        return;
-      }
-
-      queueUndo("Pasted tags", async () => {
-        for (const { tagId, entryIds } of addedByTag) {
-          await removeTagFromEntries(entryIds, tagId);
-        }
-      });
-
-      await refreshVisibleEntries();
-    },
-    [
-      addTagToEntries,
-      allTagIds,
-      copiedTagIds,
-      entryById,
-      queueUndo,
-      refreshVisibleEntries,
-      removeTagFromEntries
-    ]
-  );
-
-  const toggleReservedTagOnEntries = useCallback(
-    async (
-      targetEntryIds: number[],
-      tagId: number,
-      mode: "add" | "remove",
-      undoLabel: string
-    ) => {
-      if (targetEntryIds.length === 0) {
-        return;
-      }
-
-      const mutationTargets =
-        getTagMutationTargets(entryById, targetEntryIds, tagId, mode);
-
-      if (mutationTargets.length === 0) {
-        return;
-      }
-
-      if (mode === "add") {
-        await addTagToEntries(mutationTargets, tagId);
-      } else {
-        await removeTagFromEntries(mutationTargets, tagId);
-      }
-      applyTagMutationToEntries(mutationTargets, tagId, mode);
-
-      queueUndo(undoLabel, async () => {
-        if (mode === "add") {
-          await removeTagFromEntries(mutationTargets, tagId);
-        } else {
-          await addTagToEntries(mutationTargets, tagId);
-        }
-      });
-    },
-    [addTagToEntries, applyTagMutationToEntries, entryById, queueUndo, removeTagFromEntries]
-  );
-
-  const performTrash = useCallback(
-    async (
-      targetEntryIds: number[],
-      options: {
-        skipForSession: boolean;
-        rememberForLibrary: boolean;
-      }
-    ) => {
-      if (targetEntryIds.length === 0) {
-        return;
-      }
-
-      if (options.skipForSession) {
-        setSkipTrashConfirmSession(true);
-      }
-      if (options.skipForSession && options.rememberForLibrary) {
-        await setConfirmBeforeTrashPreference(false);
-      }
-
-      const response = await trashEntries(targetEntryIds);
-
-      if (response.deleted_count > 0) {
-        const deletedIds = new Set(response.deleted_entry_ids);
-        setInactiveEntryIds((prev) => {
-          const next = new Set(prev);
-          for (const deletedId of deletedIds) {
-            next.add(deletedId);
-          }
-          return next;
-        });
-        setSelectedEntryIds((prev) => prev.filter((entryId) => !deletedIds.has(entryId)));
-        setSelectionAnchorId((prev) => {
-          if (prev === null || !deletedIds.has(prev)) {
-            return prev;
-          }
-          return null;
-        });
-        if (selectedEntryId !== null && deletedIds.has(selectedEntryId)) {
-          clearSelection();
-        }
-      }
-
-      if (response.failed_count > 0) {
-        const nextFailures = new Map<number, string>();
-        for (const failure of response.failed_entries) {
-          nextFailures.set(failure.entry_id, formatTrashFailureReason(failure.reason_code));
-        }
-        setTrashFailureMessagesByEntryId(nextFailures);
-        if (trashFailureTimeoutRef.current !== null) {
-          window.clearTimeout(trashFailureTimeoutRef.current);
-        }
-        trashFailureTimeoutRef.current = window.setTimeout(() => {
-          setTrashFailureMessagesByEntryId(new Map());
-        }, TRASH_FAILURE_TIMEOUT_MS);
-
-        const noun = response.failed_count === 1 ? "entry" : "entries";
-        onError(`Failed to move ${response.failed_count} ${noun} to Trash.`);
-      } else {
-        onClearError();
-        clearTrashFailureHighlights();
-      }
-    },
-    [
-      clearSelection,
-      clearTrashFailureHighlights,
-      onClearError,
-      onError,
-      selectedEntryId,
-      setConfirmBeforeTrashPreference,
-      trashEntries
-    ]
-  );
+  useEffect(() => {
+    resetCopiedTagIds();
+  }, [activeLibraryPath, resetCopiedTagIds]);
 
   const handleContextMenuOpenTarget = useCallback(
     (entryId: number, targetEntryIds: number[]) => {
@@ -614,28 +417,30 @@ export function App() {
     [selectEntry, selectedEntryIds]
   );
 
-  const getContextMenuState = useCallback(
-    (entryId: number): ThumbnailContextMenuState => {
-      const rawTargetIds = resolveContextTargetEntryIds(entryId, selectedEntryIds);
-      const targetEntryIds = rawTargetIds.filter((id) => entryById.has(id) && !inactiveEntryIds.has(id));
-      const effectiveTargetIds = targetEntryIds.length > 0 ? targetEntryIds : [entryId];
-      const favoriteMode = getToggleModeForTag(entryById, effectiveTargetIds, TAG_FAVORITE_ID);
-      const archiveMode = getToggleModeForTag(entryById, effectiveTargetIds, TAG_ARCHIVED_ID);
-
-      return {
-        targetEntryIds: effectiveTargetIds,
-        canPaste: copiedTagIds.length > 0,
-        favoriteMode: favoriteMode === "add" ? "favorite" : "unfavorite",
-        archiveMode: archiveMode === "add" ? "archive" : "unarchive",
-        disabled: isActionBusy
-      };
-    },
-    [copiedTagIds.length, entryById, inactiveEntryIds, isActionBusy, selectedEntryIds]
-  );
-
   const handleContextMenuAction = useCallback(
     (action: ThumbnailContextMenuAction, state: ThumbnailContextMenuState) => {
       if (state.targetEntryIds.length === 0) {
+        return;
+      }
+
+      if (action === "open_file") {
+        runContextAsyncAction(async () => {
+          await openFilesForEntries(state.targetEntryIds);
+        });
+        return;
+      }
+
+      if (action === "reveal_file") {
+        runContextAsyncAction(async () => {
+          await revealFileInManager(state.contextEntryId);
+        });
+        return;
+      }
+
+      if (action === "copy_filepath") {
+        runContextAsyncAction(async () => {
+          await copyFilepathsFromEntries(state.targetEntryIds);
+        });
         return;
       }
 
@@ -697,9 +502,12 @@ export function App() {
     },
     [
       confirmBeforeTrash,
+      copyFilepathsFromEntries,
       copyTagsFromEntries,
+      openFilesForEntries,
       pasteTagsToEntries,
       performTrash,
+      revealFileInManager,
       runContextAsyncAction,
       skipTrashConfirmSession,
       toggleReservedTagOnEntries
@@ -720,6 +528,20 @@ export function App() {
       });
     });
   }, [performTrash, runContextAsyncAction, trashDialogState]);
+
+  const pasteTagsFromMetadata = useCallback(
+    (targetEntryIds: number[]) => {
+      const activeTargetIds = targetEntryIds.filter((entryId) => !inactiveEntryIds.has(entryId));
+      if (activeTargetIds.length === 0) {
+        return;
+      }
+
+      runContextAsyncAction(async () => {
+        await pasteTagsToEntries(activeTargetIds);
+      });
+    },
+    [inactiveEntryIds, pasteTagsToEntries, runContextAsyncAction]
+  );
 
   const handleGridSelect = useCallback(
     (entryId: number, event: ReactMouseEvent<HTMLButtonElement>) => {
@@ -802,8 +624,10 @@ export function App() {
       tagMutationPending={tagMutationPending}
       tagEditPending={tagEditPending}
       updateFieldPending={updateFieldPending}
+      canPasteTags={hasPasteableTags}
       onAddTagToEntries={addTagToEntries}
       onRemoveTagFromEntries={removeTagFromEntries}
+      onPasteTagsToEntries={pasteTagsFromMetadata}
       onCreateTag={createTag}
       onUpdateTag={updateTag}
       onRefreshSelection={refreshSelectedEntry}

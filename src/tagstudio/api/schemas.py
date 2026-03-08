@@ -205,6 +205,38 @@ class TrashEntriesResponse(BaseModel):
     failed_entries: list[TrashEntryFailure] = Field(default_factory=list)
 
 
+class EntryShellActionFailureReasonCode(str, Enum):
+    ENTRY_NOT_FOUND = "ENTRY_NOT_FOUND"
+    MISSING_ON_DISK = "MISSING_ON_DISK"
+    NOT_A_FILE = "NOT_A_FILE"
+    PERMISSION_DENIED = "PERMISSION_DENIED"
+    COMMAND_NOT_FOUND = "COMMAND_NOT_FOUND"
+    OS_ERROR = "OS_ERROR"
+    UNKNOWN_ERROR = "UNKNOWN_ERROR"
+
+
+class EntryShellActionFailure(BaseModel):
+    entry_id: int
+    path: str | None = None
+    reason_code: EntryShellActionFailureReasonCode
+
+
+class OpenEntriesRequest(BaseModel):
+    entry_ids: list[int] = Field(default_factory=list, max_length=5)
+
+
+class OpenEntriesResponse(BaseModel):
+    success: bool
+    opened_entry_ids: list[int] = Field(default_factory=list)
+    opened_count: int = 0
+    failed_count: int = 0
+    failed_entries: list[EntryShellActionFailure] = Field(default_factory=list)
+
+
+class RevealEntryRequest(BaseModel):
+    entry_id: int
+
+
 class TagCreateRequest(BaseModel):
     name: str
     shorthand: str | None = None

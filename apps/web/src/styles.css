@@ -989,6 +989,12 @@ body.modal-dragging {
   gap: 0.5rem;
 }
 
+.metadata-tag-actions-buttons {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
 .metadata-tag-list {
   display: flex;
   flex-wrap: wrap;

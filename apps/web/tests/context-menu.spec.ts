@@ -78,6 +78,8 @@ test("supports context-menu copy/paste, favorite/archive toggles, and trash-conf
   const tagAddCalls: Array<{ entry_ids: number[]; tag_ids: number[] }> = [];
   const tagRemoveCalls: Array<{ entry_ids: number[]; tag_ids: number[] }> = [];
   const trashCalls: Array<{ entry_ids: number[] }> = [];
+  const openCalls: Array<{ entry_ids: number[] }> = [];
+  const revealCalls: Array<{ entry_id: number }> = [];
   const settingsPatchCalls: Array<Record<string, unknown>> = [];
   let searchCalls = 0;
 
@@ -271,6 +273,26 @@ test("supports context-menu copy/paste, favorite/archive toggles, and trash-conf
       return;
     }
 
+    if (pathname === "/api/v1/entries:open" && method === "POST") {
+      const payload = request.postDataJSON() as { entry_ids: number[] };
+      openCalls.push(payload);
+      await fulfillJson(route, {
+        success: true,
+        opened_entry_ids: payload.entry_ids,
+        opened_count: payload.entry_ids.length,
+        failed_count: 0,
+        failed_entries: []
+      });
+      return;
+    }
+
+    if (pathname === "/api/v1/entries:reveal" && method === "POST") {
+      const payload = request.postDataJSON() as { entry_id: number };
+      revealCalls.push(payload);
+      await fulfillJson(route, { success: true });
+      return;
+    }
+
     await fulfillJson(route, { detail: `Unmocked endpoint: ${pathname}` }, 404);
   });
 
@@ -279,6 +301,18 @@ test("supports context-menu copy/paste, favorite/archive toggles, and trash-conf
     await route.fulfill({ status: 200, contentType: "image/png", body: tinyPng });
   });
 
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText: async (text: string) => {
+          (window as Window & { __lastCopiedText?: string }).__lastCopiedText = text;
+        }
+      }
+    });
+  });
+
+  await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Files" })).toBeVisible();
 
@@ -292,7 +326,29 @@ test("supports context-menu copy/paste, favorite/archive toggles, and trash-conf
 
   await alphaCard.click();
   await betaCard.click({ modifiers: ["Control"] });
-  await gammaCard.click({ button: "right" });
+
+  await betaCard.click({ button: "right", force: true });
+  await expect(page.locator(".thumb-context-menu")).toBeVisible();
+  await page.locator(".thumb-context-menu-item").nth(0).click();
+  await expect.poll(() => openCalls.length).toBe(1);
+  expect(openCalls[0].entry_ids).toEqual([101, 102]);
+
+  await betaCard.click({ button: "right", force: true });
+  await expect(page.locator(".thumb-context-menu")).toBeVisible();
+  await page.locator(".thumb-context-menu-item").nth(1).click();
+  await expect.poll(() => revealCalls.length).toBe(1);
+  expect(revealCalls[0].entry_id).toBe(102);
+
+  await betaCard.click({ button: "right", force: true });
+  await expect(page.locator(".thumb-context-menu")).toBeVisible();
+  await page.locator(".thumb-context-menu-item").nth(2).click();
+  const copiedPaths = await page.evaluate(() => (window as Window & { __lastCopiedText?: string }).__lastCopiedText);
+  expect(copiedPaths).toBe("/tmp/library/images/alpha.jpg\n/tmp/library/images/beta.jpg");
+
+  await gammaCard.click({ button: "right", force: true });
+  await expect(page.locator(".thumb-context-menu")).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: "Paste Tags" })).toHaveCount(0);
+
   const searchCallsBeforeFavorite = searchCalls;
   await page.getByRole("menuitem", { name: "Favorite" }).click();
   await expect.poll(() => tagAddCalls.some((call) => call.tag_ids[0] === 1)).toBe(true);
@@ -303,6 +359,14 @@ test("supports context-menu copy/paste, favorite/archive toggles, and trash-conf
 
   await alphaCard.click({ button: "right" });
   await page.getByRole("menuitem", { name: "Copy Tags" }).click();
+
+  await gammaCard.click();
+  await expect(page.getByRole("button", { name: "Paste Tags" })).toBeVisible();
+  await page.getByRole("button", { name: "Paste Tags" }).click();
+  await expect.poll(() =>
+    tagAddCalls.some((call) => call.tag_ids.includes(7) && call.entry_ids.includes(103))
+  ).toBe(true);
+
   await betaCard.click({ button: "right" });
   await page.getByRole("menuitem", { name: "Paste Tags" }).click();
   await expect.poll(() =>

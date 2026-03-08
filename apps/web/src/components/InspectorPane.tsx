@@ -40,7 +40,9 @@ type InspectorPaneProps = {
   tagMutationPending: boolean;
   tagEditPending: boolean;
   updateFieldPending: boolean;
+  canPasteTags: boolean;
   onAddTagToEntries: (entryIds: number[], tagId: number) => Promise<void>;
+  onPasteTagsToEntries: (entryIds: number[]) => void;
   onRemoveTagFromEntries: (entryIds: number[], tagId: number) => Promise<void>;
   onCreateTag: (payload: TagCreatePayload) => Promise<TagResponse | null>;
   onUpdateTag: (tagId: number, payload: TagUpdatePayload) => Promise<TagResponse | null>;
@@ -93,7 +95,9 @@ export function InspectorPane({
   tagMutationPending,
   tagEditPending,
   updateFieldPending,
+  canPasteTags,
   onAddTagToEntries,
+  onPasteTagsToEntries,
   onRemoveTagFromEntries,
   onCreateTag,
   onUpdateTag,
@@ -140,7 +144,9 @@ export function InspectorPane({
         tagMutationPending={tagMutationPending}
         tagEditPending={tagEditPending}
         updateFieldPending={updateFieldPending}
+        canPasteTags={canPasteTags}
         onAddTagToEntries={onAddTagToEntries}
+        onPasteTagsToEntries={onPasteTagsToEntries}
         onRemoveTagFromEntries={onRemoveTagFromEntries}
         onCreateTag={onCreateTag}
         onUpdateTag={onUpdateTag}
@@ -286,7 +292,9 @@ type MetadataContentProps = {
   tagMutationPending: boolean;
   tagEditPending: boolean;
   updateFieldPending: boolean;
+  canPasteTags: boolean;
   onAddTagToEntries: (entryIds: number[], tagId: number) => Promise<void>;
+  onPasteTagsToEntries: (entryIds: number[]) => void;
   onRemoveTagFromEntries: (entryIds: number[], tagId: number) => Promise<void>;
   onCreateTag: (payload: TagCreatePayload) => Promise<TagResponse | null>;
   onUpdateTag: (tagId: number, payload: TagUpdatePayload) => Promise<TagResponse | null>;
@@ -310,7 +318,9 @@ function MetadataContent({
   tagMutationPending,
   tagEditPending,
   updateFieldPending,
+  canPasteTags,
   onAddTagToEntries,
+  onPasteTagsToEntries,
   onRemoveTagFromEntries,
   onCreateTag,
   onUpdateTag,
@@ -426,9 +436,21 @@ function MetadataContent({
       <div className="metadata-tag-actions">
         <div className="metadata-tag-actions-header">
           <strong>Tags</strong>
-          <Button size="sm" onClick={() => setAddTagsOpen(true)} disabled={tagMutationPending}>
-            Add Tag
-          </Button>
+          <div className="metadata-tag-actions-buttons">
+            {canPasteTags ? (
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => onPasteTagsToEntries(selectedEntryIds)}
+                disabled={tagMutationPending}
+              >
+                Paste Tags
+              </Button>
+            ) : null}
+            <Button size="sm" onClick={() => setAddTagsOpen(true)} disabled={tagMutationPending}>
+              Add Tag
+            </Button>
+          </div>
         </div>
 
         <div className="metadata-tag-list">

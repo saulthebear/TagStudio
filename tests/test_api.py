@@ -137,6 +137,110 @@ def test_entries_trash_reason_codes_for_missing_and_not_found() -> None:
             assert foo_id in remaining_ids
 
 
+def test_entries_trash_os_error_does_not_delete_file() -> None:
+    with TemporaryDirectory() as tmp:
+        library_path = Path(tmp)
+        seed_library(library_path)
+
+        app = create_app()
+        with TestClient(app) as client:
+            open_res = client.post("/api/v1/libraries/open", json={"path": str(library_path)})
+            assert open_res.status_code == 200
+
+            ids = get_entry_ids_by_filename(client)
+            foo_id = ids["foo.txt"]
+            foo_path = library_path / "foo.txt"
+
+            with patch("tagstudio.api.routes.send2trash", side_effect=OSError("simulated os error")):
+                trash = client.post("/api/v1/entries:trash", json={"entry_ids": [foo_id]})
+
+            assert trash.status_code == 200
+            payload = trash.json()
+            assert payload["success"] is False
+            assert payload["deleted_count"] == 0
+            assert payload["failed_count"] == 1
+            assert payload["failed_entries"][0]["reason_code"] == "OS_ERROR"
+            assert foo_path.exists() is True
+
+
+def test_entries_open_partial_failure_reports_reason_codes() -> None:
+    with TemporaryDirectory() as tmp:
+        library_path = Path(tmp)
+        seed_library(library_path)
+
+        app = create_app()
+        with TestClient(app) as client:
+            open_res = client.post("/api/v1/libraries/open", json={"path": str(library_path)})
+            assert open_res.status_code == 200
+
+            ids = get_entry_ids_by_filename(client)
+            foo_id = ids["foo.txt"]
+            missing_entry_id = 999_999
+
+            with (
+                patch("tagstudio.api.routes.sys.platform", "darwin"),
+                patch("tagstudio.api.routes.shutil.which", return_value="/usr/bin/open"),
+                patch("tagstudio.api.routes.silent_popen") as popen_mock,
+            ):
+                response = client.post(
+                    "/api/v1/entries:open",
+                    json={"entry_ids": [foo_id, missing_entry_id]},
+                )
+
+            assert response.status_code == 200
+            payload = response.json()
+            assert payload["success"] is False
+            assert payload["opened_count"] == 1
+            assert payload["opened_entry_ids"] == [foo_id]
+            assert payload["failed_count"] == 1
+            assert payload["failed_entries"] == [
+                {
+                    "entry_id": missing_entry_id,
+                    "path": None,
+                    "reason_code": "ENTRY_NOT_FOUND",
+                }
+            ]
+            assert popen_mock.call_count == 1
+
+
+def test_entries_reveal_success_and_missing_command() -> None:
+    with TemporaryDirectory() as tmp:
+        library_path = Path(tmp)
+        seed_library(library_path)
+
+        app = create_app()
+        with TestClient(app) as client:
+            open_res = client.post("/api/v1/libraries/open", json={"path": str(library_path)})
+            assert open_res.status_code == 200
+
+            ids = get_entry_ids_by_filename(client)
+            foo_id = ids["foo.txt"]
+            expected_path = str((library_path / "foo.txt").resolve())
+
+            with (
+                patch("tagstudio.api.routes.sys.platform", "darwin"),
+                patch("tagstudio.api.routes.shutil.which", return_value="/usr/bin/open"),
+                patch("tagstudio.api.routes.silent_popen") as popen_mock,
+            ):
+                reveal = client.post("/api/v1/entries:reveal", json={"entry_id": foo_id})
+
+            assert reveal.status_code == 200
+            assert reveal.json()["success"] is True
+            popen_mock.assert_called_once_with(
+                ["/usr/bin/open", "-R", expected_path],
+                close_fds=True,
+            )
+
+            with (
+                patch("tagstudio.api.routes.sys.platform", "darwin"),
+                patch("tagstudio.api.routes.shutil.which", return_value=None),
+            ):
+                reveal_no_command = client.post("/api/v1/entries:reveal", json={"entry_id": foo_id})
+
+            assert reveal_no_command.status_code == 501
+            assert "No file manager command is available." in reveal_no_command.json()["detail"]
+
+
 def test_api_core_workflows() -> None:
     with TemporaryDirectory() as tmp:
         library_path = Path(tmp)
