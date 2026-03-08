@@ -1584,7 +1584,7 @@ class Library:
         entry_chunk_size = max(1, MAX_SQL_VARIABLES // 2)
         tag_chunk_size = max(1, MAX_SQL_VARIABLES // 2)
         total_removed = 0
-        
+
         def _rowcount(result: Any) -> int:
             return max(0, int(getattr(result, "rowcount", 0) or 0))
 
