@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import base64
 import json
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 from PIL import Image
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from tagstudio.api.app import create_app
 from tagstudio.core.library.alchemy.library import Library
@@ -179,6 +182,142 @@ def test_api_core_workflows() -> None:
             delete_tag = client.delete(f"/api/v1/tags/{new_tag_id}")
             assert delete_tag.status_code == 200
             assert delete_tag.json()["success"] is True
+
+
+def test_search_random_seed_behavior() -> None:
+    with TemporaryDirectory() as tmp:
+        library_path = Path(tmp)
+        library_path.mkdir(parents=True, exist_ok=True)
+        filenames = [f"item-{index:02}.txt" for index in range(12)]
+        for filename in filenames:
+            (library_path / filename).write_text(filename, encoding="utf-8")
+
+        lib = Library()
+        status = lib.open_library(library_path)
+        assert status.success
+        folder = unwrap(lib.folder)
+        entries = [
+            Entry(path=Path(filename), folder=folder, fields=lib.default_fields)
+            for filename in filenames
+        ]
+        assert len(lib.add_entries(entries)) == len(entries)
+        lib.close()
+
+        app = create_app()
+        with TestClient(app) as client:
+            open_res = client.post("/api/v1/libraries/open", json={"path": str(library_path)})
+            assert open_res.status_code == 200
+
+            random_request = {
+                "query": "",
+                "sorting_mode": "sorting.mode.random",
+                "ascending": False,
+                "page_size": 200,
+            }
+            first_random = client.post("/api/v1/search", json=random_request)
+            second_random = client.post("/api/v1/search", json=random_request)
+            assert first_random.status_code == 200
+            assert second_random.status_code == 200
+            first_random_payload = first_random.json()
+            second_random_payload = second_random.json()
+            assert first_random_payload["random_seed"] is not None
+            assert second_random_payload["random_seed"] is not None
+            assert first_random_payload["random_seed"] != second_random_payload["random_seed"]
+            assert first_random_payload["ids"] != second_random_payload["ids"]
+
+            seed_a = 17.25
+            seeded_random_request = {**random_request, "random_seed": seed_a}
+            seeded_first = client.post("/api/v1/search", json=seeded_random_request)
+            seeded_second = client.post("/api/v1/search", json=seeded_random_request)
+            assert seeded_first.status_code == 200
+            assert seeded_second.status_code == 200
+            seeded_first_payload = seeded_first.json()
+            seeded_second_payload = seeded_second.json()
+            assert seeded_first_payload["random_seed"] == seed_a
+            assert seeded_second_payload["random_seed"] == seed_a
+            assert seeded_first_payload["ids"] == seeded_second_payload["ids"]
+
+            seed_b = 52.75
+            seeded_other = client.post(
+                "/api/v1/search",
+                json={**random_request, "random_seed": seed_b},
+            )
+            assert seeded_other.status_code == 200
+            seeded_other_payload = seeded_other.json()
+            assert seeded_other_payload["random_seed"] == seed_b
+            assert seeded_first_payload["ids"] != seeded_other_payload["ids"]
+
+
+def test_search_recently_added_uses_date_added_with_tie_breaks() -> None:
+    with TemporaryDirectory() as tmp:
+        library_path = Path(tmp)
+        library_path.mkdir(parents=True, exist_ok=True)
+        filenames = ["z-newest.txt", "a-tie-low.txt", "m-tie-high.txt", "n-null.txt"]
+        for filename in filenames:
+            (library_path / filename).write_text(filename, encoding="utf-8")
+
+        lib = Library()
+        status = lib.open_library(library_path)
+        assert status.success
+        folder = unwrap(lib.folder)
+        entries = [
+            Entry(path=Path(filename), folder=folder, fields=lib.default_fields)
+            for filename in filenames
+        ]
+        assert len(lib.add_entries(entries)) == len(entries)
+
+        assert lib.engine is not None
+        with Session(lib.engine) as session:
+            ordered_entries = list(session.scalars(select(Entry).order_by(Entry.id.asc())))
+            newest = datetime(2026, 1, 1, 12, 0, tzinfo=UTC)
+            ordered_entries[0].date_added = newest
+            ordered_entries[1].date_added = newest - timedelta(days=1)
+            ordered_entries[2].date_added = newest - timedelta(days=1)
+            ordered_entries[3].date_added = None
+            session.commit()
+
+            expected_desc_ids = [
+                ordered_entries[0].id,
+                ordered_entries[2].id,
+                ordered_entries[1].id,
+                ordered_entries[3].id,
+            ]
+            expected_asc_ids = [
+                ordered_entries[3].id,
+                ordered_entries[1].id,
+                ordered_entries[2].id,
+                ordered_entries[0].id,
+            ]
+        lib.close()
+
+        app = create_app()
+        with TestClient(app) as client:
+            open_res = client.post("/api/v1/libraries/open", json={"path": str(library_path)})
+            assert open_res.status_code == 200
+
+            descending = client.post(
+                "/api/v1/search",
+                json={
+                    "query": "",
+                    "sorting_mode": "file.date_added",
+                    "ascending": False,
+                    "page_size": 200,
+                },
+            )
+            assert descending.status_code == 200
+            assert descending.json()["ids"] == expected_desc_ids
+
+            ascending = client.post(
+                "/api/v1/search",
+                json={
+                    "query": "",
+                    "sorting_mode": "file.date_added",
+                    "ascending": True,
+                    "page_size": 200,
+                },
+            )
+            assert ascending.status_code == 200
+            assert ascending.json()["ids"] == expected_asc_ids
 
 
 def test_tag_validation_and_parent_filtering() -> None:

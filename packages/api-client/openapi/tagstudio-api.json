@@ -194,6 +194,28 @@
         }
       }
     },
+    "/api/v1/tag-colors": {
+      "get": {
+        "summary": "List Tag Colors",
+        "operationId": "list_tag_colors_api_v1_tag_colors_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TagColorNamespaceResponse"
+                  },
+                  "type": "array",
+                  "title": "Response List Tag Colors Api V1 Tag Colors Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/tags": {
       "get": {
         "summary": "List Tags",
@@ -223,6 +245,22 @@
               "type": "integer",
               "default": 200,
               "title": "Limit"
+            }
+          },
+          {
+            "name": "parent_for_tag_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Parent For Tag Id"
             }
           }
         ],
@@ -867,31 +905,6 @@
           }
         }
       }
-    },
-    "/api/v1/tag-colors": {
-      "get": {
-        "tags": [
-          "default"
-        ],
-        "summary": "List Tag Colors",
-        "operationId": "list_tag_colors_api_v1_tag_colors_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/TagColorNamespaceResponse"
-                  },
-                  "title": "Response List Tag Colors Api V1 Tag Colors Get"
-                }
-              }
-            }
-          }
-        }
-      }
     }
   },
   "components": {
@@ -1208,8 +1221,8 @@
         "properties": {
           "main_split_ratio": {
             "type": "number",
-            "maximum": 1,
-            "minimum": 0,
+            "maximum": 1.0,
+            "minimum": 0.0,
             "title": "Main Split Ratio",
             "default": 0.78
           },
@@ -1225,15 +1238,15 @@
           },
           "main_last_open_ratio": {
             "type": "number",
-            "maximum": 1,
-            "minimum": 0,
+            "maximum": 1.0,
+            "minimum": 0.0,
             "title": "Main Last Open Ratio",
             "default": 0.78
           },
           "inspector_split_ratio": {
             "type": "number",
-            "maximum": 1,
-            "minimum": 0,
+            "maximum": 1.0,
+            "minimum": 0.0,
             "title": "Inspector Split Ratio",
             "default": 0.52
           },
@@ -1249,8 +1262,8 @@
           },
           "inspector_last_open_ratio": {
             "type": "number",
-            "maximum": 1,
-            "minimum": 0,
+            "maximum": 1.0,
+            "minimum": 0.0,
             "title": "Inspector Last Open Ratio",
             "default": 0.52
           },
@@ -1274,8 +1287,8 @@
             "anyOf": [
               {
                 "type": "number",
-                "maximum": 1,
-                "minimum": 0
+                "maximum": 1.0,
+                "minimum": 0.0
               },
               {
                 "type": "null"
@@ -1309,8 +1322,8 @@
             "anyOf": [
               {
                 "type": "number",
-                "maximum": 1,
-                "minimum": 0
+                "maximum": 1.0,
+                "minimum": 0.0
               },
               {
                 "type": "null"
@@ -1322,8 +1335,8 @@
             "anyOf": [
               {
                 "type": "number",
-                "maximum": 1,
-                "minimum": 0
+                "maximum": 1.0,
+                "minimum": 0.0
               },
               {
                 "type": "null"
@@ -1357,8 +1370,8 @@
             "anyOf": [
               {
                 "type": "number",
-                "maximum": 1,
-                "minimum": 0
+                "maximum": 1.0,
+                "minimum": 0.0
               },
               {
                 "type": "null"
@@ -1555,14 +1568,27 @@
           },
           "page_size": {
             "type": "integer",
-            "maximum": 2000,
-            "minimum": 1,
+            "maximum": 2000.0,
+            "minimum": 1.0,
             "title": "Page Size",
             "default": 200
           },
           "sorting_mode": {
             "$ref": "#/components/schemas/SortingMode",
             "default": "file.date_added"
+          },
+          "random_seed": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 100.0,
+                "minimum": 0.1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Random Seed"
           },
           "ascending": {
             "type": "boolean",
@@ -1597,6 +1623,17 @@
             },
             "type": "array",
             "title": "Entries"
+          },
+          "random_seed": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Random Seed"
           }
         },
         "type": "object",
@@ -1625,8 +1662,8 @@
           },
           "page_size": {
             "type": "integer",
-            "maximum": 2000,
-            "minimum": 1,
+            "maximum": 2000.0,
+            "minimum": 1.0,
             "title": "Page Size",
             "default": 200
           },
@@ -1678,8 +1715,8 @@
             "anyOf": [
               {
                 "type": "integer",
-                "maximum": 2000,
-                "minimum": 1
+                "maximum": 2000.0,
+                "minimum": 1.0
               },
               {
                 "type": "null"
@@ -1733,6 +1770,80 @@
           "success"
         ],
         "title": "SuccessResponse"
+      },
+      "TagColorNamespaceResponse": {
+        "properties": {
+          "namespace": {
+            "type": "string",
+            "title": "Namespace"
+          },
+          "namespace_name": {
+            "type": "string",
+            "title": "Namespace Name"
+          },
+          "colors": {
+            "items": {
+              "$ref": "#/components/schemas/TagColorResponse"
+            },
+            "type": "array",
+            "title": "Colors"
+          }
+        },
+        "type": "object",
+        "required": [
+          "namespace",
+          "namespace_name"
+        ],
+        "title": "TagColorNamespaceResponse"
+      },
+      "TagColorResponse": {
+        "properties": {
+          "namespace": {
+            "type": "string",
+            "title": "Namespace"
+          },
+          "namespace_name": {
+            "type": "string",
+            "title": "Namespace Name"
+          },
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "primary": {
+            "type": "string",
+            "title": "Primary"
+          },
+          "secondary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Secondary"
+          },
+          "color_border": {
+            "type": "boolean",
+            "title": "Color Border",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "namespace",
+          "namespace_name",
+          "slug",
+          "name",
+          "primary"
+        ],
+        "title": "TagColorResponse"
       },
       "TagCreateRequest": {
         "properties": {
@@ -2273,82 +2384,6 @@
           "type"
         ],
         "title": "ValidationError"
-      },
-      "TagColorResponse": {
-        "type": "object",
-        "title": "TagColorResponse",
-        "required": [
-          "namespace",
-          "namespace_name",
-          "slug",
-          "name",
-          "primary",
-          "color_border"
-        ],
-        "properties": {
-          "namespace": {
-            "type": "string",
-            "title": "Namespace"
-          },
-          "namespace_name": {
-            "type": "string",
-            "title": "Namespace Name"
-          },
-          "slug": {
-            "type": "string",
-            "title": "Slug"
-          },
-          "name": {
-            "type": "string",
-            "title": "Name"
-          },
-          "primary": {
-            "type": "string",
-            "title": "Primary"
-          },
-          "secondary": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Secondary"
-          },
-          "color_border": {
-            "type": "boolean",
-            "title": "Color Border",
-            "default": false
-          }
-        }
-      },
-      "TagColorNamespaceResponse": {
-        "type": "object",
-        "title": "TagColorNamespaceResponse",
-        "required": [
-          "namespace",
-          "namespace_name"
-        ],
-        "properties": {
-          "namespace": {
-            "type": "string",
-            "title": "Namespace"
-          },
-          "namespace_name": {
-            "type": "string",
-            "title": "Namespace Name"
-          },
-          "colors": {
-            "type": "array",
-            "title": "Colors",
-            "items": {
-              "$ref": "#/components/schemas/TagColorResponse"
-            },
-            "default": []
-          }
-        }
       }
     }
   }

@@ -536,6 +536,144 @@ test("applies top-bar filter menu toggles with live query sync and request flags
   ).toBeVisible();
 });
 
+test("random sorting reshuffles on search and reuses seed for pagination", async ({ page }) => {
+  const settingsPayload = {
+    ...createSettingsPayload(),
+    page_size: 12
+  };
+  const entries = Array.from({ length: 36 }, (_, index) => {
+    const id = index + 1;
+    return {
+      id,
+      path: `images/item-${String(id).padStart(2, "0")}.png`,
+      filename: `item-${String(id).padStart(2, "0")}.png`,
+      suffix: "png",
+      tag_ids: []
+    };
+  });
+  const randomRequests: Array<{ pageIndex: number; randomSeed?: number }> = [];
+  const randomResponses: Array<{ pageIndex: number; randomSeed: number; ids: number[] }> = [];
+  let generatedRandomSeed = 10;
+
+  await page.route(`${API_BASE_URL}/api/v1/**`, async (route) => {
+    const request = route.request();
+    const { pathname } = new URL(request.url());
+
+    if (pathname === "/api/v1/libraries/state") {
+      await fulfillJson(route, {
+        is_open: true,
+        library_path: "/tmp/library",
+        entries_count: entries.length,
+        tags_count: 0
+      });
+      return;
+    }
+
+    if (pathname === "/api/v1/settings") {
+      await fulfillJson(route, settingsPayload);
+      return;
+    }
+
+    if (pathname === "/api/v1/field-types") {
+      await fulfillJson(route, []);
+      return;
+    }
+
+    if (pathname === "/api/v1/tags") {
+      await fulfillJson(route, []);
+      return;
+    }
+
+    if (pathname === "/api/v1/search" && request.method() === "POST") {
+      const payload = request.postDataJSON() as {
+        page_index?: number;
+        page_size?: number;
+        sorting_mode?: string;
+        ascending?: boolean;
+        random_seed?: number;
+      };
+      const pageIndex = payload.page_index ?? 0;
+      const pageSize = payload.page_size ?? settingsPayload.page_size;
+      const ascending = payload.ascending ?? false;
+      const sortingMode = payload.sorting_mode ?? "file.date_added";
+
+      if (sortingMode === "sorting.mode.random") {
+        randomRequests.push({ pageIndex, randomSeed: payload.random_seed });
+        const randomSeed = payload.random_seed ?? generatedRandomSeed++;
+        const ordered = [...entries].sort((a, b) => {
+          const randomDelta = Math.sin(a.id * randomSeed) - Math.sin(b.id * randomSeed);
+          if (randomDelta !== 0) {
+            return ascending ? randomDelta : -randomDelta;
+          }
+          return ascending ? a.id - b.id : b.id - a.id;
+        });
+        const pageEntries = ordered.slice(pageIndex * pageSize, pageIndex * pageSize + pageSize);
+        randomResponses.push({
+          pageIndex,
+          randomSeed,
+          ids: pageEntries.map((entry) => entry.id)
+        });
+        await fulfillJson(route, {
+          total_count: entries.length,
+          ids: pageEntries.map((entry) => entry.id),
+          entries: pageEntries,
+          random_seed: randomSeed
+        });
+        return;
+      }
+
+      const ordered = [...entries].sort((a, b) => b.id - a.id);
+      const pageEntries = ordered.slice(pageIndex * pageSize, pageIndex * pageSize + pageSize);
+      await fulfillJson(route, {
+        total_count: entries.length,
+        ids: pageEntries.map((entry) => entry.id),
+        entries: pageEntries
+      });
+      return;
+    }
+
+    if (pathname === "/api/v1/thumbnails/prewarm" && request.method() === "POST") {
+      await fulfillJson(route, { accepted: 0, skipped: 0 }, 202);
+      return;
+    }
+
+    await fulfillJson(route, { detail: `Unmocked endpoint: ${pathname}` }, 404);
+  });
+
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "Files" })).toBeVisible();
+
+  await page.locator(".top-filter-sort-mode").selectOption("sorting.mode.random");
+  await expect.poll(() => randomResponses.filter((response) => response.pageIndex === 0).length).toBe(1);
+  const initialRandomRequest = randomRequests.find((request) => request.pageIndex === 0);
+  const initialRandomPage = randomResponses.find((response) => response.pageIndex === 0);
+  expect(initialRandomRequest?.randomSeed).toBeUndefined();
+  expect(initialRandomPage).toBeTruthy();
+
+  const firstRandomSeed = initialRandomPage!.randomSeed;
+  const firstRandomIds = initialRandomPage!.ids;
+
+  await page.locator(".thumb-grid-scroll").evaluate((element) => {
+    element.scrollTo({ top: element.scrollHeight });
+  });
+  await expect.poll(() => randomResponses.some((response) => response.pageIndex === 1)).toBe(true);
+  const appendRandomRequest = randomRequests.find((request) => request.pageIndex === 1);
+  expect(appendRandomRequest).toBeTruthy();
+  expect(appendRandomRequest!.randomSeed).toBe(firstRandomSeed);
+
+  const pageZeroCountBeforeSearch = randomResponses.filter((response) => response.pageIndex === 0).length;
+  await page.getByRole("button", { name: "Search" }).click();
+  await expect
+    .poll(() => randomResponses.filter((response) => response.pageIndex === 0).length)
+    .toBe(pageZeroCountBeforeSearch + 1);
+  const latestPageZeroRequest = randomRequests.filter((request) => request.pageIndex === 0).at(-1);
+  const latestPageZeroResponse = randomResponses.filter((response) => response.pageIndex === 0).at(-1);
+  expect(latestPageZeroRequest?.randomSeed).toBeUndefined();
+  expect(latestPageZeroResponse).toBeTruthy();
+  expect(latestPageZeroResponse!.randomSeed).not.toBe(firstRandomSeed);
+  expect(latestPageZeroResponse!.ids).not.toEqual(firstRandomIds);
+});
+
 test("defers special:untagged result refresh until explicit search", async ({ page }) => {
   const settingsPayload = createSettingsPayload();
   const searchRequests: string[] = [];
@@ -1515,10 +1653,21 @@ test("supports add-tags modal create-and-add workflow", async ({ page }) => {
   await expect(metadataChip).toContainText("game");
   await expect(page.locator(".metadata-tag-actions").getByRole("button", { name: "Edit" })).toHaveCount(0);
 
+  const chipRemoveSlot = metadataChip.locator(".metadata-tag-chip-remove-slot");
   const chipRemoveButton = metadataChip.locator(".metadata-tag-chip-remove");
   await expect(chipRemoveButton).toHaveCSS("opacity", "0");
+  await expect
+    .poll(async () => (await chipRemoveSlot.boundingBox())?.width ?? 0, {
+      message: "remove slot should be collapsed before hover"
+    })
+    .toBeLessThan(2);
   await metadataChip.hover();
   await expect(chipRemoveButton).toHaveCSS("opacity", "1");
+  await expect
+    .poll(async () => (await chipRemoveSlot.boundingBox())?.width ?? 0, {
+      message: "remove slot should expand on hover"
+    })
+    .toBeGreaterThan(16);
 
   await metadataChip.locator(".metadata-tag-chip-main").click();
   await expect(page.getByRole("dialog", { name: "Edit tag" })).toBeVisible();

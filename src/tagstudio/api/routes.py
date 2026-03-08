@@ -1,4 +1,5 @@
 import mimetypes
+import secrets
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode
@@ -261,10 +262,21 @@ def create_router(*, state: ApiState, jobs: JobManager) -> APIRouter:
     @router.post("/search", response_model=SearchResponse)
     def search_entries(request: SearchRequest) -> SearchResponse:
         lib = get_library_or_error()
+        sorting_mode = SortingModeEnum(request.sorting_mode.value)
+        effective_random_seed: float | None = None
+        if sorting_mode == SortingModeEnum.RANDOM:
+            # Keep seed values in a precision-safe range for SQL trig-based ordering.
+            effective_random_seed = (
+                request.random_seed
+                if request.random_seed is not None
+                else secrets.SystemRandom().uniform(0.1, 100.0)
+            )
+
         browsing_state = BrowsingState(
             page_index=request.page_index,
-            sorting_mode=SortingModeEnum(request.sorting_mode.value),
+            sorting_mode=sorting_mode,
             ascending=request.ascending,
+            random_seed=effective_random_seed if effective_random_seed is not None else 0.0,
             show_hidden_entries=request.show_hidden_entries,
             query=request.query.strip() if request.query else None,
         )
@@ -275,7 +287,12 @@ def create_router(*, state: ApiState, jobs: JobManager) -> APIRouter:
             if entry is not None:
                 entries.append(serialize_entry_summary(entry))
 
-        return SearchResponse(total_count=results.total_count, ids=results.ids, entries=entries)
+        return SearchResponse(
+            total_count=results.total_count,
+            ids=results.ids,
+            entries=entries,
+            random_seed=effective_random_seed,
+        )
 
     @router.get("/entries/{entry_id}", response_model=EntryResponse)
     def get_entry(entry_id: int) -> EntryResponse:

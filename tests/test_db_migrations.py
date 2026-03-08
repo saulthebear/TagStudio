@@ -7,6 +7,7 @@ import shutil
 from pathlib import Path
 
 import pytest
+from sqlalchemy import text
 
 from tagstudio.core.constants import TS_FOLDER_NAME
 from tagstudio.core.library.alchemy.constants import (
@@ -45,6 +46,10 @@ def test_library_migrations(path: str):
 
     try:
         status = library.open_library(library_dir=temp_path)
+        assert library.engine is not None
+        with library.engine.connect() as connection:
+            indexes = connection.execute(text("PRAGMA index_list('entries')")).fetchall()
+            assert any(index[1] == "ix_entries_date_added" for index in indexes)
         library.close()
         shutil.rmtree(temp_path)
         assert status.success

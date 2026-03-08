@@ -105,6 +105,7 @@ export type SearchRequest = {
   page_index?: number;
   page_size?: number;
   sorting_mode?: SortingMode;
+  random_seed?: number;
   ascending?: boolean;
   show_hidden_entries?: boolean;
 };
@@ -143,6 +144,7 @@ export type SearchResponse = {
   total_count: number;
   ids: number[];
   entries: EntrySummaryResponse[];
+  random_seed?: number | null;
 };
 
 export type TagMutationResponse = {

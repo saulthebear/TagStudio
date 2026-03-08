@@ -699,8 +699,13 @@ body.modal-dragging {
 }
 
 @media (hover: none) {
+  .metadata-tag-chip {
+    grid-template-columns: minmax(0, max-content) 1.45rem;
+  }
+
   .metadata-tag-chip-remove {
     opacity: 1;
+    transform: translateX(0);
     pointer-events: auto;
   }
 
@@ -840,15 +845,25 @@ body.modal-dragging {
 }
 
 .metadata-tag-chip {
-  display: inline-flex;
+  display: inline-grid;
+  grid-template-columns: minmax(0, max-content) 0rem;
   align-items: center;
-  gap: 0.25rem;
+  column-gap: 0;
   width: max-content;
   max-width: 100%;
   border: 1px solid var(--color-border-soft);
   border-radius: 999px;
   background: white;
   padding: 0.18rem 0.28rem 0.18rem 0.5rem;
+  transition:
+    grid-template-columns 200ms ease,
+    padding-right 200ms ease;
+}
+
+.metadata-tag-chip:hover,
+.metadata-tag-chip:focus-within {
+  grid-template-columns: minmax(0, max-content) 1.45rem;
+  padding-right: 0.28rem;
 }
 
 .metadata-tag-chip-main {
@@ -876,6 +891,13 @@ body.modal-dragging {
   white-space: nowrap;
 }
 
+.metadata-tag-chip-remove-slot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
 .metadata-tag-chip-remove {
   border: 0;
   background: transparent;
@@ -890,12 +912,16 @@ body.modal-dragging {
   font-size: 0.9rem;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 120ms ease;
+  transform: translateX(4px);
+  transition:
+    opacity 120ms ease,
+    transform 180ms ease;
 }
 
 .metadata-tag-chip:hover .metadata-tag-chip-remove,
 .metadata-tag-chip:focus-within .metadata-tag-chip-remove {
   opacity: 1;
+  transform: translateX(0);
   pointer-events: auto;
 }
 

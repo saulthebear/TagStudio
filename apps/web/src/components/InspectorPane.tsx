@@ -427,18 +427,20 @@ function MetadataContent({
                   <span className="metadata-tag-chip-label">{row.tag?.name ?? `Tag #${row.tagId}`}</span>
                   {row.state === "partial" ? <span className="metadata-tag-partial">Partial</span> : null}
                 </button>
-                <button
-                  type="button"
-                  className="metadata-tag-chip-remove"
-                  aria-label={`Remove ${row.tag?.name ?? `Tag #${row.tagId}`}`}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    void removeTag(row.tagId);
-                  }}
-                  disabled={tagMutationPending}
-                >
-                  ×
-                </button>
+                <div className="metadata-tag-chip-remove-slot">
+                  <button
+                    type="button"
+                    className="metadata-tag-chip-remove"
+                    aria-label={`Remove ${row.tag?.name ?? `Tag #${row.tagId}`}`}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      void removeTag(row.tagId);
+                    }}
+                    disabled={tagMutationPending}
+                  >
+                    ×
+                  </button>
+                </div>
               </div>
             ))
           )}

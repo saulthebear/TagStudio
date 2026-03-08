@@ -6,7 +6,7 @@ from datetime import datetime as dt
 from pathlib import Path
 from typing import override
 
-from sqlalchemy import JSON, ForeignKey, ForeignKeyConstraint, Integer, event
+from sqlalchemy import JSON, ForeignKey, ForeignKeyConstraint, Index, Integer, event
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from typing_extensions import deprecated
 
@@ -195,6 +195,7 @@ class Folder(Base):
 
 class Entry(Base):
     __tablename__ = "entries"
+    __table_args__ = (Index("ix_entries_date_added", "date_added"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
 
