@@ -221,8 +221,8 @@ export function useAddTagsWorkflow({
       return;
     }
 
-    setPendingTagId(tagId);
     if (isMountedRef.current) {
+      setPendingTagId(tagId);
       clearSearchState();
       focusSearchInput();
     }
