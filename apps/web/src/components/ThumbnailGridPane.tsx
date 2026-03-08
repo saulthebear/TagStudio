@@ -49,6 +49,7 @@ type ThumbnailGridPaneProps = {
   onContextMenuOpenTarget: (entryId: number, targetEntryIds: number[]) => void;
   onContextMenuAction: (action: ThumbnailContextMenuAction, state: ThumbnailContextMenuState) => void;
   trashFailureMessagesByEntryId: ReadonlyMap<number, string>;
+  inactiveEntryIds: ReadonlySet<number>;
 };
 
 type MediaKind = "image" | "video" | "other";
@@ -126,7 +127,8 @@ export function ThumbnailGridPane({
   getContextMenuState,
   onContextMenuOpenTarget,
   onContextMenuAction,
-  trashFailureMessagesByEntryId
+  trashFailureMessagesByEntryId,
+  inactiveEntryIds
 }: ThumbnailGridPaneProps) {
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
@@ -284,6 +286,7 @@ export function ThumbnailGridPane({
             const showMedia = mediaKind !== "other" && !failedMediaIds.has(entry.id);
             const isFavorite = entry.tag_ids.includes(TAG_FAVORITE_ID);
             const isArchived = entry.tag_ids.includes(TAG_ARCHIVED_ID);
+            const isInactive = inactiveEntryIds.has(entry.id);
             const trashFailureMessage = trashFailureMessagesByEntryId.get(entry.id);
 
             return (
@@ -294,14 +297,25 @@ export function ThumbnailGridPane({
                   "thumb-card",
                   selected ? "thumb-card-selected" : "",
                   isArchived ? "thumb-card-archived" : "",
+                  isInactive ? "thumb-card-inactive" : "",
                   trashFailureMessage ? "thumb-card-trash-failed" : ""
                 ]
                   .filter(Boolean)
                   .join(" ")}
                 onClick={(event) => onSelectEntry(entry.id, event)}
-                onContextMenu={(event) => openContextMenu(entry.id, event)}
-                title={trashFailureMessage ? `${entry.path}\n${trashFailureMessage}` : entry.path}
+                onContextMenu={(event) => {
+                  if (isInactive) {
+                    return;
+                  }
+                  openContextMenu(entry.id, event);
+                }}
+                title={
+                  isInactive
+                    ? `${entry.path}\nMoved to Trash. Refresh search to remove this card.`
+                    : (trashFailureMessage ? `${entry.path}\n${trashFailureMessage}` : entry.path)
+                }
                 aria-selected={selected}
+                disabled={isInactive}
               >
                 <div className={`thumb-media ${isArchived ? "thumb-media-archived" : ""}`}>
                   {showMedia ? (

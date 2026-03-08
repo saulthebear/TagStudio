@@ -79,6 +79,7 @@ test("supports context-menu copy/paste, favorite/archive toggles, and trash-conf
   const tagRemoveCalls: Array<{ entry_ids: number[]; tag_ids: number[] }> = [];
   const trashCalls: Array<{ entry_ids: number[] }> = [];
   const settingsPatchCalls: Array<Record<string, unknown>> = [];
+  let searchCalls = 0;
 
   const settingsPayload: Record<string, unknown> = {
     sorting_mode: "file.date_added",
@@ -184,6 +185,7 @@ test("supports context-menu copy/paste, favorite/archive toggles, and trash-conf
     }
 
     if (pathname === "/api/v1/search" && method === "POST") {
+      searchCalls += 1;
       const entries = buildSearchEntries();
       await fulfillJson(route, {
         total_count: entries.length,
@@ -198,7 +200,7 @@ test("supports context-menu copy/paste, favorite/archive toggles, and trash-conf
       return;
     }
 
-    const entryMatch = /^\\/api\\/v1\\/entries\\/(\\d+)$/.exec(pathname);
+    const entryMatch = /^\/api\/v1\/entries\/(\d+)$/.exec(pathname);
     if (entryMatch) {
       const entryId = Number(entryMatch[1]);
       const payload = buildEntry(entryId);
@@ -210,7 +212,7 @@ test("supports context-menu copy/paste, favorite/archive toggles, and trash-conf
       return;
     }
 
-    const previewMatch = /^\\/api\\/v1\\/entries\\/(\\d+)\\/preview$/.exec(pathname);
+    const previewMatch = /^\/api\/v1\/entries\/(\d+)\/preview$/.exec(pathname);
     if (previewMatch) {
       await fulfillJson(route, {
         entry_id: Number(previewMatch[1]),
@@ -291,10 +293,13 @@ test("supports context-menu copy/paste, favorite/archive toggles, and trash-conf
   await alphaCard.click();
   await betaCard.click({ modifiers: ["Control"] });
   await gammaCard.click({ button: "right" });
+  const searchCallsBeforeFavorite = searchCalls;
   await page.getByRole("menuitem", { name: "Favorite" }).click();
   await expect.poll(() => tagAddCalls.some((call) => call.tag_ids[0] === 1)).toBe(true);
   const lastFavoriteCall = tagAddCalls[tagAddCalls.length - 1];
   expect(lastFavoriteCall.entry_ids).toEqual([103]);
+  await expect(gammaCard.locator(".thumb-favorite-badge")).toHaveCount(1);
+  expect(searchCalls).toBe(searchCallsBeforeFavorite);
 
   await alphaCard.click({ button: "right" });
   await page.getByRole("menuitem", { name: "Copy Tags" }).click();
@@ -322,10 +327,13 @@ test("supports context-menu copy/paste, favorite/archive toggles, and trash-conf
 
   await page.getByLabel("Don't ask again this session").check();
   await page.getByLabel("Also remember for this library").check();
+  const searchCallsBeforeDelete = searchCalls;
   await page.getByRole("button", { name: "Move to Trash" }).click();
 
   await expect.poll(() => trashCalls.length).toBe(1);
   expect(trashCalls[0].entry_ids).toEqual([101]);
+  await expect(alphaCard).toHaveClass(/thumb-card-inactive/);
+  expect(searchCalls).toBe(searchCallsBeforeDelete);
   await expect.poll(() =>
     settingsPatchCalls.some((call) =>
       Boolean(

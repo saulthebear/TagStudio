@@ -95,6 +95,7 @@ export function App() {
   const [trashFailureMessagesByEntryId, setTrashFailureMessagesByEntryId] = useState<Map<number, string>>(
     () => new Map()
   );
+  const [inactiveEntryIds, setInactiveEntryIds] = useState<Set<number>>(() => new Set());
 
   const undoTokenRef = useRef(0);
   const undoTimeoutRef = useRef<number | null>(null);
@@ -221,6 +222,7 @@ export function App() {
     loadingMore,
     searchResultsStale,
     markSearchResultsStale,
+    applyTagMutationToEntries,
     executeSearch,
     searchFromInput,
     loadMore
@@ -288,6 +290,7 @@ export function App() {
     setSkipTrashConfirmSession(false);
     setTrashDialogState(null);
     setContextActionPending(false);
+    setInactiveEntryIds(new Set());
     clearUndo();
     clearTrashFailureHighlights();
   }, [activeLibraryPath, clearTrashFailureHighlights, clearUndo]);
@@ -297,6 +300,21 @@ export function App() {
 
     const visibleEntryIds = new Set(entries.map((entry) => entry.id));
     setSelectedEntryIds((prev) => prev.filter((entryId) => visibleEntryIds.has(entryId)));
+    setInactiveEntryIds((prev) => {
+      if (prev.size === 0) {
+        return prev;
+      }
+      const next = new Set<number>();
+      for (const entryId of prev) {
+        if (visibleEntryIds.has(entryId)) {
+          next.add(entryId);
+        }
+      }
+      if (next.size === prev.size) {
+        return prev;
+      }
+      return next;
+    });
   }, [entries, reconcileSelectionWithEntries]);
 
   useEffect(() => {
@@ -499,6 +517,7 @@ export function App() {
       } else {
         await removeTagFromEntries(mutationTargets, tagId);
       }
+      applyTagMutationToEntries(mutationTargets, tagId, mode);
 
       queueUndo(undoLabel, async () => {
         if (mode === "add") {
@@ -507,10 +526,8 @@ export function App() {
           await addTagToEntries(mutationTargets, tagId);
         }
       });
-
-      await refreshVisibleEntries();
     },
-    [addTagToEntries, entryById, queueUndo, refreshVisibleEntries, removeTagFromEntries]
+    [addTagToEntries, applyTagMutationToEntries, entryById, queueUndo, removeTagFromEntries]
   );
 
   const performTrash = useCallback(
@@ -536,6 +553,13 @@ export function App() {
 
       if (response.deleted_count > 0) {
         const deletedIds = new Set(response.deleted_entry_ids);
+        setInactiveEntryIds((prev) => {
+          const next = new Set(prev);
+          for (const deletedId of deletedIds) {
+            next.add(deletedId);
+          }
+          return next;
+        });
         setSelectedEntryIds((prev) => prev.filter((entryId) => !deletedIds.has(entryId)));
         setSelectionAnchorId((prev) => {
           if (prev === null || !deletedIds.has(prev)) {
@@ -546,7 +570,6 @@ export function App() {
         if (selectedEntryId !== null && deletedIds.has(selectedEntryId)) {
           clearSelection();
         }
-        await refreshVisibleEntries();
       }
 
       if (response.failed_count > 0) {
@@ -574,7 +597,6 @@ export function App() {
       clearTrashFailureHighlights,
       onClearError,
       onError,
-      refreshVisibleEntries,
       selectedEntryId,
       setConfirmBeforeTrashPreference,
       trashEntries
@@ -595,7 +617,7 @@ export function App() {
   const getContextMenuState = useCallback(
     (entryId: number): ThumbnailContextMenuState => {
       const rawTargetIds = resolveContextTargetEntryIds(entryId, selectedEntryIds);
-      const targetEntryIds = rawTargetIds.filter((id) => entryById.has(id));
+      const targetEntryIds = rawTargetIds.filter((id) => entryById.has(id) && !inactiveEntryIds.has(id));
       const effectiveTargetIds = targetEntryIds.length > 0 ? targetEntryIds : [entryId];
       const favoriteMode = getToggleModeForTag(entryById, effectiveTargetIds, TAG_FAVORITE_ID);
       const archiveMode = getToggleModeForTag(entryById, effectiveTargetIds, TAG_ARCHIVED_ID);
@@ -608,7 +630,7 @@ export function App() {
         disabled: isActionBusy
       };
     },
-    [copiedTagIds.length, entryById, isActionBusy, selectedEntryIds]
+    [copiedTagIds.length, entryById, inactiveEntryIds, isActionBusy, selectedEntryIds]
   );
 
   const handleContextMenuAction = useCallback(
@@ -759,6 +781,7 @@ export function App() {
       onContextMenuOpenTarget={handleContextMenuOpenTarget}
       onContextMenuAction={handleContextMenuAction}
       trashFailureMessagesByEntryId={trashFailureMessagesByEntryId}
+      inactiveEntryIds={inactiveEntryIds}
     />
   );
 
