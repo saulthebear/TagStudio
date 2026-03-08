@@ -1225,9 +1225,58 @@ test("supports add-tags modal create-and-add workflow", async ({ page }) => {
       disambiguation_id: null,
       is_category: false,
       is_hidden: false
+    },
+    {
+      id: 21,
+      name: "Color",
+      shorthand: null,
+      aliases: ["colour"],
+      parent_ids: [31],
+      color_namespace: "tagstudio-standard",
+      color_slug: "blue",
+      disambiguation_id: 31,
+      is_category: false,
+      is_hidden: false
+    },
+    {
+      id: 22,
+      name: "Color",
+      shorthand: null,
+      aliases: [],
+      parent_ids: [32],
+      color_namespace: "tagstudio-standard",
+      color_slug: "green",
+      disambiguation_id: null,
+      is_category: false,
+      is_hidden: false
+    },
+    {
+      id: 31,
+      name: "Design",
+      shorthand: null,
+      aliases: [],
+      parent_ids: [],
+      color_namespace: null,
+      color_slug: null,
+      disambiguation_id: null,
+      is_category: false,
+      is_hidden: false
+    },
+    {
+      id: 32,
+      name: "Paint",
+      shorthand: null,
+      aliases: [],
+      parent_ids: [],
+      color_namespace: null,
+      color_slug: null,
+      disambiguation_id: null,
+      is_category: false,
+      is_hidden: false
     }
   ];
   let nextTagId = 1000;
+  let gameTagId: number | null = null;
   const createdTagNames: string[] = [];
   const addTagRequests: Array<{ entry_ids: number[]; tag_ids: number[] }> = [];
 
@@ -1290,6 +1339,24 @@ test("supports add-tags modal create-and-add workflow", async ({ page }) => {
               primary: "#facc15",
               secondary: null,
               color_border: false
+            },
+            {
+              namespace: "tagstudio-standard",
+              namespace_name: "TagStudio Standard",
+              slug: "blue",
+              name: "Blue",
+              primary: "#3b82f6",
+              secondary: null,
+              color_border: false
+            },
+            {
+              namespace: "tagstudio-standard",
+              namespace_name: "TagStudio Standard",
+              slug: "green",
+              name: "Green",
+              primary: "#22c55e",
+              secondary: null,
+              color_border: false
             }
           ]
         }
@@ -1337,6 +1404,9 @@ test("supports add-tags modal create-and-add workflow", async ({ page }) => {
       };
       tags.push(newTag);
       createdTagNames.push(newTag.name);
+      if (newTag.name.toLowerCase() === "game") {
+        gameTagId = newTag.id;
+      }
       await fulfillJson(route, newTag);
       return;
     }
@@ -1422,18 +1492,42 @@ test("supports add-tags modal create-and-add workflow", async ({ page }) => {
   const addTagsDialog = page.getByRole("dialog", { name: "Add tags" });
   await expect(addTagsDialog).toBeVisible();
   await expect(addTagsDialog.getByRole("button", { name: "Edit" })).toHaveCount(0);
+  const addTagsBounds = requireBox(await addTagsDialog.boundingBox(), "Add tags dialog");
+  expect(addTagsBounds.width).toBeLessThanOrEqual(640);
+  expect(addTagsBounds.width).toBeGreaterThanOrEqual(500);
 
-  const searchTags = page.getByPlaceholder("Search tags");
+  const searchTags = addTagsDialog.getByPlaceholder("Search tags");
+  await expect(searchTags).toBeFocused();
+
+  await searchTags.fill("col");
+  const createColRow = addTagsDialog.getByRole("button", { name: 'Create & Add "col"' });
+  await expect(createColRow).toBeVisible();
+  await expect(createColRow).not.toHaveClass(/add-tags-row-highlighted/);
+  await expect(addTagsDialog.locator(".add-tags-row-label-chip", { hasText: "Color (Design)" })).toBeVisible();
+  await expect(addTagsDialog.locator(".add-tags-row-label-chip", { hasText: "Color (Paint)" })).toBeVisible();
+  await expect(
+    addTagsDialog.locator(".add-tags-row-label-chip", { hasText: "Color (Design)" }).first()
+  ).toHaveAttribute("style", /background-color:/);
+
+  await searchTags.press("Enter");
+  await expect.poll(() => addTagRequests.some((payload) => payload.tag_ids.includes(21))).toBe(true);
+  expect(createdTagNames.includes("col")).toBe(false);
+  await expect(searchTags).toHaveValue("", { timeout: 15000 });
+  await expect(searchTags).toBeFocused();
+
   await searchTags.fill("game");
   await expect(page.getByRole("button", { name: 'Create & Add "game"' })).toBeVisible();
   await searchTags.press("Enter");
-
   await expect(page.getByRole("dialog", { name: "Create tag" })).toBeVisible();
   await expect(page.getByRole("textbox", { name: "Name" })).toHaveValue("game");
   await page.getByRole("button", { name: "Save" }).click();
 
   await expect.poll(() => createdTagNames.includes("game")).toBe(true);
-  await expect.poll(() => addTagRequests.some((payload) => payload.tag_ids.length === 1)).toBe(true);
+  await expect
+    .poll(() => gameTagId !== null && addTagRequests.some((payload) => payload.tag_ids.includes(gameTagId!)))
+    .toBe(true);
+  await expect(searchTags).toHaveValue("");
+  await expect(searchTags).toBeFocused();
 
   const addTagsDragHandle = addTagsDialog.locator(".modal-drag-handle");
   await expect(addTagsDragHandle).toBeVisible();
@@ -1460,13 +1554,19 @@ test("supports add-tags modal create-and-add workflow", async ({ page }) => {
   await editTagDialog.getByRole("button", { name: "Add Parent Tag(s)" }).click();
   const parentPickerDialog = page.getByRole("dialog", { name: "Add parent tags" });
   await expect(parentPickerDialog).toBeVisible();
+  await expect(parentPickerDialog.getByPlaceholder("Search tags")).toBeFocused();
   await dragDialogBy(page, parentPickerDialog, parentPickerDialog.locator(".modal-drag-handle"), { x: 75, y: 0 });
   await expectDialogWithinViewport(page, parentPickerDialog, 8);
   await page.mouse.click(24, 24);
   await expect(parentPickerDialog).toHaveCount(0);
   await expect(editTagDialog).toBeVisible();
 
-  await editTagDialog.getByRole("button", { name: "No Color" }).click();
+  await editTagDialog
+    .locator(".settings-row")
+    .filter({ hasText: "Color" })
+    .getByRole("button")
+    .first()
+    .click();
   const colorPickerDialog = page.getByRole("dialog", { name: "Choose tag color" });
   await expect(colorPickerDialog).toBeVisible();
   await dragDialogBy(page, colorPickerDialog, colorPickerDialog.locator(".modal-drag-handle"), { x: -80, y: 0 });
@@ -1477,19 +1577,21 @@ test("supports add-tags modal create-and-add workflow", async ({ page }) => {
   await editTagDialog.getByRole("button", { name: "Cancel" }).click();
 
   await page.getByRole("button", { name: "Done" }).click();
-  const metadataChip = page.locator(".metadata-tag-chip").first();
-  await expect(metadataChip).toContainText("game");
+  const colorMetadataChip = page.locator(".metadata-tag-chip").filter({ hasText: "Color (Design)" }).first();
+  await expect(colorMetadataChip).toBeVisible();
+  await expect(colorMetadataChip).toHaveAttribute("style", /background-color:/);
+  await expect(page.locator(".metadata-tag-chip").filter({ hasText: "game" }).first()).toBeVisible();
   await expect(page.locator(".metadata-tag-actions").getByRole("button", { name: "Edit" })).toHaveCount(0);
 
-  const chipRemoveSlot = metadataChip.locator(".metadata-tag-chip-remove-slot");
-  const chipRemoveButton = metadataChip.locator(".metadata-tag-chip-remove");
+  const chipRemoveSlot = colorMetadataChip.locator(".metadata-tag-chip-remove-slot");
+  const chipRemoveButton = colorMetadataChip.locator(".metadata-tag-chip-remove");
   await expect(chipRemoveButton).toHaveCSS("opacity", "0");
   await expect
     .poll(async () => (await chipRemoveSlot.boundingBox())?.width ?? 0, {
       message: "remove slot should be collapsed before hover"
     })
     .toBeLessThan(2);
-  await metadataChip.hover();
+  await colorMetadataChip.hover();
   await expect(chipRemoveButton).toHaveCSS("opacity", "1");
   await expect
     .poll(async () => (await chipRemoveSlot.boundingBox())?.width ?? 0, {
@@ -1497,7 +1599,7 @@ test("supports add-tags modal create-and-add workflow", async ({ page }) => {
     })
     .toBeGreaterThan(16);
 
-  await metadataChip.locator(".metadata-tag-chip-main").click();
+  await colorMetadataChip.locator(".metadata-tag-chip-main").click();
   await expect(page.getByRole("dialog", { name: "Edit tag" })).toBeVisible();
   await page.getByRole("button", { name: "Cancel" }).click();
 });

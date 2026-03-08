@@ -201,6 +201,7 @@ export function TagEditorModal({
             </div>
             <div className="tag-editor-parent-controls">
               <input
+                ref={workflow.parentSearchInputRef}
                 className="input-base"
                 placeholder="Search tags"
                 value={workflow.parentQuery}

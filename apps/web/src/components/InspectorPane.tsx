@@ -13,6 +13,9 @@ import { useCallback, useMemo, useState } from "react";
 import { AddTagsModal } from "@/components/AddTagsModal";
 import { SplitPane, type SplitPaneState } from "@/components/SplitPane";
 import { TagEditorModal } from "@/components/TagEditorModal";
+import { useTagColors } from "@/hooks/useTagColors";
+import { createTagColorLookup, resolveTagChipStyle } from "@/lib/tag-styles";
+import { createTagDisplayContext, getTagDisplayLabel } from "@/lib/tag-workflows";
 
 type InspectorPaneProps = {
   selectedEntry: EntryResponse | null;
@@ -280,6 +283,7 @@ function MetadataContent({
   const [editTag, setEditTag] = useState<TagResponse | null>(null);
 
   const selectedCount = selectedEntryIds.length;
+  const tagColorsQuery = useTagColors(selectedCount > 0);
 
   const tagById = useMemo(() => {
     const map = new Map<number, TagResponse>();
@@ -327,6 +331,8 @@ function MetadataContent({
     return map;
   }, [selectedEntriesForMetadata]);
 
+  const tagDisplayContext = useMemo(() => createTagDisplayContext([...tagById.values()]), [tagById]);
+
   const aggregateTagRows = useMemo<AggregateTagRow[]>(() => {
     const counts = new Map<number, number>();
     for (const entry of selectedEntriesForMetadata) {
@@ -346,13 +352,14 @@ function MetadataContent({
     }
 
     rows.sort((a, b) => {
-      const aName = a.tag?.name ?? String(a.tagId);
-      const bName = b.tag?.name ?? String(b.tagId);
+      const aName = a.tag ? getTagDisplayLabel(a.tag, tagDisplayContext) : String(a.tagId);
+      const bName = b.tag ? getTagDisplayLabel(b.tag, tagDisplayContext) : String(b.tagId);
       return aName.localeCompare(bName);
     });
 
     return rows;
-  }, [selectedCount, selectedEntriesForMetadata, tagById]);
+  }, [selectedCount, selectedEntriesForMetadata, tagById, tagDisplayContext]);
+  const tagColorLookup = useMemo(() => createTagColorLookup(tagColorsQuery.data), [tagColorsQuery.data]);
 
   const removeTag = useCallback(async (tagId: number) => {
     await onRemoveTagFromEntries(selectedEntryIds, tagId);
@@ -387,7 +394,11 @@ function MetadataContent({
             <p className="tag-editor-empty">No tags applied.</p>
           ) : (
             aggregateTagRows.map((row) => (
-              <div key={row.tagId} className="metadata-tag-chip">
+              <div
+                key={row.tagId}
+                className="metadata-tag-chip"
+                style={row.tag ? resolveTagChipStyle(row.tag, tagColorLookup) : undefined}
+              >
                 <button
                   type="button"
                   className="metadata-tag-chip-main"
@@ -398,14 +409,16 @@ function MetadataContent({
                   }}
                   disabled={!row.tag || tagEditPending}
                 >
-                  <span className="metadata-tag-chip-label">{row.tag?.name ?? `Tag #${row.tagId}`}</span>
+                  <span className="metadata-tag-chip-label">
+                    {row.tag ? getTagDisplayLabel(row.tag, tagDisplayContext) : `Tag #${row.tagId}`}
+                  </span>
                   {row.state === "partial" ? <span className="metadata-tag-partial">Partial</span> : null}
                 </button>
                 <div className="metadata-tag-chip-remove-slot">
                   <button
                     type="button"
                     className="metadata-tag-chip-remove"
-                    aria-label={`Remove ${row.tag?.name ?? `Tag #${row.tagId}`}`}
+                    aria-label={`Remove ${row.tag ? getTagDisplayLabel(row.tag, tagDisplayContext) : `Tag #${row.tagId}`}`}
                     onClick={(event) => {
                       event.stopPropagation();
                       void removeTag(row.tagId);
@@ -480,6 +493,7 @@ function MetadataContent({
 
       <AddTagsModal
         open={addTagsOpen}
+        allTags={allTags}
         selectedEntryIds={selectedEntryIds}
         entryTagIdsByEntry={entryTagIdsByEntry}
         onClose={() => {

@@ -1,14 +1,18 @@
 import { type TagCreatePayload, type TagResponse, type TagUpdatePayload } from "@tagstudio/api-client";
 import { Button } from "@tagstudio/ui";
+import { useMemo } from "react";
 import { Virtuoso } from "react-virtuoso";
 
 import { ModalLayerPortal } from "@/components/ModalLayerPortal";
 import { TagEditorModal } from "@/components/TagEditorModal";
 import { useAddTagsWorkflow } from "@/hooks/useAddTagsWorkflow";
-import { deriveTagApplicationState } from "@/lib/tag-workflows";
+import { useTagColors } from "@/hooks/useTagColors";
+import { createTagColorLookup, resolveTagChipStyle } from "@/lib/tag-styles";
+import { createTagDisplayContext, deriveTagApplicationState, getTagDisplayLabel } from "@/lib/tag-workflows";
 
 type AddTagsModalProps = {
   open: boolean;
+  allTags: TagResponse[];
   selectedEntryIds: number[];
   entryTagIdsByEntry: Map<number, Set<number>>;
   onClose: () => void;
@@ -29,6 +33,7 @@ const LIMIT_OPTIONS: Array<{ label: string; value: number }> = [
 
 export function AddTagsModal({
   open,
+  allTags,
   selectedEntryIds,
   entryTagIdsByEntry,
   onClose,
@@ -45,6 +50,20 @@ export function AddTagsModal({
     onAddTagToEntries,
     onAfterTagChanged
   });
+  const tagColorsQuery = useTagColors(open);
+  const tagDisplayContext = useMemo(() => {
+    const rowTags = workflow.rows.flatMap((row) => (row.kind === "tag" ? [row.tag] : []));
+    const fromRows = createTagDisplayContext(rowTags);
+    const tagById = new Map(fromRows.tagById);
+    for (const tag of allTags) {
+      tagById.set(tag.id, tag);
+    }
+    return {
+      tagById,
+      duplicateNames: fromRows.duplicateNames
+    };
+  }, [allTags, workflow.rows]);
+  const tagColorLookup = useMemo(() => createTagColorLookup(tagColorsQuery.data), [tagColorsQuery.data]);
 
   if (!open) {
     return null;
@@ -80,6 +99,7 @@ export function AddTagsModal({
             </select>
           </label>
           <input
+            ref={workflow.searchInputRef}
             className="input-base"
             placeholder="Search tags"
             value={workflow.query}
@@ -111,6 +131,8 @@ export function AddTagsModal({
               const state = deriveTagApplicationState(workflow.selectedCount, membership);
               const isPending = workflow.pendingTagId === row.tag.id;
               const addDisabled = state === "all" || isPending;
+              const tagLabel = getTagDisplayLabel(row.tag, tagDisplayContext);
+              const tagStyle = resolveTagChipStyle(row.tag, tagColorLookup);
 
               return (
                 <div className={`add-tags-row ${highlighted ? "add-tags-row-highlighted" : ""}`}>
@@ -122,7 +144,9 @@ export function AddTagsModal({
                       void workflow.addTag(row.tag.id);
                     }}
                   >
-                    <span>{row.tag.name}</span>
+                    <span className="add-tags-row-label-chip" style={tagStyle}>
+                      {tagLabel}
+                    </span>
                     <span className="add-tags-row-state">
                       {isPending
                         ? "Adding..."

@@ -2,9 +2,12 @@ import { describe, expect, test } from "bun:test";
 
 import {
   computeDesktopSelection,
+  createTagDisplayContext,
   deriveTagApplicationState,
+  getTagDisplayLabel,
   isEditShortcutKey,
   moveHighlightIndex,
+  scoreTags,
   shouldShowCreateAndAdd
 } from "../src/lib/tag-workflows";
 
@@ -90,5 +93,210 @@ describe("tag-workflows", () => {
     });
     expect(range.selectedIds).toEqual([13, 14, 15]);
     expect(range.activeId).toBe(15);
+  });
+
+  test("scores tags by exact, prefix, boundary, substring, alias, then alphabetic fallback", () => {
+    const tags = [
+      {
+        id: 1,
+        name: "col",
+        shorthand: null,
+        aliases: [],
+        parent_ids: [],
+        color_namespace: null,
+        color_slug: null,
+        disambiguation_id: null,
+        is_category: false,
+        is_hidden: false
+      },
+      {
+        id: 2,
+        name: "Palette",
+        shorthand: "col",
+        aliases: [],
+        parent_ids: [],
+        color_namespace: null,
+        color_slug: null,
+        disambiguation_id: null,
+        is_category: false,
+        is_hidden: false
+      },
+      {
+        id: 3,
+        name: "Color",
+        shorthand: null,
+        aliases: [],
+        parent_ids: [],
+        color_namespace: null,
+        color_slug: null,
+        disambiguation_id: null,
+        is_category: false,
+        is_hidden: false
+      },
+      {
+        id: 4,
+        name: "my-color",
+        shorthand: null,
+        aliases: [],
+        parent_ids: [],
+        color_namespace: null,
+        color_slug: null,
+        disambiguation_id: null,
+        is_category: false,
+        is_hidden: false
+      },
+      {
+        id: 5,
+        name: "discoloration",
+        shorthand: null,
+        aliases: [],
+        parent_ids: [],
+        color_namespace: null,
+        color_slug: null,
+        disambiguation_id: null,
+        is_category: false,
+        is_hidden: false
+      },
+      {
+        id: 6,
+        name: "Palette B",
+        shorthand: null,
+        aliases: ["vivid-colors"],
+        parent_ids: [],
+        color_namespace: null,
+        color_slug: null,
+        disambiguation_id: null,
+        is_category: false,
+        is_hidden: false
+      },
+      {
+        id: 7,
+        name: "Zebra",
+        shorthand: null,
+        aliases: [],
+        parent_ids: [],
+        color_namespace: null,
+        color_slug: null,
+        disambiguation_id: null,
+        is_category: false,
+        is_hidden: false
+      }
+    ];
+
+    const sorted = scoreTags(tags, "col");
+    expect(sorted.map((tag) => tag.id)).toEqual([1, 2, 3, 4, 5, 6, 7]);
+    expect(tags.map((tag) => tag.id)).toEqual([1, 2, 3, 4, 5, 6, 7]);
+  });
+
+  test("falls back to deterministic alphabetical sorting when query is empty", () => {
+    const tags = [
+      {
+        id: 9,
+        name: "beta",
+        shorthand: null,
+        aliases: [],
+        parent_ids: [],
+        color_namespace: null,
+        color_slug: null,
+        disambiguation_id: null,
+        is_category: false,
+        is_hidden: false
+      },
+      {
+        id: 2,
+        name: "alpha",
+        shorthand: null,
+        aliases: [],
+        parent_ids: [],
+        color_namespace: null,
+        color_slug: null,
+        disambiguation_id: null,
+        is_category: false,
+        is_hidden: false
+      },
+      {
+        id: 4,
+        name: "gamma",
+        shorthand: null,
+        aliases: [],
+        parent_ids: [],
+        color_namespace: null,
+        color_slug: null,
+        disambiguation_id: null,
+        is_category: false,
+        is_hidden: false
+      }
+    ];
+
+    const sorted = scoreTags(tags, "");
+    expect(sorted.map((tag) => tag.id)).toEqual([2, 9, 4]);
+  });
+
+  test("builds disambiguated labels from explicit and inferred parents", () => {
+    const design = {
+      id: 31,
+      name: "Design",
+      shorthand: null,
+      aliases: [],
+      parent_ids: [],
+      color_namespace: null,
+      color_slug: null,
+      disambiguation_id: null,
+      is_category: false,
+      is_hidden: false
+    };
+    const paint = {
+      id: 32,
+      name: "Paint",
+      shorthand: null,
+      aliases: [],
+      parent_ids: [],
+      color_namespace: null,
+      color_slug: null,
+      disambiguation_id: null,
+      is_category: false,
+      is_hidden: false
+    };
+    const explicit = {
+      id: 41,
+      name: "Color",
+      shorthand: null,
+      aliases: [],
+      parent_ids: [31],
+      color_namespace: null,
+      color_slug: null,
+      disambiguation_id: 31,
+      is_category: false,
+      is_hidden: false
+    };
+    const inferred = {
+      id: 42,
+      name: "Color",
+      shorthand: null,
+      aliases: [],
+      parent_ids: [32],
+      color_namespace: null,
+      color_slug: null,
+      disambiguation_id: null,
+      is_category: false,
+      is_hidden: false
+    };
+    const fallback = {
+      id: 43,
+      name: "Color",
+      shorthand: null,
+      aliases: [],
+      parent_ids: [],
+      color_namespace: null,
+      color_slug: null,
+      disambiguation_id: null,
+      is_category: false,
+      is_hidden: false
+    };
+
+    const context = createTagDisplayContext([explicit, inferred, fallback, design, paint]);
+    expect(getTagDisplayLabel(explicit, context)).toBe("Color (Design)");
+    expect(getTagDisplayLabel(inferred, context)).toBe("Color (Paint)");
+    expect(getTagDisplayLabel(fallback, context)).toBe("Color (#43)");
   });
 });
