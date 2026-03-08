@@ -59,6 +59,8 @@ export function useSearchWorkflow({
 }: UseSearchWorkflowArgs): UseSearchWorkflowResult {
   const searchRequestIdRef = useRef(0);
   const prewarmedEntryIdsRef = useRef<Set<number>>(new Set());
+  const activeRandomSeedRef = useRef<number | null>(null);
+  const previousSortingModeRef = useRef<SortingMode>(sortingMode);
 
   const [searchInput, setSearchInput] = useState("");
   const [activeQuery, setActiveQuery] = useState("");
@@ -80,7 +82,18 @@ export function useSearchWorkflow({
     setActiveQuery("");
     setSearchResultsStale(false);
     prewarmedEntryIdsRef.current = new Set();
+    activeRandomSeedRef.current = null;
   }, [activeLibraryPath]);
+
+  useEffect(() => {
+    if (
+      previousSortingModeRef.current === "sorting.mode.random" &&
+      sortingMode !== "sorting.mode.random"
+    ) {
+      activeRandomSeedRef.current = null;
+    }
+    previousSortingModeRef.current = sortingMode;
+  }, [sortingMode]);
 
   const prewarmEntries = useCallback((incomingEntries: EntrySummaryResponse[]) => {
     if (incomingEntries.length === 0) {
@@ -148,6 +161,11 @@ export function useSearchWorkflow({
       }
 
       const normalizedQuery = query.trim();
+      const effectiveSortingMode = sortingModeOverride ?? sortingMode;
+      const isRandomSort = effectiveSortingMode === "sorting.mode.random";
+      if (!isRandomSort) {
+        activeRandomSeedRef.current = null;
+      }
       const requestId = ++searchRequestIdRef.current;
 
       if (append) {
@@ -161,7 +179,8 @@ export function useSearchWorkflow({
           query: normalizedQuery,
           page_index: pageIndex,
           page_size: pageSizeOverride ?? pageSize,
-          sorting_mode: sortingModeOverride ?? sortingMode,
+          sorting_mode: effectiveSortingMode,
+          random_seed: isRandomSort && append ? (activeRandomSeedRef.current ?? undefined) : undefined,
           ascending: ascendingOverride ?? ascending,
           show_hidden_entries: showHiddenOverride ?? showHiddenEntries
         });
@@ -170,6 +189,7 @@ export function useSearchWorkflow({
           return;
         }
 
+        activeRandomSeedRef.current = isRandomSort ? (data.random_seed ?? null) : null;
         onClearError();
         setActiveQuery(normalizedQuery);
         setTotalCount(data.total_count);

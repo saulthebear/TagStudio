@@ -59,6 +59,7 @@ class SearchRequest(BaseModel):
     page_index: int = 0
     page_size: int = Field(default=200, ge=1, le=2000)
     sorting_mode: SortingMode = SortingMode.DATE_ADDED
+    random_seed: float | None = Field(default=None, ge=0.1, le=100.0)
     ascending: bool = True
     show_hidden_entries: bool = False
 
@@ -160,6 +161,7 @@ class SearchResponse(BaseModel):
     total_count: int
     ids: list[int]
     entries: list[EntrySummaryResponse]
+    random_seed: float | None = None
 
 
 class UpdateFieldRequest(BaseModel):

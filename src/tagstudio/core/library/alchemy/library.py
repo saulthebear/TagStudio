@@ -545,6 +545,8 @@ class Library:
                     self.__apply_db9_schema_changes(session)
                 if loaded_db_version < 103:
                     self.__apply_db103_schema_changes(session)
+                if loaded_db_version < 104:
+                    self.__apply_db104_schema_changes(session)
                 if loaded_db_version == 6:
                     self.__apply_repairs_for_db6(session)
 
@@ -731,6 +733,22 @@ class Library:
         except Exception as e:
             logger.error(
                 "[Library][Migration] Could not update archived tag to be hidden!",
+                error=e,
+            )
+            session.rollback()
+
+    def __apply_db104_schema_changes(self, session: Session):
+        """Apply database schema changes introduced in DB_VERSION 104."""
+        create_date_added_index = text(
+            "CREATE INDEX IF NOT EXISTS ix_entries_date_added ON entries (date_added)"
+        )
+        try:
+            session.execute(create_date_added_index)
+            session.commit()
+            logger.info("[Library][Migration] Ensured ix_entries_date_added index exists")
+        except Exception as e:
+            logger.error(
+                "[Library][Migration] Could not create ix_entries_date_added index!",
                 error=e,
             )
             session.rollback()
@@ -1065,18 +1083,24 @@ class Library:
 
             statement = statement.distinct(Entry.id)
 
-            sort_on: ColumnExpressionArgument = Entry.id
+            sort_columns: list[ColumnExpressionArgument] = [Entry.id]
             match search.sorting_mode:
                 case SortingModeEnum.DATE_ADDED:
-                    sort_on = Entry.id
+                    # Keep null date_added values grouped as "oldest" for both sort directions.
+                    sort_columns = [Entry.date_added.is_not(None), Entry.date_added, Entry.id]
                 case SortingModeEnum.FILE_NAME:
-                    sort_on = func.lower(Entry.filename)
+                    sort_columns = [func.lower(Entry.filename), Entry.id]
                 case SortingModeEnum.PATH:
-                    sort_on = func.lower(Entry.path)
+                    sort_columns = [func.lower(Entry.path), Entry.id]
                 case SortingModeEnum.RANDOM:
-                    sort_on = func.sin(Entry.id * search.random_seed)
+                    sort_columns = [func.sin(Entry.id * search.random_seed), Entry.id]
 
-            statement = statement.order_by(asc(sort_on) if search.ascending else desc(sort_on))
+            statement = statement.order_by(
+                *(
+                    asc(sort_column) if search.ascending else desc(sort_column)
+                    for sort_column in sort_columns
+                )
+            )
 
             logger.info(
                 "searching library",
