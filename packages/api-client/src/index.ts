@@ -152,6 +152,28 @@ export type TagMutationResponse = {
   changed: number;
 };
 
+export type TrashFailureReasonCode =
+  | "ENTRY_NOT_FOUND"
+  | "MISSING_ON_DISK"
+  | "NOT_A_FILE"
+  | "PERMISSION_DENIED"
+  | "OS_ERROR"
+  | "UNKNOWN_ERROR";
+
+export type TrashEntryFailure = {
+  entry_id: number;
+  path: string | null;
+  reason_code: TrashFailureReasonCode;
+};
+
+export type TrashEntriesResponse = {
+  success: boolean;
+  deleted_entry_ids: number[];
+  deleted_count: number;
+  failed_count: number;
+  failed_entries: TrashEntryFailure[];
+};
+
 export type JobCreateResponse = {
   job_id: string;
   status: string;
@@ -179,6 +201,7 @@ export type SettingsResponse = {
   page_size: number;
   layout: LayoutSettings;
   thumbnails: ThumbnailSettings;
+  confirmations: ConfirmationSettings;
 };
 
 export type LayoutSettings = {
@@ -219,6 +242,14 @@ export type ThumbnailSettingsUpdateRequest = {
   quality?: number;
 };
 
+export type ConfirmationSettings = {
+  confirm_before_trash: boolean;
+};
+
+export type ConfirmationSettingsUpdateRequest = {
+  confirm_before_trash?: boolean;
+};
+
 export type SettingsUpdateRequest = {
   sorting_mode?: SortingMode;
   ascending?: boolean;
@@ -226,6 +257,7 @@ export type SettingsUpdateRequest = {
   page_size?: number;
   layout?: LayoutSettingsUpdateRequest;
   thumbnails?: ThumbnailSettingsUpdateRequest;
+  confirmations?: ConfirmationSettingsUpdateRequest;
 };
 
 export type ApiConfig = {
@@ -390,6 +422,13 @@ export class TagStudioApiClient {
         entry_ids: entryIds,
         tag_ids: tagIds
       })
+    });
+  }
+
+  async trashEntries(entryIds: number[]): Promise<TrashEntriesResponse> {
+    return this.request("/api/v1/entries:trash", {
+      method: "POST",
+      body: JSON.stringify({ entry_ids: entryIds })
     });
   }
 

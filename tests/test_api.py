@@ -53,6 +53,90 @@ def get_entry_ids_by_filename(client: TestClient) -> dict[str, int]:
     return {item["filename"]: item["id"] for item in search.json()["entries"]}
 
 
+def test_entries_trash_partial_failure_keeps_failed_entries() -> None:
+    with TemporaryDirectory() as tmp:
+        library_path = Path(tmp)
+        seed_library(library_path)
+
+        app = create_app()
+        with TestClient(app) as client:
+            open_res = client.post("/api/v1/libraries/open", json={"path": str(library_path)})
+            assert open_res.status_code == 200
+
+            ids = get_entry_ids_by_filename(client)
+            foo_id = ids["foo.txt"]
+            thumb_id = ids["thumb.png"]
+
+            def _send2trash_side_effect(path: str | Path) -> None:
+                if Path(path).name == "foo.txt":
+                    raise PermissionError("simulated permission denied")
+
+            with patch("tagstudio.api.routes.send2trash", side_effect=_send2trash_side_effect):
+                trash = client.post(
+                    "/api/v1/entries:trash",
+                    json={"entry_ids": [foo_id, thumb_id]},
+                )
+
+            assert trash.status_code == 200
+            payload = trash.json()
+            assert payload["success"] is False
+            assert payload["deleted_count"] == 1
+            assert payload["deleted_entry_ids"] == [thumb_id]
+            assert payload["failed_count"] == 1
+            assert payload["failed_entries"] == [
+                {
+                    "entry_id": foo_id,
+                    "path": "foo.txt",
+                    "reason_code": "PERMISSION_DENIED",
+                }
+            ]
+
+            remaining = client.post("/api/v1/search", json={"query": ""})
+            assert remaining.status_code == 200
+            remaining_ids = set(remaining.json()["ids"])
+            assert foo_id in remaining_ids
+            assert thumb_id not in remaining_ids
+
+
+def test_entries_trash_reason_codes_for_missing_and_not_found() -> None:
+    with TemporaryDirectory() as tmp:
+        library_path = Path(tmp)
+        seed_library(library_path)
+
+        app = create_app()
+        with TestClient(app) as client:
+            open_res = client.post("/api/v1/libraries/open", json={"path": str(library_path)})
+            assert open_res.status_code == 200
+
+            ids = get_entry_ids_by_filename(client)
+            foo_id = ids["foo.txt"]
+            missing_entry_id = 999_999
+            (library_path / "foo.txt").unlink()
+
+            trash = client.post(
+                "/api/v1/entries:trash",
+                json={"entry_ids": [foo_id, missing_entry_id]},
+            )
+            assert trash.status_code == 200
+            payload = trash.json()
+
+            assert payload["success"] is False
+            assert payload["deleted_count"] == 0
+            assert payload["deleted_entry_ids"] == []
+            assert payload["failed_count"] == 2
+
+            failed_by_id = {item["entry_id"]: item for item in payload["failed_entries"]}
+            assert failed_by_id[foo_id]["reason_code"] == "MISSING_ON_DISK"
+            assert failed_by_id[foo_id]["path"] == "foo.txt"
+            assert failed_by_id[missing_entry_id]["reason_code"] == "ENTRY_NOT_FOUND"
+            assert failed_by_id[missing_entry_id]["path"] is None
+
+            remaining = client.post("/api/v1/search", json={"query": ""})
+            assert remaining.status_code == 200
+            remaining_ids = set(remaining.json()["ids"])
+            assert foo_id in remaining_ids
+
+
 def test_api_core_workflows() -> None:
     with TemporaryDirectory() as tmp:
         library_path = Path(tmp)
@@ -90,6 +174,7 @@ def test_api_core_workflows() -> None:
             assert settings.json()["layout"]["main_split_ratio"] == 0.78
             assert settings.json()["layout"]["mobile_active_pane"] == "grid"
             assert settings.json()["thumbnails"]["grid_size"] >= 32
+            assert settings.json()["confirmations"]["confirm_before_trash"] is True
 
             updated_settings = client.patch(
                 "/api/v1/settings",
@@ -107,6 +192,9 @@ def test_api_core_workflows() -> None:
                         "preview_size": 720,
                         "quality": 78,
                     },
+                    "confirmations": {
+                        "confirm_before_trash": False,
+                    },
                 },
             )
             assert updated_settings.status_code == 200
@@ -117,6 +205,7 @@ def test_api_core_workflows() -> None:
             assert updated_settings.json()["layout"]["mobile_active_pane"] == "metadata"
             assert updated_settings.json()["thumbnails"]["grid_size"] == 224
             assert updated_settings.json()["thumbnails"]["preview_size"] == 720
+            assert updated_settings.json()["confirmations"]["confirm_before_trash"] is False
 
             partial_layout_update = client.patch(
                 "/api/v1/settings",

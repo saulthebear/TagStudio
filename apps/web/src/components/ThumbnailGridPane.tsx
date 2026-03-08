@@ -1,4 +1,5 @@
 import { type EntrySummaryResponse } from "@tagstudio/api-client";
+import { Archive, Star } from "lucide-react";
 import {
   type MouseEvent as ReactMouseEvent,
   useCallback,
@@ -7,6 +8,23 @@ import {
   useRef,
   useState
 } from "react";
+
+import { TAG_ARCHIVED_ID, TAG_FAVORITE_ID } from "@/lib/reserved-tags";
+
+export type ThumbnailContextMenuState = {
+  targetEntryIds: number[];
+  canPaste: boolean;
+  favoriteMode: "favorite" | "unfavorite";
+  archiveMode: "archive" | "unarchive";
+  disabled: boolean;
+};
+
+export type ThumbnailContextMenuAction =
+  | "copy_tags"
+  | "paste_tags"
+  | "favorite_toggle"
+  | "archive_toggle"
+  | "delete_to_trash";
 
 type ThumbnailGridPaneProps = {
   entries: EntrySummaryResponse[];
@@ -26,9 +44,20 @@ type ThumbnailGridPaneProps = {
       kind?: "grid" | "preview";
     }
   ) => string;
+  contextMenuEnabled: boolean;
+  getContextMenuState: (entryId: number) => ThumbnailContextMenuState;
+  onContextMenuOpenTarget: (entryId: number, targetEntryIds: number[]) => void;
+  onContextMenuAction: (action: ThumbnailContextMenuAction, state: ThumbnailContextMenuState) => void;
+  trashFailureMessagesByEntryId: ReadonlyMap<number, string>;
 };
 
 type MediaKind = "image" | "video" | "other";
+
+type ContextMenuRenderState = {
+  x: number;
+  y: number;
+  state: ThumbnailContextMenuState;
+};
 
 const IMAGE_SUFFIXES = new Set([
   "jpg",
@@ -92,10 +121,53 @@ export function ThumbnailGridPane({
   hasMore,
   onLoadMore,
   onSelectEntry,
-  getThumbnailUrl
+  getThumbnailUrl,
+  contextMenuEnabled,
+  getContextMenuState,
+  onContextMenuOpenTarget,
+  onContextMenuAction,
+  trashFailureMessagesByEntryId
 }: ThumbnailGridPaneProps) {
   const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const contextMenuRef = useRef<HTMLDivElement | null>(null);
   const [failedMediaIds, setFailedMediaIds] = useState<Set<number>>(() => new Set());
+  const [contextMenu, setContextMenu] = useState<ContextMenuRenderState | null>(null);
+
+  const closeContextMenu = useCallback(() => {
+    setContextMenu(null);
+  }, []);
+
+  const openContextMenu = useCallback(
+    (entryId: number, event: ReactMouseEvent<HTMLButtonElement>) => {
+      if (!contextMenuEnabled) {
+        return;
+      }
+
+      event.preventDefault();
+      const state = getContextMenuState(entryId);
+      onContextMenuOpenTarget(entryId, state.targetEntryIds);
+
+      const offset = 8;
+      const menuWidth = 240;
+      const menuHeight = 264;
+      const x = Math.max(offset, Math.min(event.clientX, window.innerWidth - menuWidth - offset));
+      const y = Math.max(offset, Math.min(event.clientY, window.innerHeight - menuHeight - offset));
+
+      setContextMenu({ x, y, state });
+    },
+    [contextMenuEnabled, getContextMenuState, onContextMenuOpenTarget]
+  );
+
+  const triggerContextAction = useCallback(
+    (action: ThumbnailContextMenuAction) => {
+      if (!contextMenu) {
+        return;
+      }
+      onContextMenuAction(action, contextMenu.state);
+      closeContextMenu();
+    },
+    [closeContextMenu, contextMenu, onContextMenuAction]
+  );
 
   const markMediaFailed = useCallback((entryId: number) => {
     setFailedMediaIds((prev) => {
@@ -107,6 +179,40 @@ export function ThumbnailGridPane({
       return next;
     });
   }, []);
+
+  useEffect(() => {
+    if (!contextMenu) {
+      return;
+    }
+
+    const onPointerDown = (event: PointerEvent) => {
+      if (!contextMenuRef.current?.contains(event.target as Node)) {
+        closeContextMenu();
+      }
+    };
+
+    const onScroll = () => {
+      closeContextMenu();
+    };
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        closeContextMenu();
+      }
+    };
+
+    window.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("scroll", onScroll, true);
+    window.addEventListener("resize", onScroll);
+    window.addEventListener("keydown", onKeyDown);
+
+    return () => {
+      window.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("scroll", onScroll, true);
+      window.removeEventListener("resize", onScroll);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [closeContextMenu, contextMenu]);
 
   useEffect(() => {
     if (!hasMore || searchPending || loadingMore) {
@@ -176,15 +282,28 @@ export function ThumbnailGridPane({
             const selected = selectedEntryIds.includes(entry.id);
             const mediaKind = getMediaKind(entry.suffix);
             const showMedia = mediaKind !== "other" && !failedMediaIds.has(entry.id);
+            const isFavorite = entry.tag_ids.includes(TAG_FAVORITE_ID);
+            const isArchived = entry.tag_ids.includes(TAG_ARCHIVED_ID);
+            const trashFailureMessage = trashFailureMessagesByEntryId.get(entry.id);
+
             return (
               <button
                 key={entry.id}
                 type="button"
-                className={`thumb-card ${selected ? "thumb-card-selected" : ""}`}
+                className={[
+                  "thumb-card",
+                  selected ? "thumb-card-selected" : "",
+                  isArchived ? "thumb-card-archived" : "",
+                  trashFailureMessage ? "thumb-card-trash-failed" : ""
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
                 onClick={(event) => onSelectEntry(entry.id, event)}
+                onContextMenu={(event) => openContextMenu(entry.id, event)}
+                title={trashFailureMessage ? `${entry.path}\n${trashFailureMessage}` : entry.path}
                 aria-selected={selected}
               >
-                <div className="thumb-media">
+                <div className={`thumb-media ${isArchived ? "thumb-media-archived" : ""}`}>
                   {showMedia ? (
                     <img
                       src={getThumbnailUrl(entry.id, { kind: "grid", fit: "cover" })}
@@ -195,12 +314,22 @@ export function ThumbnailGridPane({
                       onError={() => markMediaFailed(entry.id)}
                     />
                   ) : null}
+                  {!showMedia ? <span className="thumb-media-icon">{iconForSuffix(entry.suffix)}</span> : null}
+                  {isArchived ? (
+                    <span className="thumb-archive-badge" aria-label="Archived">
+                      <Archive size={12} />
+                    </span>
+                  ) : null}
+                  {isFavorite ? (
+                    <span className="thumb-favorite-badge" aria-label="Favorited">
+                      <Star size={12} fill="currentColor" />
+                    </span>
+                  ) : null}
                   {showMedia && mediaKind === "video" ? (
                     <span className="thumb-video-badge" aria-hidden="true">
                       ▶
                     </span>
                   ) : null}
-                  {!showMedia ? <span className="thumb-media-icon">{iconForSuffix(entry.suffix)}</span> : null}
                 </div>
                 <span className="thumb-label" title={entry.path}>
                   {entry.filename}
@@ -215,6 +344,67 @@ export function ThumbnailGridPane({
         {searchPending ? <p className="thumb-loading">Loading results...</p> : null}
         {loadingMore ? <p className="thumb-loading">Loading more...</p> : null}
       </div>
+
+      {contextMenu && contextMenuEnabled ? (
+        <div
+          ref={contextMenuRef}
+          className="thumb-context-menu"
+          role="menu"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+        >
+          <button
+            type="button"
+            role="menuitem"
+            className="thumb-context-menu-item"
+            disabled={contextMenu.state.disabled}
+            onClick={() => triggerContextAction("copy_tags")}
+          >
+            Copy Tags
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="thumb-context-menu-item"
+            disabled={!contextMenu.state.canPaste || contextMenu.state.disabled}
+            onClick={() => triggerContextAction("paste_tags")}
+          >
+            Paste Tags
+          </button>
+
+          <div className="thumb-context-menu-separator" />
+
+          <button
+            type="button"
+            role="menuitem"
+            className="thumb-context-menu-item"
+            disabled={contextMenu.state.disabled}
+            onClick={() => triggerContextAction("favorite_toggle")}
+          >
+            {contextMenu.state.favoriteMode === "favorite" ? "Favorite" : "Unfavorite"}
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="thumb-context-menu-item"
+            disabled={contextMenu.state.disabled}
+            onClick={() => triggerContextAction("archive_toggle")}
+          >
+            {contextMenu.state.archiveMode === "archive" ? "Archive" : "Unarchive"}
+          </button>
+
+          <div className="thumb-context-menu-separator" />
+
+          <button
+            type="button"
+            role="menuitem"
+            className="thumb-context-menu-item thumb-context-menu-item-danger"
+            disabled={contextMenu.state.disabled}
+            onClick={() => triggerContextAction("delete_to_trash")}
+          >
+            Delete to Trash
+          </button>
+        </div>
+      ) : null}
     </section>
   );
 }

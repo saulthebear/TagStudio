@@ -178,6 +178,33 @@ class TagMutationResponse(BaseModel):
     changed: int = 0
 
 
+class TrashFailureReasonCode(str, Enum):
+    ENTRY_NOT_FOUND = "ENTRY_NOT_FOUND"
+    MISSING_ON_DISK = "MISSING_ON_DISK"
+    NOT_A_FILE = "NOT_A_FILE"
+    PERMISSION_DENIED = "PERMISSION_DENIED"
+    OS_ERROR = "OS_ERROR"
+    UNKNOWN_ERROR = "UNKNOWN_ERROR"
+
+
+class TrashEntriesRequest(BaseModel):
+    entry_ids: list[int] = Field(default_factory=list)
+
+
+class TrashEntryFailure(BaseModel):
+    entry_id: int
+    path: str | None = None
+    reason_code: TrashFailureReasonCode
+
+
+class TrashEntriesResponse(BaseModel):
+    success: bool
+    deleted_entry_ids: list[int] = Field(default_factory=list)
+    deleted_count: int = 0
+    failed_count: int = 0
+    failed_entries: list[TrashEntryFailure] = Field(default_factory=list)
+
+
 class TagCreateRequest(BaseModel):
     name: str
     shorthand: str | None = None
@@ -256,6 +283,14 @@ class ThumbnailSettingsUpdateRequest(BaseModel):
     quality: int | None = Field(default=None, ge=1, le=100)
 
 
+class ConfirmationSettings(BaseModel):
+    confirm_before_trash: bool = True
+
+
+class ConfirmationSettingsUpdateRequest(BaseModel):
+    confirm_before_trash: bool | None = None
+
+
 class SettingsResponse(BaseModel):
     sorting_mode: SortingMode = SortingMode.DATE_ADDED
     ascending: bool = True
@@ -263,6 +298,7 @@ class SettingsResponse(BaseModel):
     page_size: int = Field(default=200, ge=1, le=2000)
     layout: LayoutSettings = Field(default_factory=LayoutSettings)
     thumbnails: ThumbnailSettings = Field(default_factory=ThumbnailSettings)
+    confirmations: ConfirmationSettings = Field(default_factory=ConfirmationSettings)
 
 
 class SettingsUpdateRequest(BaseModel):
@@ -272,6 +308,7 @@ class SettingsUpdateRequest(BaseModel):
     page_size: int | None = Field(default=None, ge=1, le=2000)
     layout: LayoutSettingsUpdateRequest | None = None
     thumbnails: ThumbnailSettingsUpdateRequest | None = None
+    confirmations: ConfirmationSettingsUpdateRequest | None = None
 
 
 class SuccessResponse(BaseModel):

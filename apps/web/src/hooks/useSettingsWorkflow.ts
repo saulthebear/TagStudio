@@ -31,6 +31,9 @@ type UseSettingsWorkflowResult = {
   setShowHiddenEntries: (value: boolean) => void;
   pageSize: number;
   setPageSize: (value: number) => void;
+  confirmBeforeTrash: boolean;
+  setConfirmBeforeTrash: (value: boolean) => void;
+  setConfirmBeforeTrashPreference: (value: boolean) => Promise<void>;
   settingsDraft: SettingsDraft;
   setSettingsDraft: (value: SettingsDraft | ((prev: SettingsDraft) => SettingsDraft)) => void;
   settingsOpen: boolean;
@@ -60,6 +63,7 @@ export function useSettingsWorkflow({
   const [ascending, setAscending] = useState(DEFAULT_DRAFT.ascending);
   const [showHiddenEntries, setShowHiddenEntries] = useState(DEFAULT_DRAFT.showHiddenEntries);
   const [pageSize, setPageSize] = useState(DEFAULT_DRAFT.pageSize);
+  const [confirmBeforeTrash, setConfirmBeforeTrash] = useState(DEFAULT_DRAFT.confirmBeforeTrash);
 
   const [mainSplitState, setMainSplitState] = useState<SplitPaneState>(DEFAULT_MAIN_SPLIT);
   const [inspectorSplitState, setInspectorSplitState] = useState<SplitPaneState>(
@@ -95,11 +99,13 @@ export function useSettingsWorkflow({
     setAscending(settings.data.ascending);
     setShowHiddenEntries(settings.data.show_hidden_entries);
     setPageSize(settings.data.page_size);
+    setConfirmBeforeTrash(settings.data.confirmations.confirm_before_trash);
     setSettingsDraft({
       sortingMode: settings.data.sorting_mode,
       ascending: settings.data.ascending,
       showHiddenEntries: settings.data.show_hidden_entries,
-      pageSize: settings.data.page_size
+      pageSize: settings.data.page_size,
+      confirmBeforeTrash: settings.data.confirmations.confirm_before_trash
     });
     setMainSplitState(layoutToMainSplit(settings.data.layout));
     setInspectorSplitState(layoutToInspectorSplit(settings.data.layout));
@@ -113,7 +119,10 @@ export function useSettingsWorkflow({
         sorting_mode: draft.sortingMode,
         ascending: draft.ascending,
         show_hidden_entries: draft.showHiddenEntries,
-        page_size: draft.pageSize
+        page_size: draft.pageSize,
+        confirmations: {
+          confirm_before_trash: draft.confirmBeforeTrash
+        }
       }),
     onSuccess: (nextSettings) => {
       onClearError();
@@ -122,11 +131,13 @@ export function useSettingsWorkflow({
       setAscending(nextSettings.ascending);
       setShowHiddenEntries(nextSettings.show_hidden_entries);
       setPageSize(nextSettings.page_size);
+      setConfirmBeforeTrash(nextSettings.confirmations.confirm_before_trash);
       setSettingsDraft({
         sortingMode: nextSettings.sorting_mode,
         ascending: nextSettings.ascending,
         showHiddenEntries: nextSettings.show_hidden_entries,
-        pageSize: nextSettings.page_size
+        pageSize: nextSettings.page_size,
+        confirmBeforeTrash: nextSettings.confirmations.confirm_before_trash
       });
       setSettingsOpen(false);
     },
@@ -174,10 +185,11 @@ export function useSettingsWorkflow({
       sortingMode,
       ascending,
       showHiddenEntries,
-      pageSize
+      pageSize,
+      confirmBeforeTrash
     });
     setSettingsOpen(true);
-  }, [ascending, pageSize, showHiddenEntries, sortingMode]);
+  }, [ascending, confirmBeforeTrash, pageSize, showHiddenEntries, sortingMode]);
 
   const closeSettings = useCallback(() => {
     setSettingsOpen(false);
@@ -190,12 +202,35 @@ export function useSettingsWorkflow({
         sortingMode: nextSettings.sorting_mode,
         ascending: nextSettings.ascending,
         showHiddenEntries: nextSettings.show_hidden_entries,
-        pageSize: nextSettings.page_size
+        pageSize: nextSettings.page_size,
+        confirmBeforeTrash: nextSettings.confirmations.confirm_before_trash
       };
     } catch {
       return null;
     }
   }, [saveSettingsMutation, settingsDraft]);
+
+  const setConfirmBeforeTrashPreference = useCallback(
+    async (value: boolean) => {
+      try {
+        const nextSettings = await api.updateSettings({
+          confirmations: {
+            confirm_before_trash: value
+          }
+        });
+        queryClient.setQueryData(settingsQueryKey, nextSettings);
+        setConfirmBeforeTrash(nextSettings.confirmations.confirm_before_trash);
+        setSettingsDraft((prev) => ({
+          ...prev,
+          confirmBeforeTrash: nextSettings.confirmations.confirm_before_trash
+        }));
+        onClearError();
+      } catch (error) {
+        onError(error instanceof Error ? error.message : "Failed to save trash confirmation setting.");
+      }
+    },
+    [onClearError, onError, queryClient, settingsQueryKey]
+  );
 
   return {
     sortingMode,
@@ -206,6 +241,9 @@ export function useSettingsWorkflow({
     setShowHiddenEntries,
     pageSize,
     setPageSize,
+    confirmBeforeTrash,
+    setConfirmBeforeTrash,
+    setConfirmBeforeTrashPreference,
     settingsDraft,
     setSettingsDraft,
     settingsOpen,

@@ -7,6 +7,7 @@ import {
   type JobEventPayload,
   type PreviewResponse,
   type TagCreatePayload,
+  type TrashEntriesResponse,
   type TagResponse,
   type TagUpdatePayload
 } from "@tagstudio/api-client";
@@ -41,6 +42,7 @@ type UseInspectorWorkflowResult = {
   tagMutationPending: boolean;
   tagEditPending: boolean;
   refreshPending: boolean;
+  trashPending: boolean;
   refreshStatus: JobEventPayload | null;
   selectEntry: (entryId: number) => void;
   clearSelection: () => void;
@@ -48,6 +50,7 @@ type UseInspectorWorkflowResult = {
   applyField: () => void;
   refreshLibrary: () => void;
   refreshSelectedEntry: () => Promise<void>;
+  trashEntries: (entryIds: number[]) => Promise<TrashEntriesResponse>;
   addTagToEntries: (entryIds: number[], tagId: number) => Promise<void>;
   removeTagFromEntries: (entryIds: number[], tagId: number) => Promise<void>;
   createTag: (payload: TagCreatePayload) => Promise<TagResponse | null>;
@@ -270,6 +273,18 @@ export function useInspectorWorkflow({
     }
   });
 
+  const trashEntriesMutation = useMutation({
+    mutationFn: (entryIds: number[]) => api.trashEntries(entryIds),
+    onSuccess: () => {
+      onClearError();
+      queryClient.invalidateQueries({ queryKey: ["library-state"] });
+      onSearchResultsStale();
+    },
+    onError: (error) => {
+      onError(error instanceof Error ? error.message : "Unable to move entries to trash.");
+    }
+  });
+
   const selectEntry = useCallback(
     (entryId: number) => {
       setSelectedEntryId(entryId);
@@ -362,6 +377,13 @@ export function useInspectorWorkflow({
     refreshLibraryMutation.mutate();
   }, [refreshLibraryMutation]);
 
+  const trashEntries = useCallback(
+    async (entryIds: number[]) => {
+      return await trashEntriesMutation.mutateAsync(entryIds);
+    },
+    [trashEntriesMutation]
+  );
+
   const reconcileSelectionWithEntries = useCallback(
     (entries: EntrySummaryResponse[]) => {
       if (selectedEntryId === null) {
@@ -403,12 +425,14 @@ export function useInspectorWorkflow({
     tagMutationPending: addTagsMutation.isPending || removeTagsMutation.isPending,
     tagEditPending: createTagMutation.isPending || updateTagMutation.isPending,
     refreshPending: refreshLibraryMutation.isPending,
+    trashPending: trashEntriesMutation.isPending,
     refreshStatus,
     selectEntry,
     clearSelection,
     saveField,
     applyField,
     refreshLibrary,
+    trashEntries,
     refreshSelectedEntry,
     addTagToEntries,
     removeTagFromEntries,

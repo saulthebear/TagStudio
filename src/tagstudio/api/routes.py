@@ -1,11 +1,14 @@
 import mimetypes
+import os
 import secrets
 from pathlib import Path
+from platform import system
 from typing import Any
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import FileResponse, StreamingResponse
+from send2trash import send2trash
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
@@ -26,6 +29,10 @@ from tagstudio.api.schemas import (
     SettingsResponse,
     SettingsUpdateRequest,
     SuccessResponse,
+    TrashEntriesRequest,
+    TrashEntriesResponse,
+    TrashEntryFailure,
+    TrashFailureReasonCode,
     TagColorNamespaceResponse,
     TagColorResponse,
     TagCreateRequest,
@@ -98,6 +105,29 @@ def create_router(*, state: ApiState, jobs: JobManager) -> APIRouter:
         except ValueError as exc:
             raise HTTPException(status_code=400, detail="Entry path escapes library root.") from exc
         return entry_path, str(entry.path)
+
+    def trash_file(path: Path) -> TrashFailureReasonCode | None:
+        try:
+            send2trash(path)
+            return None
+        except PermissionError:
+            return TrashFailureReasonCode.PERMISSION_DENIED
+        except FileNotFoundError:
+            return TrashFailureReasonCode.MISSING_ON_DISK
+        except OSError:
+            if system() == "Darwin" and path.exists():
+                try:
+                    os.remove(path)
+                    return None
+                except PermissionError:
+                    return TrashFailureReasonCode.PERMISSION_DENIED
+                except OSError:
+                    return TrashFailureReasonCode.OS_ERROR
+                except Exception:
+                    return TrashFailureReasonCode.UNKNOWN_ERROR
+            return TrashFailureReasonCode.OS_ERROR
+        except Exception:
+            return TrashFailureReasonCode.UNKNOWN_ERROR
 
     def build_thumbnail_url(
         entry_id: int,
@@ -195,6 +225,8 @@ def create_router(*, state: ApiState, jobs: JobManager) -> APIRouter:
             updates["layout"] = request.layout.model_dump(exclude_none=True)
         if request.thumbnails is not None:
             updates["thumbnails"] = request.thumbnails.model_dump(exclude_none=True)
+        if request.confirmations is not None:
+            updates["confirmations"] = request.confirmations.model_dump(exclude_none=True)
         return SettingsResponse.model_validate(state.update_web_settings(updates))
 
     @router.get("/field-types", response_model=list[FieldTypeResponse])
@@ -487,6 +519,76 @@ def create_router(*, state: ApiState, jobs: JobManager) -> APIRouter:
         success = lib.remove_tags_from_entries(request.entry_ids, request.tag_ids)
         changed = len(request.entry_ids) * len(request.tag_ids) if success else 0
         return TagMutationResponse(success=success, changed=changed)
+
+    @router.post("/entries:trash", response_model=TrashEntriesResponse)
+    def trash_entries(request: TrashEntriesRequest) -> TrashEntriesResponse:
+        lib = get_library_or_error()
+
+        deleted_entry_ids: list[int] = []
+        failed_entries: list[TrashEntryFailure] = []
+        seen: set[int] = set()
+
+        for entry_id in request.entry_ids:
+            if entry_id in seen:
+                continue
+            seen.add(entry_id)
+
+            try:
+                entry_path, relative_path = resolve_entry_file(lib, entry_id)
+            except HTTPException as exc:
+                reason = (
+                    TrashFailureReasonCode.ENTRY_NOT_FOUND
+                    if exc.status_code == 404
+                    else TrashFailureReasonCode.UNKNOWN_ERROR
+                )
+                failed_entries.append(
+                    TrashEntryFailure(entry_id=entry_id, path=None, reason_code=reason)
+                )
+                continue
+
+            if not entry_path.exists():
+                failed_entries.append(
+                    TrashEntryFailure(
+                        entry_id=entry_id,
+                        path=relative_path,
+                        reason_code=TrashFailureReasonCode.MISSING_ON_DISK,
+                    )
+                )
+                continue
+
+            if not entry_path.is_file():
+                failed_entries.append(
+                    TrashEntryFailure(
+                        entry_id=entry_id,
+                        path=relative_path,
+                        reason_code=TrashFailureReasonCode.NOT_A_FILE,
+                    )
+                )
+                continue
+
+            reason = trash_file(entry_path)
+            if reason is None:
+                deleted_entry_ids.append(entry_id)
+                continue
+
+            failed_entries.append(
+                TrashEntryFailure(
+                    entry_id=entry_id,
+                    path=relative_path,
+                    reason_code=reason,
+                )
+            )
+
+        if deleted_entry_ids:
+            lib.remove_entries(deleted_entry_ids)
+
+        return TrashEntriesResponse(
+            success=len(failed_entries) == 0,
+            deleted_entry_ids=deleted_entry_ids,
+            deleted_count=len(deleted_entry_ids),
+            failed_count=len(failed_entries),
+            failed_entries=failed_entries,
+        )
 
     @router.post("/tags", response_model=TagResponse)
     def create_tag(request: TagCreateRequest) -> TagResponse:
