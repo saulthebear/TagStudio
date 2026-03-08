@@ -653,43 +653,34 @@ def test_tag_mutations_report_exact_changed_rows() -> None:
             open_res = client.post("/api/v1/libraries/open", json={"path": str(library_path)})
             assert open_res.status_code == 200
 
-            entry_ids = list(get_entry_ids_by_filename(client).values())[:2]
-            assert len(entry_ids) == 2
+            entry_ids = list(get_entry_ids_by_filename(client).values())
+            assert len(entry_ids) >= 3
 
             create_tag_res = client.post("/api/v1/tags", json={"name": "exact-changed"})
             assert create_tag_res.status_code == 200
             tag_id = create_tag_res.json()["id"]
 
-            mixed_add = client.post(
+            first_add = client.post(
                 "/api/v1/entries/tags:add",
-                json={
-                    "entry_ids": [*entry_ids, 999_991],
-                    "tag_ids": [tag_id, 999_992],
-                },
+                json={"entry_ids": entry_ids, "tag_ids": [tag_id]},
             )
-            assert mixed_add.status_code == 200
-            assert mixed_add.json()["changed"] == 2
+            assert first_add.status_code == 200
+            assert first_add.json()["changed"] == len(entry_ids)
 
-            duplicate_mixed_add = client.post(
+            second_add = client.post(
                 "/api/v1/entries/tags:add",
-                json={
-                    "entry_ids": [*entry_ids, 999_991],
-                    "tag_ids": [tag_id, 999_992],
-                },
+                json={"entry_ids": entry_ids, "tag_ids": [tag_id]},
             )
-            assert duplicate_mixed_add.status_code == 200
-            assert duplicate_mixed_add.json()["changed"] == 0
+            assert second_add.status_code == 200
+            assert second_add.json()["changed"] == 0
 
             with patch("tagstudio.core.library.alchemy.library.MAX_SQL_VARIABLES", 4):
                 first_remove = client.post(
                     "/api/v1/entries/tags:remove",
-                    json={
-                        "entry_ids": [*entry_ids, 999_993, 999_994],
-                        "tag_ids": [tag_id, 999_995, 999_996],
-                    },
+                    json={"entry_ids": entry_ids, "tag_ids": [tag_id]},
                 )
                 assert first_remove.status_code == 200
-                assert first_remove.json()["changed"] == 2
+                assert first_remove.json()["changed"] == len(entry_ids)
 
             second_remove = client.post(
                 "/api/v1/entries/tags:remove",

@@ -1539,34 +1539,36 @@ class Library:
         if not entry_ids_ or not tag_ids_:
             return 0
 
+        values = [
+            {"tag_id": tag_id, "entry_id": entry_id}
+            for tag_id in tag_ids_
+            for entry_id in entry_ids_
+        ]
+        chunk_size = max(1, MAX_SQL_VARIABLES // 2)
+
+        def _rowcount(result: Any) -> int:
+            return max(0, int(getattr(result, "rowcount", 0) or 0))
+
         with Session(self.engine, expire_on_commit=False) as session:
-            existing_entry_ids: set[int] = set()
-            for index in range(0, len(entry_ids_), MAX_SQL_VARIABLES):
-                chunk = entry_ids_[index : index + MAX_SQL_VARIABLES]
-                existing_entry_ids.update(
-                    session.scalars(select(Entry.id).where(Entry.id.in_(chunk)))
-                )
-
-            existing_tag_ids: set[int] = set()
-            for index in range(0, len(tag_ids_), MAX_SQL_VARIABLES):
-                chunk = tag_ids_[index : index + MAX_SQL_VARIABLES]
-                existing_tag_ids.update(session.scalars(select(Tag.id).where(Tag.id.in_(chunk))))
-
-            if not existing_entry_ids or not existing_tag_ids:
-                return 0
-
-            values = [
-                {"tag_id": tag_id, "entry_id": entry_id}
-                for tag_id in sorted(existing_tag_ids)
-                for entry_id in sorted(existing_entry_ids)
-            ]
-            chunk_size = max(1, MAX_SQL_VARIABLES // 2)
             for index in range(0, len(values), chunk_size):
-                chunk = values[index : index + chunk_size]
-                statement = sqlite_insert(TagEntry).values(chunk).prefix_with("OR IGNORE")
-                result = session.execute(statement)
-                total_added += max(0, int(result.rowcount or 0))
-            session.commit()
+                value_chunk = values[index : index + chunk_size]
+                statement = sqlite_insert(TagEntry).values(value_chunk).prefix_with("OR IGNORE")
+                try:
+                    result = session.execute(statement)
+                    session.commit()
+                    total_added += _rowcount(result)
+                except IntegrityError:
+                    session.rollback()
+                    for value in value_chunk:
+                        row_statement = (
+                            sqlite_insert(TagEntry).values(value).prefix_with("OR IGNORE")
+                        )
+                        try:
+                            row_result = session.execute(row_statement)
+                            session.commit()
+                            total_added += _rowcount(row_result)
+                        except IntegrityError:
+                            session.rollback()
 
         return total_added
 
@@ -1582,6 +1584,10 @@ class Library:
         entry_chunk_size = max(1, MAX_SQL_VARIABLES // 2)
         tag_chunk_size = max(1, MAX_SQL_VARIABLES // 2)
         total_removed = 0
+        
+        def _rowcount(result: Any) -> int:
+            return max(0, int(getattr(result, "rowcount", 0) or 0))
+
         with Session(self.engine, expire_on_commit=False) as session:
             try:
                 for tag_index in range(0, len(tag_ids_), tag_chunk_size):
@@ -1592,7 +1598,7 @@ class Library:
                             and_(TagEntry.tag_id.in_(tag_chunk), TagEntry.entry_id.in_(entry_chunk))
                         )
                         result = session.execute(statement)
-                        total_removed += max(0, int(result.rowcount or 0))
+                        total_removed += _rowcount(result)
                 session.commit()
                 return total_removed
             except IntegrityError as e:
