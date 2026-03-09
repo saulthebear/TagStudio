@@ -66,6 +66,9 @@ class ThumbnailPipeline:
     MAX_QUALITY = 100
     MIN_CACHE_MIB = 64
     MAX_CACHE_MIB = 16384
+    MIN_VIDEO_BYTES_FOR_OPENCV = 1024
+    VIDEO_FFMPEG_TIMEOUT_SECONDS = 5.0
+    VIDEO_FFPROBE_TIMEOUT_SECONDS = 5.0
 
     _IMAGE_SUFFIXES = {
         ".jpg",
@@ -419,16 +422,19 @@ class ThumbnailPipeline:
             return None
 
     def _render_video(self, entry_path: Path, options: ThumbnailOptions) -> Image.Image | None:
-        image = self._render_video_with_opencv(entry_path, options)
+        # Prefer ffmpeg because OpenCV can block on some malformed containers.
+        image = self._render_video_with_ffmpeg(entry_path, options)
         if image is not None:
             return image
 
-        return self._render_video_with_ffmpeg(entry_path, options)
+        return self._render_video_with_opencv(entry_path, options)
 
     def _render_video_with_opencv(
         self, entry_path: Path, options: ThumbnailOptions
     ) -> Image.Image | None:
         if cv2 is None:
+            return None
+        if entry_path.stat().st_size < self.MIN_VIDEO_BYTES_FOR_OPENCV:
             return None
 
         capture = cv2.VideoCapture(str(entry_path))
@@ -542,8 +548,16 @@ class ThumbnailPipeline:
                     cmd,
                     check=False,
                     capture_output=True,
+                    timeout=self.VIDEO_FFMPEG_TIMEOUT_SECONDS,
                 )
             except OSError:
+                continue
+            except subprocess.TimeoutExpired:
+                logger.debug(
+                    "Thumbnail ffmpeg extraction timed out.",
+                    path=str(entry_path),
+                    timeout_seconds=self.VIDEO_FFMPEG_TIMEOUT_SECONDS,
+                )
                 continue
 
             if result.returncode != 0 or not result.stdout:
@@ -576,8 +590,16 @@ class ThumbnailPipeline:
                 check=False,
                 capture_output=True,
                 text=True,
+                timeout=self.VIDEO_FFPROBE_TIMEOUT_SECONDS,
             )
         except OSError:
+            return None
+        except subprocess.TimeoutExpired:
+            logger.debug(
+                "Thumbnail ffprobe timed out.",
+                path=str(entry_path),
+                timeout_seconds=self.VIDEO_FFPROBE_TIMEOUT_SECONDS,
+            )
             return None
 
         if result.returncode != 0 or not result.stdout:

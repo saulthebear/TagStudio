@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import json
+import subprocess
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -891,5 +892,25 @@ def test_thumbnail_pipeline_video_falls_back_to_ffmpeg_when_opencv_fails() -> No
 
             assert result is not None
             assert result.size == (128, 128)
+        finally:
+            pipeline.close()
+
+
+def test_thumbnail_pipeline_ffmpeg_and_ffprobe_timeout_returns_none() -> None:
+    with TemporaryDirectory() as tmp:
+        library_path = Path(tmp)
+        pipeline = ThumbnailPipeline(library_path)
+        try:
+            video_path = library_path / "timeout.webm"
+            video_path.write_bytes(b"not-a-real-video")
+            pipeline._ffmpeg_cmd = "ffmpeg"
+            pipeline._ffprobe_cmd = "ffprobe"
+
+            with patch(
+                "tagstudio.core.media.thumbnail_pipeline.subprocess.run",
+                side_effect=subprocess.TimeoutExpired(cmd=["ffprobe"], timeout=1),
+            ):
+                assert pipeline._probe_duration_seconds(video_path) is None
+                assert pipeline._extract_video_frame_with_ffmpeg(video_path, 0.0) is None
         finally:
             pipeline.close()
