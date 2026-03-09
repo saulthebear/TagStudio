@@ -26,8 +26,11 @@ def main() -> None:
     parser.add_argument(
         "--allow-query-token",
         action=argparse.BooleanOptionalAction,
-        default=True,
-        help="Allow `?token=` fallback for clients that cannot send auth headers.",
+        default=False,
+        help=(
+            "Allow `?token=` fallback for clients that cannot send auth headers "
+            "(disabled by default)."
+        ),
     )
     args = parser.parse_args()
 

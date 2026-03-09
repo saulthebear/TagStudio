@@ -52,7 +52,7 @@ def create_app(
     )
 
     effective_allow_query_token = (
-        _env_flag("TAGSTUDIO_API_ALLOW_QUERY_TOKEN", default=True)
+        _env_flag("TAGSTUDIO_API_ALLOW_QUERY_TOKEN", default=False)
         if allow_query_token is None
         else allow_query_token
     )

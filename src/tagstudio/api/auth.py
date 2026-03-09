@@ -14,7 +14,7 @@ class TokenAuthMiddleware(BaseHTTPMiddleware):
         token: str | None,
         *,
         require_token: bool = True,
-        allow_query_token: bool = True,
+        allow_query_token: bool = False,
     ):
         super().__init__(app)
         self.token = token

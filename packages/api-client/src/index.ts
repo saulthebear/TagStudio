@@ -305,7 +305,7 @@ export class TagStudioApiClient {
   constructor(config: ApiConfig) {
     this.baseUrl = config.baseUrl.replace(/\/$/, "");
     this.token = config.token;
-    this.allowQueryToken = config.allowQueryToken ?? true;
+    this.allowQueryToken = config.allowQueryToken ?? false;
   }
 
   async health(): Promise<{ status: string }> {

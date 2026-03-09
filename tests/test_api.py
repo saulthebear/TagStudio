@@ -720,6 +720,21 @@ def test_token_auth_can_be_required() -> None:
         assert query_param_rejected.status_code == 401
 
 
+def test_query_token_auth_defaults_to_disabled() -> None:
+    app = create_app(api_token="secret-token", require_token=True)
+    with TestClient(app) as client:
+        unauthorized = client.get("/api/v1/libraries/state?token=secret-token")
+        assert unauthorized.status_code == 401
+
+
+def test_query_token_auth_can_be_enabled_with_env_flag() -> None:
+    with patch.dict("os.environ", {"TAGSTUDIO_API_ALLOW_QUERY_TOKEN": "1"}, clear=False):
+        app = create_app(api_token="secret-token", require_token=True)
+    with TestClient(app) as client:
+        authorized = client.get("/api/v1/libraries/state?token=secret-token")
+        assert authorized.status_code == 200
+
+
 def test_refresh_job_sse() -> None:
     with TemporaryDirectory() as tmp:
         library_path = Path(tmp)

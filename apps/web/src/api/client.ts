@@ -24,7 +24,7 @@ export const apiBaseUrl =
   normalizeApiBaseUrl(import.meta.env.VITE_TAGSTUDIO_API_BASE_URL) ?? DEFAULT_API_BASE_URL;
 
 const apiToken = normalizeApiToken(import.meta.env.VITE_TAGSTUDIO_API_TOKEN);
-const allowQueryToken = normalizeFlag(import.meta.env.VITE_TAGSTUDIO_API_ALLOW_QUERY_TOKEN, true);
+const allowQueryToken = normalizeFlag(import.meta.env.VITE_TAGSTUDIO_API_ALLOW_QUERY_TOKEN, false);
 
 export const api = new TagStudioApiClient({
   baseUrl: apiBaseUrl,
