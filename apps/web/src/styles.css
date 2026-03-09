@@ -311,20 +311,23 @@ body {
 }
 
 .thumb-grid {
-  display: grid;
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
   gap: 0.55rem;
-  grid-template-columns: repeat(auto-fill, minmax(clamp(120px, 16vw, 220px), 1fr));
-  align-items: start;
   padding-bottom: 0.3rem;
 }
 
 .thumb-grid-item {
   min-width: 0;
+  width: clamp(120px, 16vw, 220px);
+  flex: 0 0 clamp(120px, 16vw, 220px);
 }
 
 .thumb-card {
   display: flex;
   flex-direction: column;
+  width: 100%;
   gap: 0.35rem;
   border: 1px solid transparent;
   background: transparent;
