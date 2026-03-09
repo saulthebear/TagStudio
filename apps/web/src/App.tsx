@@ -252,7 +252,6 @@ export function App() {
     handleGridSelect
   } = useAppInteractions({
     activeLibraryPath,
-    activeQuery,
     entries,
     isMobile,
     selectedEntryId,

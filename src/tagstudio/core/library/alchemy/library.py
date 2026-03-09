@@ -42,6 +42,7 @@ from sqlalchemy import (
     text,
     update,
 )
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import (
     InstanceState,
@@ -939,6 +940,11 @@ class Library:
         with Session(self.engine) as session:
             return unwrap(session.scalar(select(func.count(Entry.id))))
 
+    @property
+    def tags_count(self) -> int:
+        with Session(self.engine) as session:
+            return unwrap(session.scalar(select(func.count(Tag.id))))
+
     def all_entries(self, with_joins: bool = False) -> Iterator[Entry]:
         """Load entries without joins."""
         with Session(self.engine) as session:
@@ -1180,6 +1186,54 @@ class Library:
             session.expunge_all()
 
             return res
+
+    def search_tags_page(
+        self,
+        name: str | None,
+        *,
+        limit: int,
+        offset: int,
+        excluded_tag_ids: set[int] | None = None,
+    ) -> tuple[list[Tag], int]:
+        """Return one page of tags and the total count for the current filter."""
+        with Session(self.engine) as session:
+            ids_query = select(Tag.id)
+            if name:
+                ids_query = ids_query.outerjoin(TagAlias).where(
+                    or_(
+                        Tag.name.icontains(name),
+                        Tag.shorthand.icontains(name),
+                        TagAlias.name.icontains(name),
+                    )
+                )
+            if excluded_tag_ids:
+                ids_query = ids_query.where(Tag.id.not_in(excluded_tag_ids))
+
+            ids_query = ids_query.group_by(Tag.id)
+            total_count = unwrap(
+                session.scalar(select(func.count()).select_from(ids_query.subquery()))
+            )
+            page_ids = list(
+                session.scalars(
+                    ids_query.order_by(func.lower(Tag.name), Tag.id).offset(offset).limit(limit)
+                )
+            )
+            if not page_ids:
+                return [], total_count
+
+            tags_query = (
+                select(Tag)
+                .where(Tag.id.in_(page_ids))
+                .options(
+                    selectinload(Tag.parent_tags),
+                    selectinload(Tag.aliases),
+                )
+            )
+            tags_by_id = {tag.id: tag for tag in session.scalars(tags_query).unique()}
+            tags = [tags_by_id[tag_id] for tag_id in page_ids if tag_id in tags_by_id]
+            for tag in tags:
+                session.expunge(tag)
+            return tags, total_count
 
     def update_entry_path(self, entry_id: int | Entry, path: Path) -> bool:
         """Set the path field of an entry.
@@ -1521,54 +1575,84 @@ class Library:
         Returns:
             The total number of tags added across all entries.
         """
-        total_added: int = 0
+        total_added = 0
         logger.info(
             "[Library][add_tags_to_entries]",
             entry_ids=entry_ids,
             tag_ids=tag_ids,
         )
 
-        entry_ids_ = [entry_ids] if isinstance(entry_ids, int) else entry_ids
-        tag_ids_ = [tag_ids] if isinstance(tag_ids, int) else tag_ids
+        entry_ids_ = sorted(set([entry_ids] if isinstance(entry_ids, int) else entry_ids))
+        tag_ids_ = sorted(set([tag_ids] if isinstance(tag_ids, int) else tag_ids))
+        if not entry_ids_ or not tag_ids_:
+            return 0
+
+        values = [
+            {"tag_id": tag_id, "entry_id": entry_id}
+            for tag_id in tag_ids_
+            for entry_id in entry_ids_
+        ]
+        chunk_size = max(1, MAX_SQL_VARIABLES // 2)
+
+        def _rowcount(result: Any) -> int:
+            return max(0, int(getattr(result, "rowcount", 0) or 0))
+
         with Session(self.engine, expire_on_commit=False) as session:
-            for tag_id in tag_ids_:
-                for entry_id in entry_ids_:
-                    try:
-                        session.add(TagEntry(tag_id=tag_id, entry_id=entry_id))
-                        total_added += 1
-                        session.commit()
-                    except IntegrityError:
-                        session.rollback()
+            for index in range(0, len(values), chunk_size):
+                value_chunk = values[index : index + chunk_size]
+                statement = sqlite_insert(TagEntry).values(value_chunk).prefix_with("OR IGNORE")
+                try:
+                    result = session.execute(statement)
+                    session.commit()
+                    total_added += _rowcount(result)
+                except IntegrityError:
+                    session.rollback()
+                    for value in value_chunk:
+                        row_statement = (
+                            sqlite_insert(TagEntry).values(value).prefix_with("OR IGNORE")
+                        )
+                        try:
+                            row_result = session.execute(row_statement)
+                            session.commit()
+                            total_added += _rowcount(row_result)
+                        except IntegrityError:
+                            session.rollback()
 
         return total_added
 
     def remove_tags_from_entries(
         self, entry_ids: int | list[int] | set[int], tag_ids: int | list[int] | set[int]
-    ) -> bool:
+    ) -> int:
         """Remove one or more tags from one or more entries."""
-        entry_ids_ = [entry_ids] if isinstance(entry_ids, int) else entry_ids
-        tag_ids_ = [tag_ids] if isinstance(tag_ids, int) else tag_ids
+        entry_ids_ = sorted(set([entry_ids] if isinstance(entry_ids, int) else entry_ids))
+        tag_ids_ = sorted(set([tag_ids] if isinstance(tag_ids, int) else tag_ids))
+        if not entry_ids_ or not tag_ids_:
+            return 0
+
+        entry_chunk_size = max(1, MAX_SQL_VARIABLES // 2)
+        tag_chunk_size = max(1, MAX_SQL_VARIABLES // 2)
+        total_removed = 0
+
+        def _rowcount(result: Any) -> int:
+            return max(0, int(getattr(result, "rowcount", 0) or 0))
+
         with Session(self.engine, expire_on_commit=False) as session:
             try:
-                for tag_id in tag_ids_:
-                    for entry_id in entry_ids_:
-                        tag_entry = session.scalars(
-                            select(TagEntry).where(
-                                and_(
-                                    TagEntry.tag_id == tag_id,
-                                    TagEntry.entry_id == entry_id,
-                                )
-                            )
-                        ).first()
-                        if tag_entry:
-                            session.delete(tag_entry)
-                            session.flush()
+                for tag_index in range(0, len(tag_ids_), tag_chunk_size):
+                    tag_chunk = tag_ids_[tag_index : tag_index + tag_chunk_size]
+                    for entry_index in range(0, len(entry_ids_), entry_chunk_size):
+                        entry_chunk = entry_ids_[entry_index : entry_index + entry_chunk_size]
+                        statement = delete(TagEntry).where(
+                            and_(TagEntry.tag_id.in_(tag_chunk), TagEntry.entry_id.in_(entry_chunk))
+                        )
+                        result = session.execute(statement)
+                        total_removed += _rowcount(result)
                 session.commit()
-                return True
+                return total_removed
             except IntegrityError as e:
                 logger.error(e)
                 session.rollback()
-                return False
+                return 0
 
     def add_color(self, color_group: TagColorGroup) -> TagColorGroup | None:
         with Session(self.engine, expire_on_commit=False) as session:

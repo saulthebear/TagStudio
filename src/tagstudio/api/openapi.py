@@ -6,7 +6,7 @@ from tagstudio.api.app import create_app
 
 
 def export_openapi(output_path: Path) -> None:
-    app = create_app()
+    app = create_app(require_token=False)
     schema = app.openapi()
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(schema, indent=2) + "\n", encoding="utf-8")

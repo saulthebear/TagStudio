@@ -209,11 +209,10 @@ export function useSearchWorkflow({
         }
         onError(error instanceof Error ? error.message : "Search failed.");
       } finally {
-        if (requestId !== searchRequestIdRef.current) {
-          return;
+        if (requestId === searchRequestIdRef.current) {
+          setSearchPending(false);
+          setLoadingMore(false);
         }
-        setSearchPending(false);
-        setLoadingMore(false);
       }
     },
     [

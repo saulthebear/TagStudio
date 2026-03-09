@@ -57,7 +57,7 @@ class LibraryStateResponse(BaseModel):
 class SearchRequest(BaseModel):
     query: str | None = None
     page_index: int = 0
-    page_size: int = Field(default=200, ge=1, le=2000)
+    page_size: int = Field(default=200, ge=1, le=1000)
     sorting_mode: SortingMode = SortingMode.DATE_ADDED
     random_seed: float | None = Field(default=None, ge=0.1, le=100.0)
     ascending: bool = True
@@ -75,6 +75,14 @@ class TagResponse(BaseModel):
     disambiguation_id: int | None = None
     is_category: bool = False
     is_hidden: bool = False
+
+
+class TagSearchResponse(BaseModel):
+    items: list[TagResponse] = Field(default_factory=list)
+    total_count: int = 0
+    offset: int = 0
+    limit: int = 0
+    has_more: bool = False
 
 
 class TagColorResponse(BaseModel):
@@ -327,7 +335,7 @@ class SettingsResponse(BaseModel):
     sorting_mode: SortingMode = SortingMode.DATE_ADDED
     ascending: bool = True
     show_hidden_entries: bool = False
-    page_size: int = Field(default=200, ge=1, le=2000)
+    page_size: int = Field(default=200, ge=1, le=1000)
     layout: LayoutSettings = Field(default_factory=LayoutSettings)
     thumbnails: ThumbnailSettings = Field(default_factory=ThumbnailSettings)
     confirmations: ConfirmationSettings = Field(default_factory=ConfirmationSettings)
@@ -337,7 +345,7 @@ class SettingsUpdateRequest(BaseModel):
     sorting_mode: SortingMode | None = None
     ascending: bool | None = None
     show_hidden_entries: bool | None = None
-    page_size: int | None = Field(default=None, ge=1, le=2000)
+    page_size: int | None = Field(default=None, ge=1, le=1000)
     layout: LayoutSettingsUpdateRequest | None = None
     thumbnails: ThumbnailSettingsUpdateRequest | None = None
     confirmations: ConfirmationSettingsUpdateRequest | None = None

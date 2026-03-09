@@ -1,5 +1,7 @@
 import argparse
 import os
+import secrets
+import sys
 
 import uvicorn
 
@@ -15,9 +17,37 @@ def main() -> None:
         default=os.getenv("TAGSTUDIO_API_TOKEN"),
         help="Optional API token required in `x-tagstudio-token` header.",
     )
+    parser.add_argument(
+        "--require-token",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Require token auth for all non-health routes (disabled by default for local dev).",
+    )
+    parser.add_argument(
+        "--allow-query-token",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "Allow `?token=` fallback for clients that cannot send auth headers "
+            "(disabled by default)."
+        ),
+    )
     args = parser.parse_args()
 
-    app = create_app(api_token=args.token)
+    token = args.token
+    if args.require_token and not token:
+        token = secrets.token_urlsafe(24)
+        sys.stderr.write(
+            "Generated TAGSTUDIO_API_TOKEN for this run. "
+            "Set VITE_TAGSTUDIO_API_TOKEN to connect web clients: "
+            f"{token}\n"
+        )
+
+    app = create_app(
+        api_token=token,
+        require_token=args.require_token,
+        allow_query_token=args.allow_query_token,
+    )
     uvicorn.run(app, host=args.host, port=args.port, log_level="info")
 
 

@@ -146,12 +146,25 @@ export function useInspectorWorkflow({
 
   const allTags = useQuery({
     queryKey: ["tags", activeLibraryPath, "all"],
-    queryFn: () => api.getTags(undefined, -1),
+    queryFn: async () => {
+      const aggregated: TagResponse[] = [];
+      const limit = 500;
+      let offset = 0;
+      while (true) {
+        const batch = await api.searchTags({ limit, offset });
+        aggregated.push(...batch.items);
+        if (!batch.has_more || batch.items.length === 0) {
+          break;
+        }
+        offset += batch.items.length;
+      }
+      return aggregated;
+    },
     enabled: isLibraryOpen
   });
 
   const preview = useQuery<PreviewResponse>({
-    queryKey: ["preview", selectedEntryId],
+    queryKey: ["preview", activeLibraryPath, selectedEntryId],
     queryFn: () => api.getPreview(selectedEntryId!),
     enabled: selectedEntryId !== null
   });

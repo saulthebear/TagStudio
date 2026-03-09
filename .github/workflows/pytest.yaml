@@ -7,6 +7,7 @@ jobs:
   pytest-linux:
     name: Run pytest (Linux)
     runs-on: ubuntu-24.04
+    timeout-minutes: 25
 
     steps:
       - &checkout
@@ -48,7 +49,10 @@ jobs:
 
       - name: Execute pytest
         run: |
-          xvfb-run pytest --cov-report xml --cov=tagstudio
+          xvfb-run python -X faulthandler -m pytest \
+            --cov-report xml \
+            --cov=tagstudio \
+            -o faulthandler_timeout=300
 
       - name: Upload coverage
         uses: actions/upload-artifact@v4
@@ -87,9 +91,14 @@ jobs:
       - name: Check coverage
         uses: yedpodtrzitko/coverage@main
         with:
-          thresholdAll: 0.4
-          thresholdNew: 0.4
-          thresholdModified: 0.4
+          thresholdAll: 0.5
+          thresholdNew: 0.5
+          thresholdModified: 0.5
           coverageFile: coverage.xml
           token: ${{ secrets.GITHUB_TOKEN }}
           sourceDir: tagstudio/src
+
+      - name: Type-ignore debt summary
+        run: |
+          TYPE_IGNORE_COUNT=$(rg -n "type: ignore|pyright: ignore" src/tagstudio | wc -l)
+          echo "Type-ignore count: ${TYPE_IGNORE_COUNT}" >> "$GITHUB_STEP_SUMMARY"

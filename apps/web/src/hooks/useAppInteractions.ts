@@ -25,7 +25,6 @@ function getFileManagerRevealLabel(): string {
 
 type UseAppInteractionsArgs = {
   activeLibraryPath: string | null;
-  activeQuery: string;
   entries: EntrySummaryResponse[];
   isMobile: boolean;
   selectedEntryId: number | null;
@@ -75,7 +74,6 @@ type UseAppInteractionsResult = {
 
 export function useAppInteractions({
   activeLibraryPath,
-  activeQuery,
   entries,
   isMobile,
   selectedEntryId,

@@ -1,3 +1,5 @@
+import os
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -7,7 +9,33 @@ from tagstudio.api.routes import create_router
 from tagstudio.api.state import ApiState
 
 
-def create_app(*, api_token: str | None = None) -> FastAPI:
+def _env_flag(name: str, default: bool) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _allowed_origins() -> list[str]:
+    raw = os.getenv("TAGSTUDIO_API_ALLOWED_ORIGINS")
+    if raw:
+        parsed = [origin.strip() for origin in raw.split(",") if origin.strip()]
+        if parsed:
+            return parsed
+    return [
+        "http://127.0.0.1:5173",
+        "http://localhost:5173",
+        "http://127.0.0.1:4173",
+        "http://localhost:4173",
+    ]
+
+
+def create_app(
+    *,
+    api_token: str | None = None,
+    require_token: bool = True,
+    allow_query_token: bool | None = None,
+) -> FastAPI:
     state = ApiState(token=api_token)
     jobs = JobManager()
 
@@ -18,13 +46,22 @@ def create_app(*, api_token: str | None = None) -> FastAPI:
     )
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=_allowed_origins(),
         allow_methods=["*"],
         allow_headers=["*"],
     )
 
-    if api_token:
-        app.add_middleware(TokenAuthMiddleware, token=api_token)
+    effective_allow_query_token = (
+        _env_flag("TAGSTUDIO_API_ALLOW_QUERY_TOKEN", default=False)
+        if allow_query_token is None
+        else allow_query_token
+    )
+    app.add_middleware(
+        TokenAuthMiddleware,
+        token=api_token,
+        require_token=require_token,
+        allow_query_token=effective_allow_query_token,
+    )
 
     app.include_router(create_router(state=state, jobs=jobs))
 

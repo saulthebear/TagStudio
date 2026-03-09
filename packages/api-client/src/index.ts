@@ -18,6 +18,14 @@ export type TagResponse = {
   is_hidden: boolean;
 };
 
+export type TagSearchResponse = {
+  items: TagResponse[];
+  total_count: number;
+  offset: number;
+  limit: number;
+  has_more: boolean;
+};
+
 export type TagColorResponse = {
   namespace: string;
   namespace_name: string;
@@ -286,15 +294,18 @@ export type SettingsUpdateRequest = {
 export type ApiConfig = {
   baseUrl: string;
   token?: string;
+  allowQueryToken?: boolean;
 };
 
 export class TagStudioApiClient {
   readonly baseUrl: string;
   private readonly token?: string;
+  private readonly allowQueryToken: boolean;
 
   constructor(config: ApiConfig) {
     this.baseUrl = config.baseUrl.replace(/\/$/, "");
     this.token = config.token;
+    this.allowQueryToken = config.allowQueryToken ?? false;
   }
 
   async health(): Promise<{ status: string }> {
@@ -351,6 +362,50 @@ export class TagStudioApiClient {
     }
     const suffix = params.size > 0 ? `?${params}` : "";
     return this.request(`/api/v1/tags${suffix}`);
+  }
+
+  async searchTags(
+    params: {
+      query?: string;
+      limit?: number;
+      offset?: number;
+      parentForTagId?: number;
+    } = {}
+  ): Promise<TagSearchResponse> {
+    const searchParams = new URLSearchParams();
+    if (params.query?.trim()) {
+      searchParams.set("query", params.query.trim());
+    }
+    if (typeof params.limit === "number") {
+      searchParams.set("limit", String(params.limit));
+    }
+    if (typeof params.offset === "number") {
+      searchParams.set("offset", String(params.offset));
+    }
+    if (typeof params.parentForTagId === "number") {
+      searchParams.set("parent_for_tag_id", String(params.parentForTagId));
+    }
+    const suffix = searchParams.size > 0 ? `?${searchParams}` : "";
+    try {
+      return await this.request(`/api/v1/tags/search${suffix}`);
+    } catch (error) {
+      // Compatibility fallback for older servers that do not expose /tags/search yet.
+      if (!(error instanceof Error) || !error.message.includes("(404)")) {
+        throw error;
+      }
+
+      const legacyTags = await this.getTags(params.query, -1, params.parentForTagId);
+      const offset = Math.max(0, params.offset ?? 0);
+      const limit = Math.max(1, params.limit ?? legacyTags.length);
+      const items = legacyTags.slice(offset, offset + limit);
+      return {
+        items,
+        total_count: legacyTags.length,
+        offset,
+        limit,
+        has_more: offset + items.length < legacyTags.length
+      };
+    }
   }
 
   async search(payload: SearchRequest): Promise<SearchResponse> {
@@ -530,7 +585,7 @@ export class TagStudioApiClient {
   }
 
   private withTokenQuery(url: URL): URL {
-    if (!this.token) {
+    if (!this.allowQueryToken || !this.token) {
       return url;
     }
     if (!url.searchParams.has("token")) {

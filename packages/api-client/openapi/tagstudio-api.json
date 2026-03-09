@@ -328,6 +328,88 @@
         }
       }
     },
+    "/api/v1/tags/search": {
+      "get": {
+        "summary": "Search Tags Paginated",
+        "operationId": "search_tags_paginated_api_v1_tags_search_get",
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Query"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 200,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 0,
+              "title": "Offset"
+            }
+          },
+          {
+            "name": "parent_for_tag_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Parent For Tag Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TagSearchResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/search": {
       "post": {
         "summary": "Search Entries",
@@ -1815,7 +1897,7 @@
           },
           "page_size": {
             "type": "integer",
-            "maximum": 2000.0,
+            "maximum": 1000.0,
             "minimum": 1.0,
             "title": "Page Size",
             "default": 200
@@ -1909,7 +1991,7 @@
           },
           "page_size": {
             "type": "integer",
-            "maximum": 2000.0,
+            "maximum": 1000.0,
             "minimum": 1.0,
             "title": "Page Size",
             "default": 200
@@ -1965,7 +2047,7 @@
             "anyOf": [
               {
                 "type": "integer",
-                "maximum": 2000.0,
+                "maximum": 1000.0,
                 "minimum": 1.0
               },
               {
@@ -2309,6 +2391,39 @@
           "name"
         ],
         "title": "TagResponse"
+      },
+      "TagSearchResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TagResponse"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total_count": {
+            "type": "integer",
+            "title": "Total Count",
+            "default": 0
+          },
+          "offset": {
+            "type": "integer",
+            "title": "Offset",
+            "default": 0
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit",
+            "default": 0
+          },
+          "has_more": {
+            "type": "boolean",
+            "title": "Has More",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "TagSearchResponse"
       },
       "TagUpdateRequest": {
         "properties": {

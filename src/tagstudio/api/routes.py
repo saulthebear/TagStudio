@@ -3,20 +3,20 @@ import os
 import secrets
 import shutil
 import sys
+import time
+from hashlib import sha256
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode
 
+import structlog
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import FileResponse, StreamingResponse
 from send2trash import send2trash
-from sqlalchemy import delete, select
-from sqlalchemy.orm import Session
 
 from tagstudio.api.jobs import JobManager
 from tagstudio.api.schemas import (
     EntryResponse,
-    EntryShellActionFailure,
     EntryShellActionFailureReasonCode,
     FieldTypeResponse,
     HealthResponse,
@@ -41,6 +41,7 @@ from tagstudio.api.schemas import (
     TagMutationRequest,
     TagMutationResponse,
     TagResponse,
+    TagSearchResponse,
     TagUpdateRequest,
     ThumbnailFit,
     ThumbnailKind,
@@ -48,7 +49,6 @@ from tagstudio.api.schemas import (
     ThumbnailPrewarmResponse,
     TrashEntriesRequest,
     TrashEntriesResponse,
-    TrashEntryFailure,
     TrashFailureReasonCode,
     UpdateFieldRequest,
 )
@@ -58,12 +58,27 @@ from tagstudio.api.serializers import (
     serialize_tag,
     serialize_tag_color,
 )
+from tagstudio.api.services.entry_service import (
+    open_entries as open_entries_service,
+)
+from tagstudio.api.services.entry_service import (
+    reveal_entry as reveal_entry_service,
+)
+from tagstudio.api.services.entry_service import (
+    trash_entries as trash_entries_service,
+)
+from tagstudio.api.services.tag_service import (
+    create_tag as create_tag_service,
+)
+from tagstudio.api.services.tag_service import (
+    get_descendant_tag_ids,
+)
+from tagstudio.api.services.tag_service import (
+    update_tag as update_tag_service,
+)
 from tagstudio.api.state import ApiState
-from tagstudio.core.library.alchemy.constants import TAG_CHILDREN_ID_QUERY
 from tagstudio.core.library.alchemy.enums import BrowsingState, SortingModeEnum
-from tagstudio.core.library.alchemy.joins import TagParent
 from tagstudio.core.library.alchemy.library import Library, LibraryStatus
-from tagstudio.core.library.alchemy.models import Tag, TagAlias
 from tagstudio.core.media.thumbnail_pipeline import ThumbnailUnsupportedError
 from tagstudio.core.utils.silent_subprocess import silent_popen
 
@@ -72,6 +87,9 @@ VIDEO_SUFFIXES = {"mp4", "mov", "mkv", "webm", "avi", "m4v"}
 AUDIO_SUFFIXES = {"mp3", "wav", "ogg", "flac", "m4a"}
 IMAGE_SUFFIXES = {"jpg", "jpeg", "png", "gif", "webp", "bmp", "tif", "tiff", "jxl", "heic"}
 TAG_LIST_SOFT_CAP = 5000
+SEARCH_PAGE_SOFT_CAP = 1000
+
+logger = structlog.get_logger(__name__)
 
 
 def create_router(*, state: ApiState, jobs: JobManager) -> APIRouter:
@@ -84,15 +102,28 @@ def create_router(*, state: ApiState, jobs: JobManager) -> APIRouter:
         return lib
 
     def state_response() -> LibraryStateResponse:
+        start = time.perf_counter()
         lib = state.get_library()
         if lib is None or lib.engine is None:
             return LibraryStateResponse(is_open=False)
-        return LibraryStateResponse(
+        response = LibraryStateResponse(
             is_open=True,
             library_path=str(lib.library_dir) if lib.library_dir else None,
             entries_count=lib.entries_count,
-            tags_count=len(lib.tags),
+            tags_count=lib.tags_count,
         )
+        logger.info(
+            "api.library_state",
+            duration_ms=round((time.perf_counter() - start) * 1000, 2),
+            rows_returned=1,
+            library_path_hash=_library_path_hash(lib),
+        )
+        return response
+
+    def _library_path_hash(lib: Library) -> str | None:
+        if lib.library_dir is None:
+            return None
+        return sha256(str(lib.library_dir).encode("utf-8")).hexdigest()[:12]
 
     def ensure_status(status: LibraryStatus) -> None:
         if not status.success:
@@ -204,45 +235,6 @@ def create_router(*, state: ApiState, jobs: JobManager) -> APIRouter:
         )
         return f"/api/v1/entries/{entry_id}/thumbnail?{params}"
 
-    def get_descendant_tag_ids(lib: Library, tag_id: int) -> set[int]:
-        if lib.engine is None:
-            return set()
-        with Session(lib.engine) as session:
-            return set(session.scalars(TAG_CHILDREN_ID_QUERY, {"tag_id": tag_id}))
-
-    def validate_parent_ids_for_tag(
-        lib: Library, *, tag_id: int | None, parent_ids: set[int]
-    ) -> set[int]:
-        if tag_id is not None and tag_id in parent_ids:
-            raise HTTPException(status_code=422, detail="A tag cannot be its own parent.")
-
-        for parent_id in parent_ids:
-            if lib.get_tag(parent_id) is None:
-                raise HTTPException(
-                    status_code=422,
-                    detail=f"Parent tag {parent_id} does not exist.",
-                )
-
-        if tag_id is not None:
-            descendant_ids = get_descendant_tag_ids(lib, tag_id)
-            cycle_parent_ids = parent_ids.intersection(descendant_ids)
-            if cycle_parent_ids:
-                raise HTTPException(
-                    status_code=422,
-                    detail="Circular tag hierarchy is not allowed.",
-                )
-
-        return parent_ids
-
-    def validate_disambiguation(disambiguation_id: int | None, parent_ids: set[int]) -> None:
-        if disambiguation_id is None:
-            return
-        if disambiguation_id not in parent_ids:
-            raise HTTPException(
-                status_code=422,
-                detail="disambiguation_id must reference one of parent_ids.",
-            )
-
     @router.get("/health", response_model=HealthResponse)
     def health() -> HealthResponse:
         return HealthResponse()
@@ -350,9 +342,45 @@ def create_router(*, state: ApiState, jobs: JobManager) -> APIRouter:
 
         return [TagResponse.model_validate(serialize_tag(tag)) for tag in tags]
 
+    @router.get("/tags/search", response_model=TagSearchResponse)
+    def search_tags_paginated(
+        query: str | None = None,
+        limit: int = 200,
+        offset: int = 0,
+        parent_for_tag_id: int | None = None,
+    ) -> TagSearchResponse:
+        lib = get_library_or_error()
+        if limit < 1:
+            raise HTTPException(status_code=400, detail="limit must be >= 1")
+        if offset < 0:
+            raise HTTPException(status_code=400, detail="offset must be >= 0")
+
+        effective_limit = min(limit, TAG_LIST_SOFT_CAP)
+        excluded_tag_ids: set[int] | None = None
+        if parent_for_tag_id is not None:
+            if lib.get_tag(parent_for_tag_id) is None:
+                raise HTTPException(status_code=404, detail="Tag not found.")
+            excluded_tag_ids = get_descendant_tag_ids(lib, parent_for_tag_id)
+
+        items, total_count = lib.search_tags_page(
+            query,
+            limit=effective_limit,
+            offset=offset,
+            excluded_tag_ids=excluded_tag_ids,
+        )
+        has_more = offset + len(items) < total_count
+        return TagSearchResponse(
+            items=[TagResponse.model_validate(serialize_tag(tag)) for tag in items],
+            total_count=total_count,
+            offset=offset,
+            limit=effective_limit,
+            has_more=has_more,
+        )
+
     @router.post("/search", response_model=SearchResponse)
     def search_entries(request: SearchRequest) -> SearchResponse:
         lib = get_library_or_error()
+        start = time.perf_counter()
         sorting_mode = SortingModeEnum(request.sorting_mode.value)
         effective_random_seed: float | None = None
         if sorting_mode == SortingModeEnum.RANDOM:
@@ -371,19 +399,38 @@ def create_router(*, state: ApiState, jobs: JobManager) -> APIRouter:
             show_hidden_entries=request.show_hidden_entries,
             query=request.query.strip() if request.query else None,
         )
-        results = lib.search_library(browsing_state, page_size=request.page_size)
-        entries = []
-        for entry_id in results.ids:
-            entry = lib.get_entry_full(entry_id, with_fields=False, with_tags=True)
-            if entry is not None:
-                entries.append(serialize_entry_summary(entry))
+        effective_page_size = min(request.page_size, SEARCH_PAGE_SOFT_CAP)
+        if request.page_size != effective_page_size:
+            logger.warning(
+                "api.search.page_size_capped",
+                requested_page_size=request.page_size,
+                effective_page_size=effective_page_size,
+                library_path_hash=_library_path_hash(lib),
+            )
+        results = lib.search_library(browsing_state, page_size=effective_page_size)
+        summaries_by_id = {
+            entry.id: serialize_entry_summary(entry) for entry in lib.get_entries_full(results.ids)
+        }
+        entries = [
+            summaries_by_id[entry_id] for entry_id in results.ids if entry_id in summaries_by_id
+        ]
 
-        return SearchResponse(
+        response = SearchResponse(
             total_count=results.total_count,
             ids=results.ids,
             entries=entries,
             random_seed=effective_random_seed,
         )
+        logger.info(
+            "api.search",
+            duration_ms=round((time.perf_counter() - start) * 1000, 2),
+            rows_returned=len(entries),
+            total_count=results.total_count,
+            sorting_mode=sorting_mode.value,
+            page_size=effective_page_size,
+            library_path_hash=_library_path_hash(lib),
+        )
+        return response
 
     @router.get("/entries/{entry_id}", response_model=EntryResponse)
     def get_entry(entry_id: int) -> EntryResponse:
@@ -569,285 +616,73 @@ def create_router(*, state: ApiState, jobs: JobManager) -> APIRouter:
     @router.post("/entries/tags:add", response_model=TagMutationResponse)
     def add_tags_to_entries(request: TagMutationRequest) -> TagMutationResponse:
         lib = get_library_or_error()
+        start = time.perf_counter()
         changed = lib.add_tags_to_entries(request.entry_ids, request.tag_ids)
+        logger.info(
+            "api.tags.add",
+            duration_ms=round((time.perf_counter() - start) * 1000, 2),
+            rows_returned=changed,
+            entry_ids_count=len(set(request.entry_ids)),
+            tag_ids_count=len(set(request.tag_ids)),
+            library_path_hash=_library_path_hash(lib),
+        )
         return TagMutationResponse(success=True, changed=changed)
 
     @router.post("/entries/tags:remove", response_model=TagMutationResponse)
     def remove_tags_from_entries(request: TagMutationRequest) -> TagMutationResponse:
         lib = get_library_or_error()
-        success = lib.remove_tags_from_entries(request.entry_ids, request.tag_ids)
-        changed = len(request.entry_ids) * len(request.tag_ids) if success else 0
-        return TagMutationResponse(success=success, changed=changed)
+        start = time.perf_counter()
+        changed = lib.remove_tags_from_entries(request.entry_ids, request.tag_ids)
+        logger.info(
+            "api.tags.remove",
+            duration_ms=round((time.perf_counter() - start) * 1000, 2),
+            rows_returned=changed,
+            entry_ids_count=len(set(request.entry_ids)),
+            tag_ids_count=len(set(request.tag_ids)),
+            library_path_hash=_library_path_hash(lib),
+        )
+        return TagMutationResponse(success=True, changed=changed)
 
     @router.post("/entries:trash", response_model=TrashEntriesResponse)
     def trash_entries(request: TrashEntriesRequest) -> TrashEntriesResponse:
         lib = get_library_or_error()
-
-        deleted_entry_ids: list[int] = []
-        failed_entries: list[TrashEntryFailure] = []
-        seen: set[int] = set()
-
-        for entry_id in request.entry_ids:
-            if entry_id in seen:
-                continue
-            seen.add(entry_id)
-
-            try:
-                entry_path, relative_path = resolve_entry_file(lib, entry_id)
-            except HTTPException as exc:
-                reason = (
-                    TrashFailureReasonCode.ENTRY_NOT_FOUND
-                    if exc.status_code == 404
-                    else TrashFailureReasonCode.UNKNOWN_ERROR
-                )
-                failed_entries.append(
-                    TrashEntryFailure(entry_id=entry_id, path=None, reason_code=reason)
-                )
-                continue
-
-            if not entry_path.exists():
-                failed_entries.append(
-                    TrashEntryFailure(
-                        entry_id=entry_id,
-                        path=relative_path,
-                        reason_code=TrashFailureReasonCode.MISSING_ON_DISK,
-                    )
-                )
-                continue
-
-            if not entry_path.is_file():
-                failed_entries.append(
-                    TrashEntryFailure(
-                        entry_id=entry_id,
-                        path=relative_path,
-                        reason_code=TrashFailureReasonCode.NOT_A_FILE,
-                    )
-                )
-                continue
-
-            reason = trash_file(entry_path)
-            if reason is None:
-                deleted_entry_ids.append(entry_id)
-                continue
-
-            failed_entries.append(
-                TrashEntryFailure(
-                    entry_id=entry_id,
-                    path=relative_path,
-                    reason_code=reason,
-                )
-            )
-
-        if deleted_entry_ids:
-            lib.remove_entries(deleted_entry_ids)
-
-        return TrashEntriesResponse(
-            success=len(failed_entries) == 0,
-            deleted_entry_ids=deleted_entry_ids,
-            deleted_count=len(deleted_entry_ids),
-            failed_count=len(failed_entries),
-            failed_entries=failed_entries,
+        return trash_entries_service(
+            lib,
+            request.entry_ids,
+            resolve_entry_file=resolve_entry_file,
+            trash_file=trash_file,
         )
 
     @router.post("/entries:open", response_model=OpenEntriesResponse)
     def open_entries(request: OpenEntriesRequest) -> OpenEntriesResponse:
         lib = get_library_or_error()
-
-        opened_entry_ids: list[int] = []
-        failed_entries: list[EntryShellActionFailure] = []
-        seen: set[int] = set()
-
-        for entry_id in request.entry_ids:
-            if entry_id in seen:
-                continue
-            seen.add(entry_id)
-
-            try:
-                entry_path, relative_path = resolve_entry_file(lib, entry_id)
-            except HTTPException as exc:
-                reason = (
-                    EntryShellActionFailureReasonCode.ENTRY_NOT_FOUND
-                    if exc.status_code == 404
-                    else EntryShellActionFailureReasonCode.UNKNOWN_ERROR
-                )
-                failed_entries.append(
-                    EntryShellActionFailure(entry_id=entry_id, path=None, reason_code=reason)
-                )
-                continue
-
-            if not entry_path.exists():
-                failed_entries.append(
-                    EntryShellActionFailure(
-                        entry_id=entry_id,
-                        path=relative_path,
-                        reason_code=EntryShellActionFailureReasonCode.MISSING_ON_DISK,
-                    )
-                )
-                continue
-
-            if not entry_path.is_file():
-                failed_entries.append(
-                    EntryShellActionFailure(
-                        entry_id=entry_id,
-                        path=relative_path,
-                        reason_code=EntryShellActionFailureReasonCode.NOT_A_FILE,
-                    )
-                )
-                continue
-
-            reason = open_path_in_default_app(entry_path)
-            if reason is None:
-                opened_entry_ids.append(entry_id)
-                continue
-
-            failed_entries.append(
-                EntryShellActionFailure(
-                    entry_id=entry_id,
-                    path=relative_path,
-                    reason_code=reason,
-                )
-            )
-
-        return OpenEntriesResponse(
-            success=len(failed_entries) == 0,
-            opened_entry_ids=opened_entry_ids,
-            opened_count=len(opened_entry_ids),
-            failed_count=len(failed_entries),
-            failed_entries=failed_entries,
+        return open_entries_service(
+            lib,
+            request.entry_ids,
+            resolve_entry_file=resolve_entry_file,
+            open_path=open_path_in_default_app,
         )
 
     @router.post("/entries:reveal", response_model=SuccessResponse)
     def reveal_entry(request: RevealEntryRequest) -> SuccessResponse:
         lib = get_library_or_error()
-        entry_path, _ = resolve_entry_file(lib, request.entry_id)
-
-        if not entry_path.exists():
-            raise HTTPException(status_code=404, detail="File is missing on disk.")
-        if not entry_path.is_file():
-            raise HTTPException(status_code=400, detail="Path is not a regular file.")
-
-        reason = reveal_path_in_file_manager(entry_path)
-        if reason is None:
-            return SuccessResponse(success=True)
-        if reason == EntryShellActionFailureReasonCode.COMMAND_NOT_FOUND:
-            raise HTTPException(status_code=501, detail="No file manager command is available.")
-        if reason == EntryShellActionFailureReasonCode.PERMISSION_DENIED:
-            raise HTTPException(
-                status_code=403,
-                detail="Permission denied while opening file manager.",
-            )
-        raise HTTPException(status_code=500, detail="Failed to reveal file in file manager.")
+        return reveal_entry_service(
+            lib,
+            request.entry_id,
+            resolve_entry_file=resolve_entry_file,
+            reveal_path=reveal_path_in_file_manager,
+        )
 
     @router.post("/tags", response_model=TagResponse)
     def create_tag(request: TagCreateRequest) -> TagResponse:
         lib = get_library_or_error()
-        parent_ids = validate_parent_ids_for_tag(
-            lib,
-            tag_id=None,
-            parent_ids=set(request.parent_ids),
-        )
-        validate_disambiguation(request.disambiguation_id, parent_ids)
-
-        tag = Tag(
-            name=request.name,
-            shorthand=request.shorthand,
-            color_namespace=request.color_namespace,
-            color_slug=request.color_slug,
-            disambiguation_id=request.disambiguation_id,
-            is_category=request.is_category,
-            is_hidden=request.is_hidden,
-        )
-
-        created = lib.add_tag(
-            tag=tag,
-            parent_ids=parent_ids,
-            alias_names=set(request.aliases),
-            alias_ids=set(),
-        )
-        if created is None:
-            raise HTTPException(status_code=409, detail="Tag already exists or cannot be created.")
-        created_full = lib.get_tag(created.id)
-        if created_full is None:
-            raise HTTPException(status_code=500, detail="Failed to load created tag.")
-        return TagResponse.model_validate(serialize_tag(created_full))
+        created = create_tag_service(lib, request)
+        return TagResponse.model_validate(serialize_tag(created))
 
     @router.patch("/tags/{tag_id}", response_model=TagResponse)
     def update_tag(tag_id: int, request: TagUpdateRequest) -> TagResponse:
         lib = get_library_or_error()
-        if lib.engine is None:
-            raise HTTPException(status_code=409, detail="No library open.")
-
-        provided_fields = request.model_fields_set
-
-        with Session(lib.engine) as session:
-            tag = session.get(Tag, tag_id)
-            if tag is None:
-                raise HTTPException(status_code=404, detail="Tag not found.")
-
-            if "name" in provided_fields and request.name is None:
-                raise HTTPException(status_code=422, detail="name cannot be null.")
-            if "name" in provided_fields and request.name is not None:
-                tag.name = request.name
-            if "shorthand" in provided_fields:
-                tag.shorthand = request.shorthand
-            if "color_namespace" in provided_fields:
-                tag.color_namespace = request.color_namespace
-            if "color_slug" in provided_fields:
-                tag.color_slug = request.color_slug
-            if "is_category" in provided_fields and request.is_category is not None:
-                tag.is_category = request.is_category
-            if "is_hidden" in provided_fields and request.is_hidden is not None:
-                tag.is_hidden = request.is_hidden
-
-            existing_parent_ids = {
-                parent_id
-                for (parent_id,) in session.execute(
-                    select(TagParent.parent_id).where(TagParent.child_id == tag_id)
-                ).all()
-            }
-            requested_parent_ids = (
-                set(request.parent_ids or []) if "parent_ids" in provided_fields else None
-            )
-            effective_parent_ids = (
-                requested_parent_ids if requested_parent_ids is not None else existing_parent_ids
-            )
-            effective_parent_ids = validate_parent_ids_for_tag(
-                lib,
-                tag_id=tag_id,
-                parent_ids=set(effective_parent_ids),
-            )
-
-            if "disambiguation_id" in provided_fields:
-                validate_disambiguation(request.disambiguation_id, effective_parent_ids)
-                tag.disambiguation_id = request.disambiguation_id
-            elif tag.disambiguation_id is not None and requested_parent_ids is not None:
-                if tag.disambiguation_id not in effective_parent_ids:
-                    tag.disambiguation_id = None
-
-            if requested_parent_ids is not None:
-                session.execute(delete(TagParent).where(TagParent.child_id == tag_id))
-                for parent_id in effective_parent_ids:
-                    session.add(TagParent(parent_id=parent_id, child_id=tag_id))
-
-            if "aliases" in provided_fields:
-                existing_aliases = session.scalars(
-                    select(TagAlias).where(TagAlias.tag_id == tag_id)
-                ).all()
-                desired_aliases = {alias for alias in (request.aliases or []) if alias}
-                existing_by_name = {alias.name: alias for alias in existing_aliases}
-
-                for alias in existing_aliases:
-                    if alias.name not in desired_aliases:
-                        session.delete(alias)
-                for alias_name in desired_aliases:
-                    if alias_name not in existing_by_name:
-                        session.add(TagAlias(name=alias_name, tag_id=tag_id))
-
-            session.commit()
-
-        updated = lib.get_tag(tag_id)
-        if updated is None:
-            raise HTTPException(status_code=404, detail="Tag not found after update.")
+        updated = update_tag_service(lib, tag_id, request)
         return TagResponse.model_validate(serialize_tag(updated))
 
     @router.delete("/tags/{tag_id}", response_model=SuccessResponse)

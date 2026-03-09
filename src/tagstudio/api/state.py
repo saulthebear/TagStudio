@@ -178,7 +178,7 @@ class ApiState:
     def _normalize_web_settings(self, settings: dict[str, Any]) -> dict[str, Any]:
         """Apply type normalization and value clamping to persisted web settings."""
         settings = deepcopy(settings)
-        settings["page_size"] = _clamp_int(settings.get("page_size"), default=200, low=1, high=2000)
+        settings["page_size"] = _clamp_int(settings.get("page_size"), default=200, low=1, high=1000)
         settings["ascending"] = bool(settings.get("ascending", True))
         settings["show_hidden_entries"] = bool(settings.get("show_hidden_entries", False))
         settings["sorting_mode"] = str(settings.get("sorting_mode", "file.date_added"))

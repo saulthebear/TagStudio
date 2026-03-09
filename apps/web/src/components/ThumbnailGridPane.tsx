@@ -8,6 +8,7 @@ import {
   useRef,
   useState
 } from "react";
+import { VirtuosoGrid } from "react-virtuoso";
 
 import { TAG_ARCHIVED_ID, TAG_FAVORITE_ID } from "@/lib/reserved-tags";
 
@@ -142,7 +143,6 @@ export function ThumbnailGridPane({
   inactiveEntryIds
 }: ThumbnailGridPaneProps) {
   const paneRef = useRef<HTMLElement | null>(null);
-  const sentinelRef = useRef<HTMLDivElement | null>(null);
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
   const [failedMediaIds, setFailedMediaIds] = useState<Set<number>>(() => new Set());
   const [contextMenu, setContextMenu] = useState<ContextMenuRenderState | null>(null);
@@ -296,31 +296,6 @@ export function ThumbnailGridPane({
   }, [contextMenu]);
 
   useEffect(() => {
-    if (!hasMore || searchPending || loadingMore) {
-      return;
-    }
-
-    const sentinel = sentinelRef.current;
-    if (!sentinel) {
-      return;
-    }
-
-    const observer = new IntersectionObserver(
-      (entriesList) => {
-        if (entriesList.some((entry) => entry.isIntersecting)) {
-          onLoadMore();
-        }
-      },
-      {
-        rootMargin: "300px"
-      }
-    );
-
-    observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, [hasMore, loadingMore, onLoadMore, searchPending]);
-
-  useEffect(() => {
     setFailedMediaIds((prev) => {
       if (prev.size === 0) {
         return prev;
@@ -345,6 +320,7 @@ export function ThumbnailGridPane({
     }
     return `${totalCount} entries for ${activeQuery}`;
   }, [activeQuery, totalCount]);
+  const selectedEntryIdSet = useMemo(() => new Set(selectedEntryIds), [selectedEntryIds]);
 
   return (
     <section ref={paneRef} className="pane panel thumb-pane">
@@ -358,9 +334,20 @@ export function ThumbnailGridPane({
           <p className="thumb-empty">No entries match this filter.</p>
         ) : null}
 
-        <div className="thumb-grid" role="listbox" aria-label="Library entries">
-          {entries.map((entry) => {
-            const selected = selectedEntryIds.includes(entry.id);
+        <VirtuosoGrid
+          className="thumb-grid-virtuoso"
+          listClassName="thumb-grid"
+          itemClassName="thumb-grid-item"
+          data={entries}
+          overscan={480}
+          endReached={() => {
+            if (!hasMore || searchPending || loadingMore) {
+              return;
+            }
+            onLoadMore();
+          }}
+          itemContent={(_, entry) => {
+            const selected = selectedEntryIdSet.has(entry.id);
             const mediaKind = getMediaKind(entry.suffix);
             const showMedia = mediaKind !== "other" && !failedMediaIds.has(entry.id);
             const isFavorite = entry.tag_ids.includes(TAG_FAVORITE_ID);
@@ -429,10 +416,8 @@ export function ThumbnailGridPane({
                 </span>
               </button>
             );
-          })}
-        </div>
-
-        <div ref={sentinelRef} className="thumb-grid-sentinel" aria-hidden="true" />
+          }}
+        />
 
         {searchPending ? <p className="thumb-loading">Loading results...</p> : null}
         {loadingMore ? <p className="thumb-loading">Loading more...</p> : null}

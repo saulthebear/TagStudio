@@ -51,6 +51,14 @@ type UseSettingsWorkflowResult = {
   settingsFetching: boolean;
 };
 
+type SettingsConfirmations = {
+  confirm_before_trash?: boolean;
+} | null | undefined;
+
+function resolveConfirmBeforeTrashValue(confirmations: SettingsConfirmations): boolean {
+  return confirmations?.confirm_before_trash ?? DEFAULT_DRAFT.confirmBeforeTrash;
+}
+
 export function useSettingsWorkflow({
   activeLibraryPath,
   isLibraryOpen,
@@ -95,17 +103,19 @@ export function useSettingsWorkflow({
       return;
     }
 
+    const confirmBeforeTrashValue = resolveConfirmBeforeTrashValue(settings.data.confirmations);
+
     setSortingMode(settings.data.sorting_mode);
     setAscending(settings.data.ascending);
     setShowHiddenEntries(settings.data.show_hidden_entries);
     setPageSize(settings.data.page_size);
-    setConfirmBeforeTrash(settings.data.confirmations.confirm_before_trash);
+    setConfirmBeforeTrash(confirmBeforeTrashValue);
     setSettingsDraft({
       sortingMode: settings.data.sorting_mode,
       ascending: settings.data.ascending,
       showHiddenEntries: settings.data.show_hidden_entries,
       pageSize: settings.data.page_size,
-      confirmBeforeTrash: settings.data.confirmations.confirm_before_trash
+      confirmBeforeTrash: confirmBeforeTrashValue
     });
     setMainSplitState(layoutToMainSplit(settings.data.layout));
     setInspectorSplitState(layoutToInspectorSplit(settings.data.layout));
@@ -125,19 +135,20 @@ export function useSettingsWorkflow({
         }
       }),
     onSuccess: (nextSettings) => {
+      const confirmBeforeTrashValue = resolveConfirmBeforeTrashValue(nextSettings.confirmations);
       onClearError();
       queryClient.setQueryData(settingsQueryKey, nextSettings);
       setSortingMode(nextSettings.sorting_mode);
       setAscending(nextSettings.ascending);
       setShowHiddenEntries(nextSettings.show_hidden_entries);
       setPageSize(nextSettings.page_size);
-      setConfirmBeforeTrash(nextSettings.confirmations.confirm_before_trash);
+      setConfirmBeforeTrash(confirmBeforeTrashValue);
       setSettingsDraft({
         sortingMode: nextSettings.sorting_mode,
         ascending: nextSettings.ascending,
         showHiddenEntries: nextSettings.show_hidden_entries,
         pageSize: nextSettings.page_size,
-        confirmBeforeTrash: nextSettings.confirmations.confirm_before_trash
+        confirmBeforeTrash: confirmBeforeTrashValue
       });
       setSettingsOpen(false);
     },
@@ -198,12 +209,13 @@ export function useSettingsWorkflow({
   const saveSettingsDraft = useCallback(async (): Promise<SettingsDraft | null> => {
     try {
       const nextSettings = await saveSettingsMutation.mutateAsync(settingsDraft);
+      const confirmBeforeTrashValue = resolveConfirmBeforeTrashValue(nextSettings.confirmations);
       return {
         sortingMode: nextSettings.sorting_mode,
         ascending: nextSettings.ascending,
         showHiddenEntries: nextSettings.show_hidden_entries,
         pageSize: nextSettings.page_size,
-        confirmBeforeTrash: nextSettings.confirmations.confirm_before_trash
+        confirmBeforeTrash: confirmBeforeTrashValue
       };
     } catch {
       return null;
@@ -218,11 +230,12 @@ export function useSettingsWorkflow({
             confirm_before_trash: value
           }
         });
+        const confirmBeforeTrashValue = resolveConfirmBeforeTrashValue(nextSettings.confirmations);
         queryClient.setQueryData(settingsQueryKey, nextSettings);
-        setConfirmBeforeTrash(nextSettings.confirmations.confirm_before_trash);
+        setConfirmBeforeTrash(confirmBeforeTrashValue);
         setSettingsDraft((prev) => ({
           ...prev,
-          confirmBeforeTrash: nextSettings.confirmations.confirm_before_trash
+          confirmBeforeTrash: confirmBeforeTrashValue
         }));
         onClearError();
       } catch (error) {
