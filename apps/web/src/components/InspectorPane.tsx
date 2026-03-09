@@ -8,7 +8,7 @@ import {
   type TagUpdatePayload
 } from "@tagstudio/api-client";
 import { Button } from "@tagstudio/ui";
-import { type SyntheticEvent, useCallback, useMemo, useState } from "react";
+import { type SyntheticEvent, useCallback, useEffect, useMemo, useState } from "react";
 
 import { AddTagsModal } from "@/components/AddTagsModal";
 import { SplitPane, type SplitPaneState } from "@/components/SplitPane";
@@ -56,6 +56,7 @@ type InspectorPaneProps = {
   onSplitStateChange: (next: SplitPaneState) => void;
   disableSplit: boolean;
   mobileSection: "preview" | "metadata";
+  addTagsModalRequestNonce: number;
   videoPreviewStartsMuted: boolean;
   onVideoPreviewUnmuted: () => void;
 };
@@ -111,6 +112,7 @@ export function InspectorPane({
   onSplitStateChange,
   disableSplit,
   mobileSection,
+  addTagsModalRequestNonce,
   videoPreviewStartsMuted,
   onVideoPreviewUnmuted
 }: InspectorPaneProps) {
@@ -156,6 +158,7 @@ export function InspectorPane({
         onNewFieldKeyChange={onNewFieldKeyChange}
         onNewFieldValueChange={onNewFieldValueChange}
         onApplyField={onApplyField}
+        openAddTagsRequestNonce={addTagsModalRequestNonce}
       />
     </div>
   );
@@ -304,6 +307,7 @@ type MetadataContentProps = {
   onNewFieldKeyChange: (value: string) => void;
   onNewFieldValueChange: (value: string) => void;
   onApplyField: () => void;
+  openAddTagsRequestNonce: number;
 };
 
 function MetadataContent({
@@ -329,13 +333,21 @@ function MetadataContent({
   onSaveField,
   onNewFieldKeyChange,
   onNewFieldValueChange,
-  onApplyField
+  onApplyField,
+  openAddTagsRequestNonce
 }: MetadataContentProps) {
   const [addTagsOpen, setAddTagsOpen] = useState(false);
   const [editTag, setEditTag] = useState<TagResponse | null>(null);
 
   const selectedCount = selectedEntryIds.length;
   const tagColorsQuery = useTagColors(selectedCount > 0);
+
+  useEffect(() => {
+    if (openAddTagsRequestNonce === 0 || selectedCount === 0) {
+      return;
+    }
+    setAddTagsOpen(true);
+  }, [openAddTagsRequestNonce, selectedCount]);
 
   const tagById = useMemo(() => {
     const map = new Map<number, TagResponse>();

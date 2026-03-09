@@ -26,6 +26,7 @@ export type ThumbnailContextMenuAction =
   | "reveal_file"
   | "copy_filepath"
   | "copy_tags"
+  | "add_tags"
   | "paste_tags"
   | "favorite_toggle"
   | "archive_toggle"
@@ -483,6 +484,15 @@ export function ThumbnailGridPane({
             onClick={() => triggerContextAction("copy_tags")}
           >
             Copy Tags
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="thumb-context-menu-item"
+            disabled={contextMenu.state.disabled}
+            onClick={() => triggerContextAction("add_tags")}
+          >
+            Add Tags
           </button>
           {contextMenu.state.canPaste ? (
             <button

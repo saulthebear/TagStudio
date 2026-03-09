@@ -68,6 +68,7 @@ type UseAppInteractionsResult = {
   getContextMenuState: (entryId: number) => ThumbnailContextMenuState;
   handleContextMenuOpenTarget: (entryId: number, targetEntryIds: number[]) => void;
   handleContextMenuAction: (action: ThumbnailContextMenuAction, state: ThumbnailContextMenuState) => void;
+  addTagsModalRequestNonce: number;
   confirmTrashDialog: () => void;
   pasteTagsFromMetadata: (targetEntryIds: number[]) => void;
   handleGridSelect: (entryId: number, event: ReactMouseEvent<HTMLButtonElement>) => void;
@@ -100,6 +101,7 @@ export function useAppInteractions({
   const [selectedEntryIds, setSelectedEntryIds] = useState<number[]>([]);
   const [selectionAnchorId, setSelectionAnchorId] = useState<number | null>(null);
   const [contextActionPending, setContextActionPending] = useState(false);
+  const [addTagsModalRequestNonce, setAddTagsModalRequestNonce] = useState(0);
 
   const { undoState, clearUndo, queueUndo, runUndo } = useUndoState({
     onUndoApplied: refreshVisibleEntries,
@@ -267,6 +269,19 @@ export function useAppInteractions({
         return;
       }
 
+      if (action === "add_tags") {
+        setSelectedEntryIds(state.targetEntryIds);
+        const nextActiveId = state.targetEntryIds.includes(state.contextEntryId)
+          ? state.contextEntryId
+          : state.targetEntryIds[0];
+        if (nextActiveId !== undefined) {
+          setSelectionAnchorId(nextActiveId);
+          selectEntry(nextActiveId);
+          setAddTagsModalRequestNonce((prev) => prev + 1);
+        }
+        return;
+      }
+
       if (action === "paste_tags") {
         runContextAsyncAction(async () => {
           await pasteTagsToEntries(state.targetEntryIds);
@@ -327,6 +342,7 @@ export function useAppInteractions({
       performTrash,
       revealFileInManager,
       runContextAsyncAction,
+      selectEntry,
       setTrashDialogState,
       skipTrashConfirmSession,
       toggleReservedTagOnEntries
@@ -419,6 +435,7 @@ export function useAppInteractions({
     getContextMenuState,
     handleContextMenuOpenTarget,
     handleContextMenuAction,
+    addTagsModalRequestNonce,
     confirmTrashDialog,
     pasteTagsFromMetadata,
     handleGridSelect
