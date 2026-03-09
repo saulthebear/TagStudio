@@ -150,7 +150,7 @@ export function useInspectorWorkflow({
       const aggregated: TagResponse[] = [];
       const limit = 500;
       let offset = 0;
-      for (let page = 0; page < 1000; page += 1) {
+      while (true) {
         const batch = await api.searchTags({ limit, offset });
         aggregated.push(...batch.items);
         if (!batch.has_more || batch.items.length === 0) {

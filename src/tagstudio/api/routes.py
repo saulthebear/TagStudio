@@ -356,20 +356,18 @@ def create_router(*, state: ApiState, jobs: JobManager) -> APIRouter:
             raise HTTPException(status_code=400, detail="offset must be >= 0")
 
         effective_limit = min(limit, TAG_LIST_SOFT_CAP)
-        if query:
-            direct_tags, ancestor_tags = lib.search_tags(query, limit=TAG_LIST_SOFT_CAP)
-            tags = sorted(direct_tags | ancestor_tags)
-        else:
-            tags = sorted(lib.tags)
-
+        excluded_tag_ids: set[int] | None = None
         if parent_for_tag_id is not None:
             if lib.get_tag(parent_for_tag_id) is None:
                 raise HTTPException(status_code=404, detail="Tag not found.")
-            disallowed_parent_ids = get_descendant_tag_ids(lib, parent_for_tag_id)
-            tags = [tag for tag in tags if tag.id not in disallowed_parent_ids]
+            excluded_tag_ids = get_descendant_tag_ids(lib, parent_for_tag_id)
 
-        total_count = len(tags)
-        items = tags[offset : offset + effective_limit]
+        items, total_count = lib.search_tags_page(
+            query,
+            limit=effective_limit,
+            offset=offset,
+            excluded_tag_ids=excluded_tag_ids,
+        )
         has_more = offset + len(items) < total_count
         return TagSearchResponse(
             items=[TagResponse.model_validate(serialize_tag(tag)) for tag in items],

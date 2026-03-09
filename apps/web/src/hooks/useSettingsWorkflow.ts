@@ -51,6 +51,14 @@ type UseSettingsWorkflowResult = {
   settingsFetching: boolean;
 };
 
+type SettingsConfirmations = {
+  confirm_before_trash?: boolean;
+} | null | undefined;
+
+function resolveConfirmBeforeTrashValue(confirmations: SettingsConfirmations): boolean {
+  return confirmations?.confirm_before_trash ?? DEFAULT_DRAFT.confirmBeforeTrash;
+}
+
 export function useSettingsWorkflow({
   activeLibraryPath,
   isLibraryOpen,
@@ -95,8 +103,7 @@ export function useSettingsWorkflow({
       return;
     }
 
-    const confirmBeforeTrashValue =
-      settings.data.confirmations?.confirm_before_trash ?? DEFAULT_DRAFT.confirmBeforeTrash;
+    const confirmBeforeTrashValue = resolveConfirmBeforeTrashValue(settings.data.confirmations);
 
     setSortingMode(settings.data.sorting_mode);
     setAscending(settings.data.ascending);
@@ -128,8 +135,7 @@ export function useSettingsWorkflow({
         }
       }),
     onSuccess: (nextSettings) => {
-      const confirmBeforeTrashValue =
-        nextSettings.confirmations?.confirm_before_trash ?? DEFAULT_DRAFT.confirmBeforeTrash;
+      const confirmBeforeTrashValue = resolveConfirmBeforeTrashValue(nextSettings.confirmations);
       onClearError();
       queryClient.setQueryData(settingsQueryKey, nextSettings);
       setSortingMode(nextSettings.sorting_mode);
@@ -203,8 +209,7 @@ export function useSettingsWorkflow({
   const saveSettingsDraft = useCallback(async (): Promise<SettingsDraft | null> => {
     try {
       const nextSettings = await saveSettingsMutation.mutateAsync(settingsDraft);
-      const confirmBeforeTrashValue =
-        nextSettings.confirmations?.confirm_before_trash ?? DEFAULT_DRAFT.confirmBeforeTrash;
+      const confirmBeforeTrashValue = resolveConfirmBeforeTrashValue(nextSettings.confirmations);
       return {
         sortingMode: nextSettings.sorting_mode,
         ascending: nextSettings.ascending,
@@ -225,8 +230,7 @@ export function useSettingsWorkflow({
             confirm_before_trash: value
           }
         });
-        const confirmBeforeTrashValue =
-          nextSettings.confirmations?.confirm_before_trash ?? DEFAULT_DRAFT.confirmBeforeTrash;
+        const confirmBeforeTrashValue = resolveConfirmBeforeTrashValue(nextSettings.confirmations);
         queryClient.setQueryData(settingsQueryKey, nextSettings);
         setConfirmBeforeTrash(confirmBeforeTrashValue);
         setSettingsDraft((prev) => ({

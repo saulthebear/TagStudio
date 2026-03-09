@@ -1,3 +1,5 @@
+import secrets
+
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
@@ -40,7 +42,7 @@ class TokenAuthMiddleware(BaseHTTPMiddleware):
         provided = request.headers.get("x-tagstudio-token")
         if provided is None and self.allow_query_token:
             provided = request.query_params.get("token")
-        if provided != self.token:
+        if provided is None or not secrets.compare_digest(provided, self.token):
             return JSONResponse(
                 status_code=401,
                 content={"detail": "Unauthorized"},

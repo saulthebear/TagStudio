@@ -8,6 +8,7 @@
 
 import argparse
 import secrets
+import sys
 import traceback
 
 import structlog
@@ -100,10 +101,7 @@ def main():
         api_token = args.api_token
         if not api_token:
             api_token = secrets.token_urlsafe(24)
-            logger.warning(
-                "No --api-token provided; generated runtime API token.",
-                api_token=api_token,
-            )
+            sys.stderr.write(f"No --api-token provided; generated runtime API token: {api_token}\n")
 
         app = create_app(
             api_token=api_token,

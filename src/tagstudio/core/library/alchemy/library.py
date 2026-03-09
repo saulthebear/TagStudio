@@ -1187,6 +1187,54 @@ class Library:
 
             return res
 
+    def search_tags_page(
+        self,
+        name: str | None,
+        *,
+        limit: int,
+        offset: int,
+        excluded_tag_ids: set[int] | None = None,
+    ) -> tuple[list[Tag], int]:
+        """Return one page of tags and the total count for the current filter."""
+        with Session(self.engine) as session:
+            ids_query = select(Tag.id)
+            if name:
+                ids_query = ids_query.outerjoin(TagAlias).where(
+                    or_(
+                        Tag.name.icontains(name),
+                        Tag.shorthand.icontains(name),
+                        TagAlias.name.icontains(name),
+                    )
+                )
+            if excluded_tag_ids:
+                ids_query = ids_query.where(Tag.id.not_in(excluded_tag_ids))
+
+            ids_query = ids_query.group_by(Tag.id)
+            total_count = unwrap(
+                session.scalar(select(func.count()).select_from(ids_query.subquery()))
+            )
+            page_ids = list(
+                session.scalars(
+                    ids_query.order_by(func.lower(Tag.name), Tag.id).offset(offset).limit(limit)
+                )
+            )
+            if not page_ids:
+                return [], total_count
+
+            tags_query = (
+                select(Tag)
+                .where(Tag.id.in_(page_ids))
+                .options(
+                    selectinload(Tag.parent_tags),
+                    selectinload(Tag.aliases),
+                )
+            )
+            tags_by_id = {tag.id: tag for tag in session.scalars(tags_query).unique()}
+            tags = [tags_by_id[tag_id] for tag_id in page_ids if tag_id in tags_by_id]
+            for tag in tags:
+                session.expunge(tag)
+            return tags, total_count
+
     def update_entry_path(self, entry_id: int | Entry, path: Path) -> bool:
         """Set the path field of an entry.
 

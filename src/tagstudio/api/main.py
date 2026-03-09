@@ -1,13 +1,11 @@
 import argparse
 import os
 import secrets
+import sys
 
-import structlog
 import uvicorn
 
 from tagstudio.api.app import create_app
-
-logger = structlog.get_logger(__name__)
 
 
 def main() -> None:
@@ -36,10 +34,10 @@ def main() -> None:
     token = args.token
     if args.require_token and not token:
         token = secrets.token_urlsafe(24)
-        logger.warning(
+        sys.stderr.write(
             "Generated TAGSTUDIO_API_TOKEN for this run. "
-            "Set VITE_TAGSTUDIO_API_TOKEN to connect web clients.",
-            token=token,
+            "Set VITE_TAGSTUDIO_API_TOKEN to connect web clients: "
+            f"{token}\n"
         )
 
     app = create_app(
