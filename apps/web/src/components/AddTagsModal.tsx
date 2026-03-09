@@ -75,7 +75,7 @@ export function AddTagsModal({
     <ModalLayerPortal open={open} onBackdropClick={onClose}>
       <div
         ref={workflow.panelRef}
-        className={`overlay-panel panel add-tags-panel modal-draggable-panel ${workflow.isDragging ? "modal-panel-dragging" : ""}`}
+        className={`overlay-panel panel tag-workflow-panel add-tags-panel modal-draggable-panel ${workflow.isDragging ? "modal-panel-dragging" : ""}`}
         role="dialog"
         aria-modal="true"
         aria-label="Add tags"

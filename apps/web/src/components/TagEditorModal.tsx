@@ -53,7 +53,7 @@ export function TagEditorModal({
     <ModalLayerPortal open={open} onBackdropClick={onClose}>
       <div
         ref={workflow.tagEditorDrag.panelRef}
-        className={`overlay-panel panel tag-editor-panel modal-draggable-panel ${workflow.tagEditorDrag.isDragging ? "modal-panel-dragging" : ""}`}
+        className={`overlay-panel panel tag-workflow-panel tag-editor-panel modal-draggable-panel ${workflow.tagEditorDrag.isDragging ? "modal-panel-dragging" : ""}`}
         role="dialog"
         aria-modal="true"
         aria-label={mode === "create" ? "Create tag" : "Edit tag"}
@@ -190,7 +190,7 @@ export function TagEditorModal({
         <ModalLayerPortal open={workflow.parentPickerOpen} onBackdropClick={() => workflow.setParentPickerOpen(false)}>
           <div
             ref={workflow.parentPickerDrag.panelRef}
-            className={`overlay-panel panel tag-editor-subpanel modal-draggable-panel ${workflow.parentPickerDrag.isDragging ? "modal-panel-dragging" : ""}`}
+            className={`overlay-panel panel tag-workflow-panel tag-editor-subpanel modal-draggable-panel ${workflow.parentPickerDrag.isDragging ? "modal-panel-dragging" : ""}`}
             role="dialog"
             aria-modal="true"
             aria-label="Add parent tags"
@@ -247,7 +247,7 @@ export function TagEditorModal({
         <ModalLayerPortal open={workflow.colorPickerOpen} onBackdropClick={() => workflow.setColorPickerOpen(false)}>
           <div
             ref={workflow.colorPickerDrag.panelRef}
-            className={`overlay-panel panel tag-editor-subpanel modal-draggable-panel ${workflow.colorPickerDrag.isDragging ? "modal-panel-dragging" : ""}`}
+            className={`overlay-panel panel tag-workflow-panel tag-editor-subpanel modal-draggable-panel ${workflow.colorPickerDrag.isDragging ? "modal-panel-dragging" : ""}`}
             role="dialog"
             aria-modal="true"
             aria-label="Choose tag color"

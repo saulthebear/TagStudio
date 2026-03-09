@@ -11,6 +11,7 @@ import { api } from "@/api/client";
 import { useDraggableModalPosition } from "@/hooks/useDraggableModalPosition";
 import { useSearchInputFocus } from "@/hooks/useSearchInputFocus";
 import { useTagColors } from "@/hooks/useTagColors";
+import { scoreTags } from "@/lib/tag-workflows";
 
 type UseTagEditorWorkflowParams = {
   open: boolean;
@@ -118,9 +119,21 @@ export function useTagEditorWorkflow({
     return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [open, colorPickerOpen, parentPickerOpen, onClose]);
 
-  const tagEditorDrag = useDraggableModalPosition({ open });
-  const parentPickerDrag = useDraggableModalPosition({ open: open && parentPickerOpen });
-  const colorPickerDrag = useDraggableModalPosition({ open: open && colorPickerOpen });
+  const tagEditorDrag = useDraggableModalPosition({
+    open,
+    initialPlacement: "left",
+    initialOffset: { left: 20, top: 20 }
+  });
+  const parentPickerDrag = useDraggableModalPosition({
+    open: open && parentPickerOpen,
+    initialPlacement: "left",
+    initialOffset: { left: 32, top: 32 }
+  });
+  const colorPickerDrag = useDraggableModalPosition({
+    open: open && colorPickerOpen,
+    initialPlacement: "left",
+    initialOffset: { left: 44, top: 44 }
+  });
 
   const allTagsQuery = useQuery({
     queryKey: ["tag-editor-all-tags"],
@@ -180,6 +193,11 @@ export function useTagEditorWorkflow({
         .filter((value): value is TagResponse => value !== undefined)
         .sort((a, b) => a.name.localeCompare(b.name)),
     [parentIds, tagById]
+  );
+
+  const parentCandidates = useMemo(
+    () => scoreTags(parentCandidatesQuery.data ?? [], parentQuery),
+    [parentCandidatesQuery.data, parentQuery]
   );
 
   const disambiguationLabel = useMemo(() => {
@@ -293,7 +311,7 @@ export function useTagEditorWorkflow({
     colorPickerOpen,
     savePending,
     canSave,
-    parentCandidates: parentCandidatesQuery.data ?? [],
+    parentCandidates,
     colorGroups: tagColorsQuery.data ?? [],
     tagEditorDrag,
     parentPickerDrag,

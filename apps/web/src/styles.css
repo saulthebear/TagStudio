@@ -790,6 +790,13 @@ body {
   gap: 0.7rem;
 }
 
+.tag-workflow-panel {
+  background: color-mix(in oklab, var(--color-surface) 82%, transparent 18%);
+  box-shadow: 0 16px 36px rgb(15 23 42 / 0.12);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+}
+
 .modal-draggable-panel {
   transform: translate3d(var(--modal-x, 0), var(--modal-y, 0), 0);
   will-change: transform;
@@ -1117,7 +1124,7 @@ body.modal-dragging {
 }
 
 .add-tags-panel {
-  width: min(620px, calc(100vw - (2 * var(--modal-margin))));
+  width: min(530px, calc(100vw - (2 * var(--modal-margin))));
   max-height: min(92vh, 860px);
   overflow: hidden;
 }
@@ -1137,7 +1144,7 @@ body.modal-dragging {
   border: 1px solid var(--color-border-soft);
   border-radius: 0.75rem;
   overflow: hidden;
-  background: white;
+  background: rgb(255 255 255 / 0.62);
 }
 
 .add-tags-row,
@@ -1209,7 +1216,7 @@ body.modal-dragging {
 }
 
 .tag-editor-panel {
-  width: min(760px, calc(100vw - (2 * var(--modal-margin))));
+  width: min(646px, calc(100vw - (2 * var(--modal-margin))));
   max-height: min(92vh, 880px);
   overflow: auto;
 }
@@ -1233,6 +1240,7 @@ body.modal-dragging {
   overflow: auto;
   display: grid;
   gap: 0.4rem;
+  background: rgb(255 255 255 / 0.52);
 }
 
 .tag-editor-parent-pill {
@@ -1243,6 +1251,7 @@ body.modal-dragging {
   border: 1px solid var(--color-border-soft);
   border-radius: 0.5rem;
   padding: 0.3rem 0.4rem;
+  background: rgb(255 255 255 / 0.68);
 }
 
 .tag-editor-empty {
@@ -1267,7 +1276,7 @@ body.modal-dragging {
 }
 
 .tag-editor-subpanel {
-  width: min(640px, calc(100vw - (2 * var(--modal-margin))));
+  width: min(544px, calc(100vw - (2 * var(--modal-margin))));
   max-height: min(84vh, 720px);
   overflow: auto;
 }
@@ -1283,13 +1292,14 @@ body.modal-dragging {
   border-radius: 0.7rem;
   overflow: auto;
   max-height: 320px;
+  background: rgb(255 255 255 / 0.56);
 }
 
 .tag-editor-candidate-row {
   width: 100%;
   border: 0;
   border-bottom: 1px solid color-mix(in oklab, var(--color-border-soft) 70%, white 30%);
-  background: white;
+  background: rgb(255 255 255 / 0.42);
   display: flex;
   justify-content: space-between;
   align-items: center;

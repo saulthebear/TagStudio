@@ -1461,6 +1461,42 @@ test("supports add-tags modal create-and-add workflow", async ({ page }) => {
       disambiguation_id: null,
       is_category: false,
       is_hidden: false
+    },
+    {
+      id: 41,
+      name: "Needs Review",
+      shorthand: null,
+      aliases: [],
+      parent_ids: [42],
+      color_namespace: null,
+      color_slug: null,
+      disambiguation_id: null,
+      is_category: false,
+      is_hidden: false
+    },
+    {
+      id: 43,
+      name: "Review Queue",
+      shorthand: null,
+      aliases: [],
+      parent_ids: [42],
+      color_namespace: null,
+      color_slug: null,
+      disambiguation_id: null,
+      is_category: false,
+      is_hidden: false
+    },
+    {
+      id: 42,
+      name: "Review",
+      shorthand: null,
+      aliases: [],
+      parent_ids: [],
+      color_namespace: null,
+      color_slug: null,
+      disambiguation_id: null,
+      is_category: false,
+      is_hidden: false
     }
   ];
   let nextTagId = 1000;
@@ -1681,8 +1717,10 @@ test("supports add-tags modal create-and-add workflow", async ({ page }) => {
   await expect(addTagsDialog).toBeVisible();
   await expect(addTagsDialog.getByRole("button", { name: "Edit" })).toHaveCount(0);
   const addTagsBounds = requireBox(await addTagsDialog.boundingBox(), "Add tags dialog");
-  expect(addTagsBounds.width).toBeLessThanOrEqual(640);
-  expect(addTagsBounds.width).toBeGreaterThanOrEqual(500);
+  expect(addTagsBounds.width).toBeLessThanOrEqual(560);
+  expect(addTagsBounds.width).toBeGreaterThanOrEqual(440);
+  expect(addTagsBounds.x).toBeGreaterThanOrEqual(12);
+  expect(addTagsBounds.x).toBeLessThanOrEqual(48);
 
   const searchTags = addTagsDialog.getByPlaceholder("Search tags");
   await expect(searchTags).toBeFocused();
@@ -1728,6 +1766,11 @@ test("supports add-tags modal create-and-add workflow", async ({ page }) => {
   await searchTags.press("Control+Enter");
   const editTagDialog = page.getByRole("dialog", { name: "Edit tag" });
   await expect(editTagDialog).toBeVisible();
+  const editTagBounds = requireBox(await editTagDialog.boundingBox(), "Edit tag dialog");
+  expect(editTagBounds.width).toBeLessThanOrEqual(680);
+  expect(editTagBounds.width).toBeGreaterThanOrEqual(540);
+  expect(editTagBounds.x).toBeGreaterThanOrEqual(12);
+  expect(editTagBounds.x).toBeLessThanOrEqual(48);
   await expect(page.locator(".modal-layer-backdrop-dim")).toHaveCount(1);
   await page.mouse.click(24, 24);
   await expect(editTagDialog).toHaveCount(0);
@@ -1742,7 +1785,19 @@ test("supports add-tags modal create-and-add workflow", async ({ page }) => {
   await editTagDialog.getByRole("button", { name: "Add Parent Tag(s)" }).click();
   const parentPickerDialog = page.getByRole("dialog", { name: "Add parent tags" });
   await expect(parentPickerDialog).toBeVisible();
-  await expect(parentPickerDialog.getByPlaceholder("Search tags")).toBeFocused();
+  const parentSearch = parentPickerDialog.getByPlaceholder("Search tags");
+  await expect(parentSearch).toBeFocused();
+  const parentPickerBounds = requireBox(await parentPickerDialog.boundingBox(), "Add parent tags dialog");
+  expect(parentPickerBounds.width).toBeLessThanOrEqual(580);
+  expect(parentPickerBounds.width).toBeGreaterThanOrEqual(440);
+  expect(parentPickerBounds.x).toBeGreaterThanOrEqual(20);
+  expect(parentPickerBounds.x).toBeLessThanOrEqual(64);
+  await parentSearch.fill("review");
+  const parentCandidateRows = parentPickerDialog.locator(".tag-editor-candidate-row");
+  await expect(parentCandidateRows).toHaveCount(3);
+  await expect(parentCandidateRows.nth(0)).toHaveText(/^\s*Review\s*Add\s*$/);
+  await expect(parentCandidateRows.nth(1)).toHaveText(/^\s*Review Queue\s*Add\s*$/);
+  await expect(parentCandidateRows.nth(2)).toHaveText(/^\s*Needs Review\s*Add\s*$/);
   await dragDialogBy(page, parentPickerDialog, parentPickerDialog.locator(".modal-drag-handle"), { x: 75, y: 0 });
   await expectDialogWithinViewport(page, parentPickerDialog, 8);
   await page.mouse.click(24, 24);
