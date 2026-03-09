@@ -20,8 +20,8 @@ def main() -> None:
     parser.add_argument(
         "--require-token",
         action=argparse.BooleanOptionalAction,
-        default=True,
-        help="Require token auth for all non-health routes.",
+        default=False,
+        help="Require token auth for all non-health routes (disabled by default for local dev).",
     )
     parser.add_argument(
         "--allow-query-token",
