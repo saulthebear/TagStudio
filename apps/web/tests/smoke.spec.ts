@@ -1390,6 +1390,19 @@ test("supports add-tags modal create-and-add workflow", async ({ page }) => {
     [402, new Set<number>()]
   ]);
 
+  const extraReviewTags = Array.from({ length: 27 }, (_, index) => ({
+    id: 200 + index,
+    name: `Candidate Review ${String(index + 1).padStart(2, "0")}`,
+    shorthand: null,
+    aliases: [],
+    parent_ids: [42],
+    color_namespace: null,
+    color_slug: null,
+    disambiguation_id: null,
+    is_category: false,
+    is_hidden: false
+  }));
+
   const tags: Array<{
     id: number;
     name: string;
@@ -1497,7 +1510,8 @@ test("supports add-tags modal create-and-add workflow", async ({ page }) => {
       disambiguation_id: null,
       is_category: false,
       is_hidden: false
-    }
+    },
+    ...extraReviewTags
   ];
   let nextTagId = 1000;
   let gameTagId: number | null = null;
@@ -1789,6 +1803,7 @@ test("supports add-tags modal create-and-add workflow", async ({ page }) => {
   await expect(parentPickerDialog).toBeVisible();
   const parentSearch = parentPickerDialog.getByPlaceholder("Search tags");
   await expect(parentSearch).toBeFocused();
+  await expect(parentPickerDialog.getByRole("combobox")).toHaveCount(0);
   const parentPickerBounds = requireBox(await parentPickerDialog.boundingBox(), "Add parent tags dialog");
   expect(parentPickerBounds.width).toBeLessThanOrEqual(580);
   expect(parentPickerBounds.width).toBeGreaterThanOrEqual(440);
@@ -1796,10 +1811,10 @@ test("supports add-tags modal create-and-add workflow", async ({ page }) => {
   expect(parentPickerBounds.x).toBeLessThanOrEqual(64);
   await parentSearch.fill("review");
   const parentCandidateRows = parentPickerDialog.locator(".tag-editor-candidate-row");
-  await expect(parentCandidateRows).toHaveCount(3);
-  await expect(parentCandidateRows.nth(0)).toHaveText(/^\s*Review\s*Add\s*$/);
-  await expect(parentCandidateRows.nth(1)).toHaveText(/^\s*Review Queue\s*Add\s*$/);
-  await expect(parentCandidateRows.nth(2)).toHaveText(/^\s*Needs Review\s*Add\s*$/);
+  await expect(parentCandidateRows).toHaveCount(30);
+  await expect(parentCandidateRows.nth(0).locator("span").first()).toHaveText("Review");
+  await expect(parentCandidateRows.nth(1).locator("span").first()).toHaveText("Review Queue");
+  await expect(parentCandidateRows.nth(2).locator("span").first()).toHaveText("Needs Review");
   await dragDialogBy(page, parentPickerDialog, parentPickerDialog.locator(".modal-drag-handle"), { x: 75, y: 0 });
   await expectDialogWithinViewport(page, parentPickerDialog, 8);
   await page.mouse.click(backdropClickX, 24);

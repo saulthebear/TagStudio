@@ -15,15 +15,6 @@ type TagEditorModalProps = {
   onSaved?: (tag: TagResponse) => void;
 };
 
-const LIMIT_OPTIONS: Array<{ label: string; value: number }> = [
-  { label: "25", value: 25 },
-  { label: "50", value: 50 },
-  { label: "100", value: 100 },
-  { label: "250", value: 250 },
-  { label: "500", value: 500 },
-  { label: "All", value: -1 }
-];
-
 export function TagEditorModal({
   open,
   mode,
@@ -207,17 +198,6 @@ export function TagEditorModal({
                 value={workflow.parentQuery}
                 onChange={(event) => workflow.setParentQuery(event.target.value)}
               />
-              <select
-                className="input-base"
-                value={String(workflow.parentLimit)}
-                onChange={(event) => workflow.setParentLimit(Number(event.target.value))}
-              >
-                {LIMIT_OPTIONS.map((option) => (
-                  <option key={option.label} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
             </div>
             <div className="tag-editor-parent-candidates">
               {workflow.parentCandidates.map((candidate) => {

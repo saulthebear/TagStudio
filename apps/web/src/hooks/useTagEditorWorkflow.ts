@@ -88,7 +88,6 @@ export function useTagEditorWorkflow({
 
   const [parentPickerOpen, setParentPickerOpen] = useState(false);
   const [parentQuery, setParentQuery] = useState("");
-  const [parentLimit, setParentLimit] = useState(25);
   const [colorPickerOpen, setColorPickerOpen] = useState(false);
   const [savePending, setSavePending] = useState(false);
   const { inputRef: parentSearchInputRef, focusInput: focusParentSearchInput } = useSearchInputFocus();
@@ -142,8 +141,8 @@ export function useTagEditorWorkflow({
   });
 
   const parentCandidatesQuery = useQuery({
-    queryKey: ["tag-editor-parent-candidates", tag?.id ?? "new", parentQuery, parentLimit],
-    queryFn: () => api.getTags(parentQuery, parentLimit, tag?.id),
+    queryKey: ["tag-editor-parent-candidates", tag?.id ?? "new", parentQuery],
+    queryFn: () => api.getTags(parentQuery, -1, tag?.id),
     enabled: open && parentPickerOpen
   });
 
@@ -165,7 +164,6 @@ export function useTagEditorWorkflow({
     setIsHidden(mode === "create" ? false : (tag?.is_hidden ?? false));
     setParentPickerOpen(false);
     setParentQuery("");
-    setParentLimit(25);
     setColorPickerOpen(false);
     setSavePending(false);
   }, [initialName, mode, open, tag]);
@@ -306,7 +304,6 @@ export function useTagEditorWorkflow({
     parentIds,
     parentPickerOpen,
     parentQuery,
-    parentLimit,
     parentSearchInputRef,
     colorPickerOpen,
     savePending,
@@ -323,7 +320,6 @@ export function useTagEditorWorkflow({
     setIsHidden,
     setParentPickerOpen,
     setParentQuery,
-    setParentLimit,
     setColorPickerOpen,
     addAliasRow,
     updateAlias,
