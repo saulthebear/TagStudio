@@ -247,6 +247,7 @@ export function App() {
     getContextMenuState,
     handleContextMenuOpenTarget,
     handleContextMenuAction,
+    addTagsModalRequestNonce,
     confirmTrashDialog,
     pasteTagsFromMetadata,
     handleGridSelect
@@ -418,6 +419,7 @@ export function App() {
       onSplitStateChange={setInspectorSplitState}
       disableSplit={isMobile}
       mobileSection={mobileActivePane === "metadata" ? "metadata" : "preview"}
+      addTagsModalRequestNonce={addTagsModalRequestNonce}
       videoPreviewStartsMuted={videoPreviewStartsMuted}
       onVideoPreviewUnmuted={handleVideoPreviewUnmuted}
     />
