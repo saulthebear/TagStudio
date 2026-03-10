@@ -274,11 +274,9 @@ export function useAppInteractions({
         const nextActiveId = state.targetEntryIds.includes(state.contextEntryId)
           ? state.contextEntryId
           : state.targetEntryIds[0];
-        if (nextActiveId !== undefined) {
-          setSelectionAnchorId(nextActiveId);
-          selectEntry(nextActiveId);
-          setAddTagsModalRequestNonce((prev) => prev + 1);
-        }
+        setSelectionAnchorId(nextActiveId);
+        selectEntry(nextActiveId);
+        setAddTagsModalRequestNonce((prev) => prev + 1);
         return;
       }
 

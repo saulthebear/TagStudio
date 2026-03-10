@@ -8,7 +8,7 @@ import {
   type TagUpdatePayload
 } from "@tagstudio/api-client";
 import { Button } from "@tagstudio/ui";
-import { type SyntheticEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { type SyntheticEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { AddTagsModal } from "@/components/AddTagsModal";
 import { SplitPane, type SplitPaneState } from "@/components/SplitPane";
@@ -338,15 +338,16 @@ function MetadataContent({
 }: MetadataContentProps) {
   const [addTagsOpen, setAddTagsOpen] = useState(false);
   const [editTag, setEditTag] = useState<TagResponse | null>(null);
+  const previousOpenAddTagsRequestNonce = useRef(openAddTagsRequestNonce);
 
   const selectedCount = selectedEntryIds.length;
   const tagColorsQuery = useTagColors(selectedCount > 0);
 
   useEffect(() => {
-    if (openAddTagsRequestNonce === 0 || selectedCount === 0) {
-      return;
+    if (openAddTagsRequestNonce > previousOpenAddTagsRequestNonce.current && selectedCount > 0) {
+      setAddTagsOpen(true);
     }
-    setAddTagsOpen(true);
+    previousOpenAddTagsRequestNonce.current = openAddTagsRequestNonce;
   }, [openAddTagsRequestNonce, selectedCount]);
 
   const tagById = useMemo(() => {
