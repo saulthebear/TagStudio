@@ -1759,7 +1759,7 @@ test("supports add-tags modal create-and-add workflow", async ({ page }) => {
   await expect(addTagsDragHandle).toBeVisible();
   await expect(addTagsDialog).toHaveCSS("position", "fixed");
   await expectDialogWithinViewport(page, addTagsDialog, 8);
-  await dragDialogBy(page, addTagsDialog, addTagsDragHandle, { x: -120, y: 0 });
+  await dragDialogBy(page, addTagsDialog, addTagsDragHandle, { x: 90, y: 0 });
   await expectDialogWithinViewport(page, addTagsDialog, 8);
   await expect(page.locator(".modal-layer-backdrop-dim")).toHaveCount(1);
 
@@ -1771,8 +1771,10 @@ test("supports add-tags modal create-and-add workflow", async ({ page }) => {
   expect(editTagBounds.width).toBeGreaterThanOrEqual(540);
   expect(editTagBounds.x).toBeGreaterThanOrEqual(12);
   expect(editTagBounds.x).toBeLessThanOrEqual(48);
+  const viewport = page.viewportSize();
+  const backdropClickX = (viewport?.width ?? 1280) - 24;
   await expect(page.locator(".modal-layer-backdrop-dim")).toHaveCount(1);
-  await page.mouse.click(24, 24);
+  await page.mouse.click(backdropClickX, 24);
   await expect(editTagDialog).toHaveCount(0);
   await expect(addTagsDialog).toBeVisible();
 
@@ -1800,7 +1802,7 @@ test("supports add-tags modal create-and-add workflow", async ({ page }) => {
   await expect(parentCandidateRows.nth(2)).toHaveText(/^\s*Needs Review\s*Add\s*$/);
   await dragDialogBy(page, parentPickerDialog, parentPickerDialog.locator(".modal-drag-handle"), { x: 75, y: 0 });
   await expectDialogWithinViewport(page, parentPickerDialog, 8);
-  await page.mouse.click(24, 24);
+  await page.mouse.click(backdropClickX, 24);
   await expect(parentPickerDialog).toHaveCount(0);
   await expect(editTagDialog).toBeVisible();
 
@@ -1812,9 +1814,9 @@ test("supports add-tags modal create-and-add workflow", async ({ page }) => {
     .click();
   const colorPickerDialog = page.getByRole("dialog", { name: "Choose tag color" });
   await expect(colorPickerDialog).toBeVisible();
-  await dragDialogBy(page, colorPickerDialog, colorPickerDialog.locator(".modal-drag-handle"), { x: -80, y: 0 });
+  await dragDialogBy(page, colorPickerDialog, colorPickerDialog.locator(".modal-drag-handle"), { x: 60, y: 0 });
   await expectDialogWithinViewport(page, colorPickerDialog, 8);
-  await page.mouse.click(24, 24);
+  await page.mouse.click(backdropClickX, 24);
   await expect(colorPickerDialog).toHaveCount(0);
   await expect(editTagDialog).toBeVisible();
   await editTagDialog.getByRole("button", { name: "Cancel" }).click();
