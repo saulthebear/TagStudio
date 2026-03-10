@@ -15,15 +15,6 @@ type TagEditorModalProps = {
   onSaved?: (tag: TagResponse) => void;
 };
 
-const LIMIT_OPTIONS: Array<{ label: string; value: number }> = [
-  { label: "25", value: 25 },
-  { label: "50", value: 50 },
-  { label: "100", value: 100 },
-  { label: "250", value: 250 },
-  { label: "500", value: 500 },
-  { label: "All", value: -1 }
-];
-
 export function TagEditorModal({
   open,
   mode,
@@ -53,7 +44,7 @@ export function TagEditorModal({
     <ModalLayerPortal open={open} onBackdropClick={onClose}>
       <div
         ref={workflow.tagEditorDrag.panelRef}
-        className={`overlay-panel panel tag-editor-panel modal-draggable-panel ${workflow.tagEditorDrag.isDragging ? "modal-panel-dragging" : ""}`}
+        className={`overlay-panel panel tag-workflow-panel tag-editor-panel modal-draggable-panel ${workflow.tagEditorDrag.isDragging ? "modal-panel-dragging" : ""}`}
         role="dialog"
         aria-modal="true"
         aria-label={mode === "create" ? "Create tag" : "Edit tag"}
@@ -190,7 +181,7 @@ export function TagEditorModal({
         <ModalLayerPortal open={workflow.parentPickerOpen} onBackdropClick={() => workflow.setParentPickerOpen(false)}>
           <div
             ref={workflow.parentPickerDrag.panelRef}
-            className={`overlay-panel panel tag-editor-subpanel modal-draggable-panel ${workflow.parentPickerDrag.isDragging ? "modal-panel-dragging" : ""}`}
+            className={`overlay-panel panel tag-workflow-panel tag-editor-subpanel modal-draggable-panel ${workflow.parentPickerDrag.isDragging ? "modal-panel-dragging" : ""}`}
             role="dialog"
             aria-modal="true"
             aria-label="Add parent tags"
@@ -207,17 +198,6 @@ export function TagEditorModal({
                 value={workflow.parentQuery}
                 onChange={(event) => workflow.setParentQuery(event.target.value)}
               />
-              <select
-                className="input-base"
-                value={String(workflow.parentLimit)}
-                onChange={(event) => workflow.setParentLimit(Number(event.target.value))}
-              >
-                {LIMIT_OPTIONS.map((option) => (
-                  <option key={option.label} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
             </div>
             <div className="tag-editor-parent-candidates">
               {workflow.parentCandidates.map((candidate) => {
@@ -247,7 +227,7 @@ export function TagEditorModal({
         <ModalLayerPortal open={workflow.colorPickerOpen} onBackdropClick={() => workflow.setColorPickerOpen(false)}>
           <div
             ref={workflow.colorPickerDrag.panelRef}
-            className={`overlay-panel panel tag-editor-subpanel modal-draggable-panel ${workflow.colorPickerDrag.isDragging ? "modal-panel-dragging" : ""}`}
+            className={`overlay-panel panel tag-workflow-panel tag-editor-subpanel modal-draggable-panel ${workflow.colorPickerDrag.isDragging ? "modal-panel-dragging" : ""}`}
             role="dialog"
             aria-modal="true"
             aria-label="Choose tag color"

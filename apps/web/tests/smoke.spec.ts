@@ -1390,6 +1390,19 @@ test("supports add-tags modal create-and-add workflow", async ({ page }) => {
     [402, new Set<number>()]
   ]);
 
+  const extraReviewTags = Array.from({ length: 27 }, (_, index) => ({
+    id: 200 + index,
+    name: `Candidate Review ${String(index + 1).padStart(2, "0")}`,
+    shorthand: null,
+    aliases: [],
+    parent_ids: [42],
+    color_namespace: null,
+    color_slug: null,
+    disambiguation_id: null,
+    is_category: false,
+    is_hidden: false
+  }));
+
   const tags: Array<{
     id: number;
     name: string;
@@ -1461,7 +1474,44 @@ test("supports add-tags modal create-and-add workflow", async ({ page }) => {
       disambiguation_id: null,
       is_category: false,
       is_hidden: false
-    }
+    },
+    {
+      id: 41,
+      name: "Needs Review",
+      shorthand: null,
+      aliases: [],
+      parent_ids: [42],
+      color_namespace: null,
+      color_slug: null,
+      disambiguation_id: null,
+      is_category: false,
+      is_hidden: false
+    },
+    {
+      id: 43,
+      name: "Review Queue",
+      shorthand: null,
+      aliases: [],
+      parent_ids: [42],
+      color_namespace: null,
+      color_slug: null,
+      disambiguation_id: null,
+      is_category: false,
+      is_hidden: false
+    },
+    {
+      id: 42,
+      name: "Review",
+      shorthand: null,
+      aliases: [],
+      parent_ids: [],
+      color_namespace: null,
+      color_slug: null,
+      disambiguation_id: null,
+      is_category: false,
+      is_hidden: false
+    },
+    ...extraReviewTags
   ];
   let nextTagId = 1000;
   let gameTagId: number | null = null;
@@ -1681,8 +1731,10 @@ test("supports add-tags modal create-and-add workflow", async ({ page }) => {
   await expect(addTagsDialog).toBeVisible();
   await expect(addTagsDialog.getByRole("button", { name: "Edit" })).toHaveCount(0);
   const addTagsBounds = requireBox(await addTagsDialog.boundingBox(), "Add tags dialog");
-  expect(addTagsBounds.width).toBeLessThanOrEqual(640);
-  expect(addTagsBounds.width).toBeGreaterThanOrEqual(500);
+  expect(addTagsBounds.width).toBeLessThanOrEqual(560);
+  expect(addTagsBounds.width).toBeGreaterThanOrEqual(440);
+  expect(addTagsBounds.x).toBeGreaterThanOrEqual(12);
+  expect(addTagsBounds.x).toBeLessThanOrEqual(48);
 
   const searchTags = addTagsDialog.getByPlaceholder("Search tags");
   await expect(searchTags).toBeFocused();
@@ -1721,15 +1773,22 @@ test("supports add-tags modal create-and-add workflow", async ({ page }) => {
   await expect(addTagsDragHandle).toBeVisible();
   await expect(addTagsDialog).toHaveCSS("position", "fixed");
   await expectDialogWithinViewport(page, addTagsDialog, 8);
-  await dragDialogBy(page, addTagsDialog, addTagsDragHandle, { x: -120, y: 0 });
+  await dragDialogBy(page, addTagsDialog, addTagsDragHandle, { x: 90, y: 0 });
   await expectDialogWithinViewport(page, addTagsDialog, 8);
   await expect(page.locator(".modal-layer-backdrop-dim")).toHaveCount(1);
 
   await searchTags.press("Control+Enter");
   const editTagDialog = page.getByRole("dialog", { name: "Edit tag" });
   await expect(editTagDialog).toBeVisible();
+  const editTagBounds = requireBox(await editTagDialog.boundingBox(), "Edit tag dialog");
+  expect(editTagBounds.width).toBeLessThanOrEqual(680);
+  expect(editTagBounds.width).toBeGreaterThanOrEqual(540);
+  expect(editTagBounds.x).toBeGreaterThanOrEqual(12);
+  expect(editTagBounds.x).toBeLessThanOrEqual(48);
+  const viewport = page.viewportSize();
+  const backdropClickX = (viewport?.width ?? 1280) - 24;
   await expect(page.locator(".modal-layer-backdrop-dim")).toHaveCount(1);
-  await page.mouse.click(24, 24);
+  await page.mouse.click(backdropClickX, 24);
   await expect(editTagDialog).toHaveCount(0);
   await expect(addTagsDialog).toBeVisible();
 
@@ -1742,10 +1801,23 @@ test("supports add-tags modal create-and-add workflow", async ({ page }) => {
   await editTagDialog.getByRole("button", { name: "Add Parent Tag(s)" }).click();
   const parentPickerDialog = page.getByRole("dialog", { name: "Add parent tags" });
   await expect(parentPickerDialog).toBeVisible();
-  await expect(parentPickerDialog.getByPlaceholder("Search tags")).toBeFocused();
+  const parentSearch = parentPickerDialog.getByPlaceholder("Search tags");
+  await expect(parentSearch).toBeFocused();
+  await expect(parentPickerDialog.getByRole("combobox")).toHaveCount(0);
+  const parentPickerBounds = requireBox(await parentPickerDialog.boundingBox(), "Add parent tags dialog");
+  expect(parentPickerBounds.width).toBeLessThanOrEqual(580);
+  expect(parentPickerBounds.width).toBeGreaterThanOrEqual(440);
+  expect(parentPickerBounds.x).toBeGreaterThanOrEqual(20);
+  expect(parentPickerBounds.x).toBeLessThanOrEqual(64);
+  await parentSearch.fill("review");
+  const parentCandidateRows = parentPickerDialog.locator(".tag-editor-candidate-row");
+  await expect(parentCandidateRows).toHaveCount(30);
+  await expect(parentCandidateRows.nth(0).locator("span").first()).toHaveText("Review");
+  await expect(parentCandidateRows.nth(1).locator("span").first()).toHaveText("Review Queue");
+  await expect(parentCandidateRows.nth(2).locator("span").first()).toHaveText("Needs Review");
   await dragDialogBy(page, parentPickerDialog, parentPickerDialog.locator(".modal-drag-handle"), { x: 75, y: 0 });
   await expectDialogWithinViewport(page, parentPickerDialog, 8);
-  await page.mouse.click(24, 24);
+  await page.mouse.click(backdropClickX, 24);
   await expect(parentPickerDialog).toHaveCount(0);
   await expect(editTagDialog).toBeVisible();
 
@@ -1757,9 +1829,9 @@ test("supports add-tags modal create-and-add workflow", async ({ page }) => {
     .click();
   const colorPickerDialog = page.getByRole("dialog", { name: "Choose tag color" });
   await expect(colorPickerDialog).toBeVisible();
-  await dragDialogBy(page, colorPickerDialog, colorPickerDialog.locator(".modal-drag-handle"), { x: -80, y: 0 });
+  await dragDialogBy(page, colorPickerDialog, colorPickerDialog.locator(".modal-drag-handle"), { x: 60, y: 0 });
   await expectDialogWithinViewport(page, colorPickerDialog, 8);
-  await page.mouse.click(24, 24);
+  await page.mouse.click(backdropClickX, 24);
   await expect(colorPickerDialog).toHaveCount(0);
   await expect(editTagDialog).toBeVisible();
   await editTagDialog.getByRole("button", { name: "Cancel" }).click();

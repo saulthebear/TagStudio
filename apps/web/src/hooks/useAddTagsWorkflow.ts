@@ -103,7 +103,11 @@ export function useAddTagsWorkflow({
     };
   }, []);
 
-  const { panelRef, panelStyle, dragHandleProps, isDragging } = useDraggableModalPosition({ open });
+  const { panelRef, panelStyle, dragHandleProps, isDragging } = useDraggableModalPosition({
+    open,
+    initialPlacement: "left",
+    initialOffset: { left: 20, top: 20 }
+  });
 
   useEffect(() => {
     if (!open || editorOpen) {

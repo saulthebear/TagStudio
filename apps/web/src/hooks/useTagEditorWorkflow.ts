@@ -11,6 +11,7 @@ import { api } from "@/api/client";
 import { useDraggableModalPosition } from "@/hooks/useDraggableModalPosition";
 import { useSearchInputFocus } from "@/hooks/useSearchInputFocus";
 import { useTagColors } from "@/hooks/useTagColors";
+import { scoreTags } from "@/lib/tag-workflows";
 
 type UseTagEditorWorkflowParams = {
   open: boolean;
@@ -87,7 +88,6 @@ export function useTagEditorWorkflow({
 
   const [parentPickerOpen, setParentPickerOpen] = useState(false);
   const [parentQuery, setParentQuery] = useState("");
-  const [parentLimit, setParentLimit] = useState(25);
   const [colorPickerOpen, setColorPickerOpen] = useState(false);
   const [savePending, setSavePending] = useState(false);
   const { inputRef: parentSearchInputRef, focusInput: focusParentSearchInput } = useSearchInputFocus();
@@ -118,9 +118,21 @@ export function useTagEditorWorkflow({
     return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [open, colorPickerOpen, parentPickerOpen, onClose]);
 
-  const tagEditorDrag = useDraggableModalPosition({ open });
-  const parentPickerDrag = useDraggableModalPosition({ open: open && parentPickerOpen });
-  const colorPickerDrag = useDraggableModalPosition({ open: open && colorPickerOpen });
+  const tagEditorDrag = useDraggableModalPosition({
+    open,
+    initialPlacement: "left",
+    initialOffset: { left: 20, top: 20 }
+  });
+  const parentPickerDrag = useDraggableModalPosition({
+    open: open && parentPickerOpen,
+    initialPlacement: "left",
+    initialOffset: { left: 32, top: 32 }
+  });
+  const colorPickerDrag = useDraggableModalPosition({
+    open: open && colorPickerOpen,
+    initialPlacement: "left",
+    initialOffset: { left: 44, top: 44 }
+  });
 
   const allTagsQuery = useQuery({
     queryKey: ["tag-editor-all-tags"],
@@ -129,8 +141,8 @@ export function useTagEditorWorkflow({
   });
 
   const parentCandidatesQuery = useQuery({
-    queryKey: ["tag-editor-parent-candidates", tag?.id ?? "new", parentQuery, parentLimit],
-    queryFn: () => api.getTags(parentQuery, parentLimit, tag?.id),
+    queryKey: ["tag-editor-parent-candidates", tag?.id ?? "new", parentQuery],
+    queryFn: () => api.getTags(parentQuery, -1, tag?.id),
     enabled: open && parentPickerOpen
   });
 
@@ -152,7 +164,6 @@ export function useTagEditorWorkflow({
     setIsHidden(mode === "create" ? false : (tag?.is_hidden ?? false));
     setParentPickerOpen(false);
     setParentQuery("");
-    setParentLimit(25);
     setColorPickerOpen(false);
     setSavePending(false);
   }, [initialName, mode, open, tag]);
@@ -180,6 +191,11 @@ export function useTagEditorWorkflow({
         .filter((value): value is TagResponse => value !== undefined)
         .sort((a, b) => a.name.localeCompare(b.name)),
     [parentIds, tagById]
+  );
+
+  const parentCandidates = useMemo(
+    () => scoreTags(parentCandidatesQuery.data ?? [], parentQuery),
+    [parentCandidatesQuery.data, parentQuery]
   );
 
   const disambiguationLabel = useMemo(() => {
@@ -288,12 +304,11 @@ export function useTagEditorWorkflow({
     parentIds,
     parentPickerOpen,
     parentQuery,
-    parentLimit,
     parentSearchInputRef,
     colorPickerOpen,
     savePending,
     canSave,
-    parentCandidates: parentCandidatesQuery.data ?? [],
+    parentCandidates,
     colorGroups: tagColorsQuery.data ?? [],
     tagEditorDrag,
     parentPickerDrag,
@@ -305,7 +320,6 @@ export function useTagEditorWorkflow({
     setIsHidden,
     setParentPickerOpen,
     setParentQuery,
-    setParentLimit,
     setColorPickerOpen,
     addAliasRow,
     updateAlias,

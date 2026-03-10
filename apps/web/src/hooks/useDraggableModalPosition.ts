@@ -13,6 +13,11 @@ import {
 type UseDraggableModalPositionOptions = {
   open: boolean;
   margin?: number;
+  initialPlacement?: "center" | "left";
+  initialOffset?: {
+    left: number;
+    top: number;
+  };
 };
 
 type DragState = {
@@ -75,9 +80,34 @@ function centerInViewport(panel: HTMLElement, margin: number): DragPosition {
   return clampToViewport(rect.width, rect.height, centered, margin);
 }
 
+function placeInViewport(
+  panel: HTMLElement,
+  margin: number,
+  initialPlacement: "center" | "left",
+  initialLeft: number,
+  initialTop: number
+): DragPosition {
+  if (initialPlacement === "center") {
+    return centerInViewport(panel, margin);
+  }
+
+  const rect = panel.getBoundingClientRect();
+  return clampToViewport(
+    rect.width,
+    rect.height,
+    {
+      left: initialLeft,
+      top: initialTop
+    },
+    margin
+  );
+}
+
 export function useDraggableModalPosition({
   open,
-  margin = 16
+  margin = 16,
+  initialPlacement = "center",
+  initialOffset
 }: UseDraggableModalPositionOptions): {
   panelRef: RefObject<HTMLDivElement | null>;
   panelStyle: CSSProperties | undefined;
@@ -92,6 +122,8 @@ export function useDraggableModalPosition({
   const dragCleanupRef = useRef<(() => void) | null>(null);
   const [position, setPosition] = useState<DragPosition | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const initialLeft = initialOffset?.left ?? margin;
+  const initialTop = initialOffset?.top ?? margin;
 
   const cleanupDragState = () => {
     if (dragCleanupRef.current) {
@@ -114,8 +146,8 @@ export function useDraggableModalPosition({
       return;
     }
 
-    setPosition(centerInViewport(panel, margin));
-  }, [margin, open]);
+    setPosition(placeInViewport(panel, margin, initialPlacement, initialLeft, initialTop));
+  }, [initialLeft, initialPlacement, initialTop, margin, open]);
 
   useEffect(() => {
     return () => {
@@ -148,7 +180,7 @@ export function useDraggableModalPosition({
 
       setPosition((current) => {
         if (!current) {
-          return centerInViewport(panel, margin);
+          return placeInViewport(panel, margin, initialPlacement, initialLeft, initialTop);
         }
         const rect = panel.getBoundingClientRect();
         return clampToViewport(rect.width, rect.height, current, margin);
@@ -157,7 +189,7 @@ export function useDraggableModalPosition({
 
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
-  }, [margin, open]);
+  }, [initialLeft, initialPlacement, initialTop, margin, open]);
 
   const startDrag = (args: {
     mode: "pointer" | "mouse";
