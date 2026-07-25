@@ -1,6 +1,6 @@
 import { type SortingMode } from "@tagstudio/api-client";
 import { Button } from "@tagstudio/ui";
-import { RefreshCw, SlidersHorizontal, Volume2, VolumeX } from "lucide-react";
+import { ArrowUpDown, RefreshCw, Settings, SlidersHorizontal, Volume2, VolumeX } from "lucide-react";
 
 import {
   DropdownMenu,
@@ -57,7 +57,6 @@ export function TopFilterBar({
   showHiddenEntries,
   activeFilterCount,
   totalCount,
-  searchPending,
   refreshPending,
   searchResultsStale,
   videoMuted,
@@ -99,15 +98,14 @@ export function TopFilterBar({
         <DropdownMenuTrigger asChild>
           <button
             type="button"
-            className={`filter-trigger ${showUntaggedConflict ? "filter-trigger-warning" : ""}`}
-            aria-label="Open filters menu"
-            title="Open filters menu"
+            className={`filter-icon-btn ${showUntaggedConflict ? "border-amber-500" : ""}`}
+            aria-label="Open view settings"
+            title="Open view settings"
           >
-            <SlidersHorizontal size={16} />
-            <span>Filters</span>
+            <SlidersHorizontal size={18} />
             {activeFilterCount > 0 ? (
               <span
-                className={`filter-badge ${showUntaggedConflict ? "filter-badge-warning" : ""}`}
+                className={`filter-badge absolute -top-2 -right-2 ${showUntaggedConflict ? "filter-badge-warning" : ""}`}
               >
                 {activeFilterCount}
               </span>
@@ -116,18 +114,45 @@ export function TopFilterBar({
         </DropdownMenuTrigger>
         <DropdownMenuContent className="top-filter-dropdown" align="start">
           <DropdownMenuLabel className="top-filter-dropdown-label">
+            Sort By
+          </DropdownMenuLabel>
+          <DropdownMenuSeparator className="top-filter-dropdown-separator" />
+          {SORTING_OPTIONS.map((option) => (
+            <DropdownMenuCheckboxItem
+              key={option.value}
+              checked={sortingMode === option.value}
+              onCheckedChange={() => onSortingModeChange(option.value)}
+              onSelect={(e) => e.preventDefault()}
+            >
+              {option.label}
+            </DropdownMenuCheckboxItem>
+          ))}
+          <DropdownMenuSeparator className="top-filter-dropdown-separator" />
+          <DropdownMenuCheckboxItem
+            checked={ascending}
+            onCheckedChange={() => onAscendingChange(!ascending)}
+            onSelect={(e) => e.preventDefault()}
+          >
+            Ascending Order
+          </DropdownMenuCheckboxItem>
+
+          <DropdownMenuSeparator className="top-filter-dropdown-separator" />
+
+          <DropdownMenuLabel className="top-filter-dropdown-label">
             Entry Filters
           </DropdownMenuLabel>
           <DropdownMenuSeparator className="top-filter-dropdown-separator" />
           <DropdownMenuCheckboxItem
             checked={untaggedChecked}
             onCheckedChange={(value) => onUntaggedChange(value === true)}
+            onSelect={(e) => e.preventDefault()}
           >
             Untagged
           </DropdownMenuCheckboxItem>
           <DropdownMenuCheckboxItem
             checked={showHiddenEntries}
             onCheckedChange={(value) => onShowHiddenChange(value === true)}
+            onSelect={(e) => e.preventDefault()}
           >
             Show hidden entries
           </DropdownMenuCheckboxItem>
@@ -144,65 +169,36 @@ export function TopFilterBar({
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <select
-        className="input-base top-filter-sort-mode"
-        value={sortingMode}
-        onChange={(event) => onSortingModeChange(event.target.value as SortingMode)}
-      >
-        {SORTING_OPTIONS.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-
-      <select
-        className="input-base top-filter-sort-direction"
-        value={ascending ? "asc" : "desc"}
-        onChange={(event) => onAscendingChange(event.target.value === "asc")}
-      >
-        <option value="desc">Descending</option>
-        <option value="asc">Ascending</option>
-      </select>
-
-      <Button
-        variant="secondary"
-        size="md"
-        className={`top-filter-action top-filter-search-action ${searchResultsStale ? "btn-search-stale" : ""}`}
-        disabled={searchPending}
-        onClick={onSearch}
-      >
-        Search
-      </Button>
-
-      <Button
-        variant="secondary"
-        size="md"
-        className="top-filter-action top-filter-refresh-action"
+      <button
+        type="button"
+        className="filter-icon-btn"
         disabled={refreshPending}
         onClick={onRefresh}
+        title="Refresh"
+        aria-label="Refresh"
       >
-        Refresh
-      </Button>
+        <RefreshCw size={18} />
+      </button>
 
-      <Button
-        variant="secondary"
-        size="md"
-        className="top-filter-action top-filter-mute-action"
+      <button
+        type="button"
+        className="filter-icon-btn"
         onClick={onToggleMute}
         title={videoMuted ? "Unmute Videos" : "Mute Videos"}
+        aria-label={videoMuted ? "Unmute Videos" : "Mute Videos"}
       >
         {videoMuted ? <VolumeX size={18} /> : <Volume2 size={18} />}
-      </Button>
+      </button>
 
-      <Button
-        variant="secondary"
-        size="md"
-        className="top-filter-action top-filter-settings-action"
+      <button
+        type="button"
+        className="filter-icon-btn"
         onClick={onOpenSettings}
+        title="Settings"
+        aria-label="Settings"
       >
-        Settings
-      </Button>
+        <Settings size={18} />
+      </button>
 
       <div className="top-filter-status" aria-live="polite">
         Results: <strong>{totalCount}</strong> | Filter: {filterSummary}
