@@ -238,35 +238,38 @@ function PreviewContent({
   return (
     <div className="preview-content">
       {!hasSelectedEntry ? <p className="text-sm text-slate-500">Select an entry to render preview.</p> : null}
-      {hasSelectedEntry && preview?.preview_kind === "image" ? (
-        <img
-          src={
-            animatedImageSource ??
-            (preview.thumbnail_url
-              ? resolveApiUrl(preview.thumbnail_url)
-              : getThumbnailUrl(selectedEntry.id, { kind: "preview", fit: "contain" }))
-          }
-          alt={selectedEntry.filename}
-          className="inspector-image"
-        />
-      ) : null}
-      {hasSelectedEntry && preview?.preview_kind === "video" ? (
-        <video
-          src={getMediaUrl(selectedEntry.id)}
-          poster={
-            preview.poster_url
-              ? resolveApiUrl(preview.poster_url)
-              : getThumbnailUrl(selectedEntry.id, { kind: "preview", fit: "contain" })
-          }
-          preload="metadata"
-          autoPlay
-          loop
-          muted={videoPreviewStartsMuted}
-          onVolumeChange={handleVideoVolumeChange}
-          playsInline
-          controls
-          className="inspector-video"
-        />
+      {hasSelectedEntry && (preview?.preview_kind === "image" || preview?.preview_kind === "video") ? (
+        <div className="inspector-media-wrapper">
+          {preview.preview_kind === "image" ? (
+            <img
+              src={
+                animatedImageSource ??
+                (preview.thumbnail_url
+                  ? resolveApiUrl(preview.thumbnail_url)
+                  : getThumbnailUrl(selectedEntry.id, { kind: "preview", fit: "contain" }))
+              }
+              alt={selectedEntry.filename}
+              className="inspector-image"
+            />
+          ) : (
+            <video
+              src={getMediaUrl(selectedEntry.id)}
+              poster={
+                preview.poster_url
+                  ? resolveApiUrl(preview.poster_url)
+                  : getThumbnailUrl(selectedEntry.id, { kind: "preview", fit: "contain" })
+              }
+              preload="metadata"
+              autoPlay
+              loop
+              muted={videoPreviewStartsMuted}
+              onVolumeChange={handleVideoVolumeChange}
+              playsInline
+              controls
+              className="inspector-video"
+            />
+          )}
+        </div>
       ) : null}
       {hasSelectedEntry && preview?.preview_kind === "audio" ? (
         <audio src={getMediaUrl(selectedEntry.id)} controls className="w-full" />

@@ -558,28 +558,25 @@ body {
   gap: 0.45rem;
 }
 
-.inspector-image {
+.inspector-media-wrapper {
+  position: relative;
   width: 100%;
-  max-width: 100%;
-  max-height: 100%;
-  height: auto;
-  object-fit: contain;
-  align-self: center;
+  flex: 1;
+  min-height: 0;
   border-radius: 0.75rem;
   border: 1px solid var(--color-border-soft);
   background: #0f172a;
+  overflow: hidden;
 }
 
+.inspector-image,
 .inspector-video {
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
-  max-width: 100%;
-  max-height: 100%;
-  height: auto;
+  height: 100%;
   object-fit: contain;
-  align-self: center;
-  border-radius: 0.75rem;
-  border: 1px solid var(--color-border-soft);
-  background: #0f172a;
 }
 
 .media-controls {
