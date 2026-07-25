@@ -1,6 +1,6 @@
 import { type SortingMode } from "@tagstudio/api-client";
 import { Button } from "@tagstudio/ui";
-import { RefreshCw, SlidersHorizontal } from "lucide-react";
+import { RefreshCw, SlidersHorizontal, Volume2, VolumeX } from "lucide-react";
 
 import {
   DropdownMenu,
@@ -26,6 +26,7 @@ type TopFilterBarProps = {
   searchPending: boolean;
   refreshPending: boolean;
   searchResultsStale: boolean;
+  videoMuted: boolean;
   onSearchInputChange: (value: string) => void;
   onSearch: () => void;
   onSortingModeChange: (value: SortingMode) => void;
@@ -35,6 +36,7 @@ type TopFilterBarProps = {
   onOpenLibraryModal: () => void;
   onRefresh: () => void;
   onOpenSettings: () => void;
+  onToggleMute: () => void;
 };
 
 const SORTING_OPTIONS: Array<{ label: string; value: SortingMode }> = [
@@ -58,6 +60,7 @@ export function TopFilterBar({
   searchPending,
   refreshPending,
   searchResultsStale,
+  videoMuted,
   onSearchInputChange,
   onSearch,
   onSortingModeChange,
@@ -66,7 +69,8 @@ export function TopFilterBar({
   onShowHiddenChange,
   onOpenLibraryModal,
   onRefresh,
-  onOpenSettings
+  onOpenSettings,
+  onToggleMute
 }: TopFilterBarProps) {
   return (
     <section className="top-filter-bar panel">
@@ -179,6 +183,16 @@ export function TopFilterBar({
         onClick={onRefresh}
       >
         Refresh
+      </Button>
+
+      <Button
+        variant="secondary"
+        size="md"
+        className="top-filter-action top-filter-mute-action"
+        onClick={onToggleMute}
+        title={videoMuted ? "Unmute Videos" : "Mute Videos"}
+      >
+        {videoMuted ? <VolumeX size={18} /> : <Volume2 size={18} />}
       </Button>
 
       <Button

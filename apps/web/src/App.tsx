@@ -67,6 +67,10 @@ export function App() {
     setVideoPreviewStartsMuted(false);
   }, []);
 
+  const toggleVideoMute = useCallback(() => {
+    setVideoPreviewStartsMuted((prev) => !prev);
+  }, []);
+
   useEffect(() => {
     const onResize = () => {
       setIsMobile(window.innerWidth < 768);
@@ -457,6 +461,7 @@ export function App() {
               searchPending={searchPending}
               refreshPending={refreshPending}
               searchResultsStale={searchResultsStale}
+              videoMuted={videoPreviewStartsMuted}
               onSearchInputChange={setSearchInput}
               onSearch={handleSearch}
               onSortingModeChange={handleSortingModeChange}
@@ -466,6 +471,7 @@ export function App() {
               onOpenLibraryModal={openLibraryModal}
               onRefresh={refreshLibrary}
               onOpenSettings={openSettings}
+              onToggleMute={toggleVideoMute}
             />
 
             {refreshStatus ? <RefreshStatusPanel refreshStatus={refreshStatus} /> : null}
