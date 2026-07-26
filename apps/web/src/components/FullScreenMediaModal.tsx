@@ -1,7 +1,8 @@
-import { type EntryResponse, type PreviewResponse } from "@tagstudio/api-client";
-import { ChevronLeft, ChevronRight, RotateCcw, X, ZoomIn, ZoomOut } from "lucide-react";
+import { type EntryResponse, type PreviewResponse, type TagCreatePayload, type TagResponse, type TagUpdatePayload } from "@tagstudio/api-client";
+import { ChevronLeft, ChevronRight, RotateCcw, Tag, X, ZoomIn, ZoomOut } from "lucide-react";
 import { type MouseEvent, type SyntheticEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { AddTagsModal } from "@/components/AddTagsModal";
 import { ModalLayerPortal } from "@/components/ModalLayerPortal";
 
 type FullScreenMediaModalProps = {
@@ -25,6 +26,11 @@ type FullScreenMediaModalProps = {
   onNavigateNext: () => void;
   hasPrevious: boolean;
   hasNext: boolean;
+  allTags?: TagResponse[];
+  onAddTagToEntries?: (entryIds: number[], tagId: number) => Promise<void>;
+  onCreateTag?: (payload: TagCreatePayload) => Promise<TagResponse | null>;
+  onUpdateTag?: (tagId: number, payload: TagUpdatePayload) => Promise<TagResponse | null>;
+  onRefreshSelection?: () => Promise<void>;
 };
 
 const MIN_ZOOM = 1;
@@ -56,17 +62,24 @@ export function FullScreenMediaModal({
   onNavigatePrevious,
   onNavigateNext,
   hasPrevious,
-  hasNext
+  hasNext,
+  allTags,
+  onAddTagToEntries,
+  onCreateTag,
+  onUpdateTag,
+  onRefreshSelection
 }: FullScreenMediaModalProps) {
   const [zoomScale, setZoomScale] = useState(1);
   const [panPosition, setPanPosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
+  const [addTagsOpen, setAddTagsOpen] = useState(false);
   const dragStartRef = useRef<{ x: number; y: number; initialPanX: number; initialPanY: number } | null>(null);
 
   // Reset zoom & pan when selected entry changes or modal closes
   useEffect(() => {
     setZoomScale(1);
     setPanPosition({ x: 0, y: 0 });
+    setAddTagsOpen(false);
   }, [selectedEntry?.id, open]);
 
   const handleZoomChange = useCallback((newScale: number) => {
@@ -157,6 +170,11 @@ export function FullScreenMediaModal({
     }
   }, [onVideoPreviewUnmuted]);
 
+  const entryTagIdsByEntry = useMemo(() => {
+    if (!selectedEntry) return new Map<number, Set<number>>();
+    return new Map([[selectedEntry.id, new Set(selectedEntry.tags.map((t) => t.id))]]);
+  }, [selectedEntry]);
+
   if (!open || !selectedEntry) {
     return null;
   }
@@ -235,6 +253,21 @@ export function FullScreenMediaModal({
           </button>
 
           <div className="fullscreen-controls-divider" />
+
+          {/* Add Tag Button */}
+          {onAddTagToEntries ? (
+            <button
+              type="button"
+              className="fullscreen-control-icon-btn"
+              onClick={() => setAddTagsOpen(true)}
+              aria-label="Add tag to file"
+              title="Add Tag"
+            >
+              <Tag className="h-4 w-4" />
+            </button>
+          ) : null}
+
+          {onAddTagToEntries ? <div className="fullscreen-controls-divider" /> : null}
 
           {/* Zoom In Button */}
           <button
@@ -315,6 +348,26 @@ export function FullScreenMediaModal({
             <ChevronRight className="h-4 w-4" />
           </button>
         </div>
+
+        {/* Add Tags Modal */}
+        {allTags && onAddTagToEntries && onCreateTag && onUpdateTag ? (
+          <AddTagsModal
+            open={addTagsOpen}
+            allTags={allTags}
+            selectedEntryIds={selectedEntry ? [selectedEntry.id] : []}
+            entryTagIdsByEntry={entryTagIdsByEntry}
+            onClose={() => {
+              setAddTagsOpen(false);
+              void onRefreshSelection?.();
+            }}
+            onAddTagToEntries={onAddTagToEntries}
+            onCreateTag={onCreateTag}
+            onUpdateTag={onUpdateTag}
+            onAfterTagChanged={async () => {
+              await onRefreshSelection?.();
+            }}
+          />
+        ) : null}
       </div>
     </ModalLayerPortal>
   );

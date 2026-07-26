@@ -681,6 +681,11 @@ export function App() {
           onNavigateNext={navigateNext}
           hasPrevious={hasPrevious}
           hasNext={hasNext}
+          allTags={allTags}
+          onAddTagToEntries={addTagToEntries}
+          onCreateTag={createTag}
+          onUpdateTag={updateTag}
+          onRefreshSelection={refreshSelectedEntry}
         />
       </main>
     </ModalStackProvider>
