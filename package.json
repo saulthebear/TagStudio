@@ -7,12 +7,16 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "bun run dev:web",
+    "dev": "concurrently -n api,web -c cyan.bold,magenta.bold \"bun run dev:api\" \"bun run dev:web\"",
+    "dev:api": "PYTHONUNBUFFERED=1 PYTHONPATH=src .venv/bin/python -m tagstudio.api.main --host 127.0.0.1 --port 5987",
     "dev:web": "bun run --cwd apps/web dev",
     "build": "bun run build:web",
     "build:web": "bun run --cwd apps/web build",
     "lint": "bun run --cwd apps/web lint",
     "test:web": "bun run --cwd apps/web test",
     "generate:openapi": "python -m tagstudio.api.openapi --output packages/api-client/openapi/tagstudio-api.json"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.4"
   }
 }
