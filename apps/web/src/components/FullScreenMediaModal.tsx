@@ -3,10 +3,8 @@ import { ChevronLeft, ChevronRight, RotateCcw, Tag, X, ZoomIn, ZoomOut } from "l
 import { type MouseEvent, type SyntheticEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { AddTagsModal } from "@/components/AddTagsModal";
-import { ModalLayerPortal } from "@/components/ModalLayerPortal";
 
-type FullScreenMediaModalProps = {
-  open: boolean;
+type FullScreenMediaViewProps = {
   selectedEntry: EntryResponse | null;
   preview: PreviewResponse | undefined;
   getMediaUrl: (entryId: number) => string;
@@ -49,8 +47,7 @@ function isAnimatedFormat(suffix?: string | null, mediaType?: string | null): bo
   );
 }
 
-export function FullScreenMediaModal({
-  open,
+export function FullScreenMediaView({
   selectedEntry,
   preview,
   getMediaUrl,
@@ -63,24 +60,24 @@ export function FullScreenMediaModal({
   onNavigateNext,
   hasPrevious,
   hasNext,
-  allTags,
+  allTags = [],
   onAddTagToEntries,
   onCreateTag,
   onUpdateTag,
   onRefreshSelection
-}: FullScreenMediaModalProps) {
+}: FullScreenMediaViewProps) {
   const [zoomScale, setZoomScale] = useState(1);
   const [panPosition, setPanPosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [addTagsOpen, setAddTagsOpen] = useState(false);
   const dragStartRef = useRef<{ x: number; y: number; initialPanX: number; initialPanY: number } | null>(null);
 
-  // Reset zoom & pan when selected entry changes or modal closes
+  // Reset zoom & pan when selected entry changes
   useEffect(() => {
     setZoomScale(1);
     setPanPosition({ x: 0, y: 0 });
     setAddTagsOpen(false);
-  }, [selectedEntry?.id, open]);
+  }, [selectedEntry?.id]);
 
   const handleZoomChange = useCallback((newScale: number) => {
     const clampedScale = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, newScale));
@@ -175,7 +172,7 @@ export function FullScreenMediaModal({
     return new Map([[selectedEntry.id, new Set(selectedEntry.tags.map((t) => t.id))]]);
   }, [selectedEntry]);
 
-  if (!open || !selectedEntry) {
+  if (!selectedEntry) {
     return null;
   }
 
@@ -183,192 +180,190 @@ export function FullScreenMediaModal({
   const isVideo = preview?.preview_kind === "video";
 
   return (
-    <ModalLayerPortal open={open} onBackdropClick={onClose} zIndexBase={2000}>
-      <div className="fullscreen-modal-overlay" onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp}>
-        {/* Media Viewport (Full Screen) */}
+    <div className="fullscreen-modal-overlay" onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp}>
+      {/* Media Viewport (Full Screen Base Layout) */}
+      <div
+        className="fullscreen-modal-viewport"
+        onWheel={handleWheel}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onDoubleClick={handleDoubleClick}
+        style={{
+          cursor: zoomScale > 1 ? (isDragging ? "grabbing" : "grab") : "zoom-in"
+        }}
+      >
+        {/* Media Content Wrapper */}
         <div
-          className="fullscreen-modal-viewport"
-          onWheel={handleWheel}
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onDoubleClick={handleDoubleClick}
+          className="fullscreen-media-container"
           style={{
-            cursor: zoomScale > 1 ? (isDragging ? "grabbing" : "grab") : "zoom-in"
+            transform: `translate(${panPosition.x}px, ${panPosition.y}px) scale(${zoomScale})`,
+            transition: isDragging ? "none" : "transform 0.1s ease-out"
           }}
         >
-          {/* Media Content Wrapper */}
-          <div
-            className="fullscreen-media-container"
-            style={{
-              transform: `translate(${panPosition.x}px, ${panPosition.y}px) scale(${zoomScale})`,
-              transition: isDragging ? "none" : "transform 0.1s ease-out"
-            }}
-          >
-            {isImage ? (
-              <img
-                src={
-                  animatedImageSource ??
-                  (preview.thumbnail_url
-                    ? resolveApiUrl(preview.thumbnail_url)
-                    : getThumbnailUrl(selectedEntry.id, { kind: "preview", fit: "contain" }))
-                }
-                alt={selectedEntry.filename}
-                className="fullscreen-media-img"
-                draggable={false}
-              />
-            ) : isVideo ? (
-              <video
-                src={getMediaUrl(selectedEntry.id)}
-                poster={
-                  preview.poster_url
-                    ? resolveApiUrl(preview.poster_url)
-                    : getThumbnailUrl(selectedEntry.id, { kind: "preview", fit: "contain" })
-                }
-                preload="metadata"
-                autoPlay
-                loop
-                muted={videoPreviewStartsMuted}
-                onVolumeChange={handleVideoVolumeChange}
-                playsInline
-                controls
-                className="fullscreen-media-video"
-              />
-            ) : (
-              <div className="text-white text-center p-4">Preview not available in full screen</div>
-            )}
-          </div>
-        </div>
-
-        {/* Floating Vertical Control Bar on Right */}
-        <div className="fullscreen-controls-bar" onClick={(e) => e.stopPropagation()}>
-          {/* Close Modal Button */}
-          <button
-            type="button"
-            className="fullscreen-control-icon-btn fullscreen-close-icon-btn"
-            onClick={onClose}
-            aria-label="Close full screen modal"
-            title="Close full screen"
-          >
-            <X className="h-5 w-5" />
-          </button>
-
-          <div className="fullscreen-controls-divider" />
-
-          {/* Add Tag Button */}
-          {onAddTagToEntries ? (
-            <button
-              type="button"
-              className="fullscreen-control-icon-btn"
-              onClick={() => setAddTagsOpen(true)}
-              aria-label="Add tag to file"
-              title="Add Tag"
-            >
-              <Tag className="h-4 w-4" />
-            </button>
-          ) : null}
-
-          {onAddTagToEntries ? <div className="fullscreen-controls-divider" /> : null}
-
-          {/* Zoom In Button */}
-          <button
-            type="button"
-            className="fullscreen-control-icon-btn"
-            onClick={handleZoomIn}
-            disabled={zoomScale >= MAX_ZOOM}
-            aria-label="Zoom in"
-            title="Zoom in"
-          >
-            <ZoomIn className="h-4 w-4" />
-          </button>
-
-          {/* Zoom Level Continuous Vertical Slider */}
-          <div className="fullscreen-zoom-slider-wrapper">
-            <input
-              type="range"
-              min={MIN_ZOOM}
-              max={MAX_ZOOM}
-              step={ZOOM_STEP}
-              value={zoomScale}
-              onChange={(e) => handleZoomChange(parseFloat(e.target.value))}
-              className="fullscreen-zoom-slider"
-              aria-label="Zoom level slider"
+          {isImage ? (
+            <img
+              src={
+                animatedImageSource ??
+                (preview.thumbnail_url
+                  ? resolveApiUrl(preview.thumbnail_url)
+                  : getThumbnailUrl(selectedEntry.id, { kind: "preview", fit: "contain" }))
+              }
+              alt={selectedEntry.filename}
+              className="fullscreen-media-img"
+              draggable={false}
             />
-          </div>
+          ) : isVideo ? (
+            <video
+              src={getMediaUrl(selectedEntry.id)}
+              poster={
+                preview.poster_url
+                  ? resolveApiUrl(preview.poster_url)
+                  : getThumbnailUrl(selectedEntry.id, { kind: "preview", fit: "contain" })
+              }
+              preload="metadata"
+              autoPlay
+              loop
+              muted={videoPreviewStartsMuted}
+              onVolumeChange={handleVideoVolumeChange}
+              playsInline
+              controls
+              className="fullscreen-media-video"
+            />
+          ) : (
+            <div className="text-white text-center p-4">Preview not available in full screen</div>
+          )}
+        </div>
+      </div>
 
-          {/* Zoom Out Button */}
+      {/* Floating Vertical Control Bar on Right */}
+      <div className="fullscreen-controls-bar" onClick={(e) => e.stopPropagation()}>
+        {/* Close Button (returns to standard view) */}
+        <button
+          type="button"
+          className="fullscreen-control-icon-btn fullscreen-close-icon-btn"
+          onClick={onClose}
+          aria-label="Exit full screen mode"
+          title="Exit full screen"
+        >
+          <X className="h-5 w-5" />
+        </button>
+
+        <div className="fullscreen-controls-divider" />
+
+        {/* Add Tag Button */}
+        {onAddTagToEntries && onCreateTag && onUpdateTag ? (
           <button
             type="button"
             className="fullscreen-control-icon-btn"
-            onClick={handleZoomOut}
-            disabled={zoomScale <= MIN_ZOOM}
-            aria-label="Zoom out"
-            title="Zoom out"
+            onClick={() => setAddTagsOpen(true)}
+            aria-label="Add tag to file"
+            title="Add Tag"
           >
-            <ZoomOut className="h-4 w-4" />
+            <Tag className="h-4 w-4" />
           </button>
+        ) : null}
 
-          {/* Percentage Indicator */}
-          <span className="fullscreen-zoom-badge">{Math.round(zoomScale * 100)}%</span>
+        {onAddTagToEntries ? <div className="fullscreen-controls-divider" /> : null}
 
-          {/* Reset Zoom Button */}
-          <button
-            type="button"
-            className="fullscreen-control-icon-btn"
-            onClick={handleResetZoom}
-            disabled={zoomScale === 1 && panPosition.x === 0 && panPosition.y === 0}
-            aria-label="Reset zoom and pan"
-            title="Reset zoom"
-          >
-            <RotateCcw className="h-4 w-4" />
-          </button>
+        {/* Zoom In Button */}
+        <button
+          type="button"
+          className="fullscreen-control-icon-btn"
+          onClick={handleZoomIn}
+          disabled={zoomScale >= MAX_ZOOM}
+          aria-label="Zoom in"
+          title="Zoom in"
+        >
+          <ZoomIn className="h-4 w-4" />
+        </button>
 
-          <div className="fullscreen-controls-divider" />
-
-          {/* Previous File Button */}
-          <button
-            type="button"
-            className="fullscreen-control-icon-btn"
-            onClick={onNavigatePrevious}
-            disabled={!hasPrevious}
-            aria-label="Previous file"
-            title="Previous file (Left Arrow)"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </button>
-
-          {/* Next File Button */}
-          <button
-            type="button"
-            className="fullscreen-control-icon-btn"
-            onClick={onNavigateNext}
-            disabled={!hasNext}
-            aria-label="Next file"
-            title="Next file (Right Arrow)"
-          >
-            <ChevronRight className="h-4 w-4" />
-          </button>
+        {/* Zoom Level Continuous Vertical Slider */}
+        <div className="fullscreen-zoom-slider-wrapper">
+          <input
+            type="range"
+            min={MIN_ZOOM}
+            max={MAX_ZOOM}
+            step={ZOOM_STEP}
+            value={zoomScale}
+            onChange={(e) => handleZoomChange(parseFloat(e.target.value))}
+            className="fullscreen-zoom-slider"
+            aria-label="Zoom level slider"
+          />
         </div>
 
-        {/* Add Tags Modal */}
-        {allTags && onAddTagToEntries && onCreateTag && onUpdateTag ? (
-          <AddTagsModal
-            open={addTagsOpen}
-            allTags={allTags}
-            selectedEntryIds={selectedEntry ? [selectedEntry.id] : []}
-            entryTagIdsByEntry={entryTagIdsByEntry}
-            onClose={() => {
-              setAddTagsOpen(false);
-              void onRefreshSelection?.();
-            }}
-            onAddTagToEntries={onAddTagToEntries}
-            onCreateTag={onCreateTag}
-            onUpdateTag={onUpdateTag}
-            onAfterTagChanged={async () => {
-              await onRefreshSelection?.();
-            }}
-          />
-        ) : null}
+        {/* Zoom Out Button */}
+        <button
+          type="button"
+          className="fullscreen-control-icon-btn"
+          onClick={handleZoomOut}
+          disabled={zoomScale <= MIN_ZOOM}
+          aria-label="Zoom out"
+          title="Zoom out"
+        >
+          <ZoomOut className="h-4 w-4" />
+        </button>
+
+        {/* Percentage Indicator */}
+        <span className="fullscreen-zoom-badge">{Math.round(zoomScale * 100)}%</span>
+
+        {/* Reset Zoom Button */}
+        <button
+          type="button"
+          className="fullscreen-control-icon-btn"
+          onClick={handleResetZoom}
+          disabled={zoomScale === 1 && panPosition.x === 0 && panPosition.y === 0}
+          aria-label="Reset zoom and pan"
+          title="Reset zoom"
+        >
+          <RotateCcw className="h-4 w-4" />
+        </button>
+
+        <div className="fullscreen-controls-divider" />
+
+        {/* Previous File Button */}
+        <button
+          type="button"
+          className="fullscreen-control-icon-btn"
+          onClick={onNavigatePrevious}
+          disabled={!hasPrevious}
+          aria-label="Previous file"
+          title="Previous file (Left Arrow)"
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </button>
+
+        {/* Next File Button */}
+        <button
+          type="button"
+          className="fullscreen-control-icon-btn"
+          onClick={onNavigateNext}
+          disabled={!hasNext}
+          aria-label="Next file"
+          title="Next file (Right Arrow)"
+        >
+          <ChevronRight className="h-4 w-4" />
+        </button>
       </div>
-    </ModalLayerPortal>
+
+      {/* Add Tags Modal (rendered as portal on top of base page layout) */}
+      {addTagsOpen && onAddTagToEntries && onCreateTag && onUpdateTag ? (
+        <AddTagsModal
+          open={addTagsOpen}
+          allTags={allTags}
+          selectedEntryIds={selectedEntry ? [selectedEntry.id] : []}
+          entryTagIdsByEntry={entryTagIdsByEntry}
+          onClose={() => {
+            setAddTagsOpen(false);
+            void onRefreshSelection?.();
+          }}
+          onAddTagToEntries={onAddTagToEntries}
+          onCreateTag={onCreateTag}
+          onUpdateTag={onUpdateTag}
+          onAfterTagChanged={async () => {
+            await onRefreshSelection?.();
+          }}
+        />
+      ) : null}
+    </div>
   );
 }

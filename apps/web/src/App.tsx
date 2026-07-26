@@ -9,7 +9,7 @@ import {
 
 import { api } from "@/api/client";
 import { ErrorPanel } from "@/components/ErrorPanel";
-import { FullScreenMediaModal } from "@/components/FullScreenMediaModal";
+import { FullScreenMediaView } from "@/components/FullScreenMediaModal";
 import { InspectorPane } from "@/components/InspectorPane";
 import { LibraryGate } from "@/components/LibraryGate";
 import { LibrarySwitcherModal } from "@/components/LibrarySwitcherModal";
@@ -471,6 +471,26 @@ export function App() {
             onOpen={openLibrary}
             onCreate={createLibrary}
           />
+        ) : fullScreenModalOpen ? (
+          <FullScreenMediaView
+            selectedEntry={selectedEntry}
+            preview={preview}
+            getMediaUrl={(entryId) => api.getMediaUrl(entryId)}
+            getThumbnailUrl={(entryId, options) => api.getThumbnailUrl(entryId, options)}
+            resolveApiUrl={(path) => api.resolveUrl(path)}
+            videoPreviewStartsMuted={videoPreviewStartsMuted}
+            onVideoPreviewUnmuted={handleVideoPreviewUnmuted}
+            onClose={() => setFullScreenModalOpen(false)}
+            onNavigatePrevious={navigatePrevious}
+            onNavigateNext={navigateNext}
+            hasPrevious={hasPrevious}
+            hasNext={hasNext}
+            allTags={allTags}
+            onAddTagToEntries={addTagToEntries}
+            onCreateTag={createTag}
+            onUpdateTag={updateTag}
+            onRefreshSelection={refreshSelectedEntry}
+          />
         ) : (
           <>
             <TopFilterBar
@@ -666,27 +686,6 @@ export function App() {
             </Button>
           </div>
         ) : null}
-
-        <FullScreenMediaModal
-          open={fullScreenModalOpen}
-          selectedEntry={selectedEntry}
-          preview={preview}
-          getMediaUrl={(entryId) => api.getMediaUrl(entryId)}
-          getThumbnailUrl={(entryId, options) => api.getThumbnailUrl(entryId, options)}
-          resolveApiUrl={(path) => api.resolveUrl(path)}
-          videoPreviewStartsMuted={videoPreviewStartsMuted}
-          onVideoPreviewUnmuted={handleVideoPreviewUnmuted}
-          onClose={() => setFullScreenModalOpen(false)}
-          onNavigatePrevious={navigatePrevious}
-          onNavigateNext={navigateNext}
-          hasPrevious={hasPrevious}
-          hasNext={hasNext}
-          allTags={allTags}
-          onAddTagToEntries={addTagToEntries}
-          onCreateTag={createTag}
-          onUpdateTag={updateTag}
-          onRefreshSelection={refreshSelectedEntry}
-        />
       </main>
     </ModalStackProvider>
   );
