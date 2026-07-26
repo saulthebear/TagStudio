@@ -92,7 +92,12 @@ body {
 }
 
 @utility panel {
-  @apply rounded-2xl border border-[var(--color-border-soft)] bg-[color-mix(in_oklab,var(--color-surface)_92%,white_8%)] p-3 shadow-[0_10px_30px_rgba(15,23,42,0.08)] backdrop-blur-sm;
+  border-radius: 1rem;
+  border: 1px solid var(--color-border-soft);
+  padding: 0.75rem;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+  backdrop-filter: blur(4px);
+  background-color: color-mix(in oklab, var(--color-surface) 92%, white 8%);
 }
 
 @utility panel-title {
@@ -418,6 +423,7 @@ select {
     opacity: 0;
     transform: translateY(-2px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -781,7 +787,7 @@ select {
   overflow: hidden;
 }
 
-.split-pane-single-open > .split-pane-region {
+.split-pane-single-open>.split-pane-region {
   flex: 1 1 auto;
   width: auto;
   height: auto;
@@ -825,15 +831,15 @@ select {
   left: calc(50% + 2px);
 }
 
-.split-pane-vertical > .split-pane-handle {
+.split-pane-vertical>.split-pane-handle {
   width: 100%;
   height: var(--split-handle-size);
   align-self: auto;
   cursor: row-resize;
 }
 
-.split-pane-vertical > .split-pane-handle::before,
-.split-pane-vertical > .split-pane-handle::after {
+.split-pane-vertical>.split-pane-handle::before,
+.split-pane-vertical>.split-pane-handle::after {
   width: 10px;
   height: 2px;
   border-radius: 1px;
@@ -841,11 +847,11 @@ select {
   transform: translate(-50%, -50%);
 }
 
-.split-pane-vertical > .split-pane-handle::before {
+.split-pane-vertical>.split-pane-handle::before {
   top: calc(50% - 2px);
 }
 
-.split-pane-vertical > .split-pane-handle::after {
+.split-pane-vertical>.split-pane-handle::after {
   top: calc(50% + 2px);
 }
 
@@ -870,11 +876,16 @@ select {
   flex: 0 0 auto;
   display: grid;
   place-items: center;
-  border: 1px solid var(--color-border-soft);
-  background: color-mix(in oklab, white 92%, #dbeafe 8%);
-  border-radius: 0.75rem;
-  min-width: 24px;
-  min-height: 24px;
+  border: none;
+  background: transparent;
+  border-radius: 0.5rem;
+  min-width: 0;
+  min-height: 0;
+  transition: background-color 0.12s ease;
+}
+
+.collapsed-rail:hover {
+  background: color-mix(in oklab, var(--color-border-soft) 36%, transparent);
 }
 
 .split-pane-horizontal > .collapsed-rail-horizontal {
@@ -882,22 +893,38 @@ select {
   width: var(--split-rail-size);
   height: 100%;
   align-self: stretch;
+  cursor: col-resize;
 }
 
 .split-pane-vertical > .collapsed-rail-vertical {
   flex-basis: var(--split-rail-size);
   height: var(--split-rail-size);
   width: 100%;
+  cursor: row-resize;
 }
 
 .collapsed-rail-toggle {
-  border: 1px solid var(--color-border-strong);
-  background: white;
-  border-radius: 999px;
-  font-size: 0.72rem;
-  width: 24px;
-  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  color: color-mix(in oklab, var(--color-border-strong) 78%, #334155 22%);
   cursor: pointer;
+  border-radius: 0.25rem;
+  transition: color 0.12s ease, transform 0.12s ease;
+}
+
+.collapsed-rail-toggle:hover {
+  color: var(--color-brand);
+  transform: scale(1.15);
+}
+
+.collapsed-rail-toggle:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 1px;
 }
 
 .overlay {
@@ -940,7 +967,7 @@ select {
   padding: 1rem;
 }
 
-.modal-layer-panel > * {
+.modal-layer-panel>* {
   pointer-events: auto;
 }
 
@@ -1578,14 +1605,22 @@ body.modal-dragging {
 }
 
 .dark .collapsed-rail {
-  background: color-mix(in oklab, #151d2a 92%, #1e3a8a 8%);
-  border-color: var(--color-border-soft);
+  background: transparent;
+  border: none;
+}
+
+.dark .collapsed-rail:hover {
+  background: color-mix(in oklab, var(--color-border-soft) 36%, transparent);
 }
 
 .dark .collapsed-rail-toggle {
-  border-color: var(--color-border-strong);
-  background: #151d2a;
-  color: #f1f5f9;
+  border: none;
+  background: transparent;
+  color: var(--color-muted);
+}
+
+.dark .collapsed-rail-toggle:hover {
+  color: #60a5fa;
 }
 
 .dark .overlay {
@@ -1892,7 +1927,3 @@ body.modal-dragging {
   color: #60a5fa !important;
   background: rgba(59, 130, 246, 0.25) !important;
 }
-
-
-
-

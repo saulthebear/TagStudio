@@ -189,7 +189,7 @@ export function InspectorPane({
         minSecondarySize={220}
         collapseThreshold={90}
         resetRatio={0.52}
-        railSize={26}
+        railSize={12}
         handleSize={12}
         className="inspector-split"
       />

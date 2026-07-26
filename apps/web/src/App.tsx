@@ -607,7 +607,7 @@ export function App() {
                   minSecondarySize={300}
                   collapseThreshold={120}
                   resetRatio={0.78}
-                  railSize={28}
+                  railSize={12}
                   handleSize={12}
                   className="main-split"
                 />

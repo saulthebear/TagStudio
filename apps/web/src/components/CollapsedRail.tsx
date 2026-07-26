@@ -1,4 +1,5 @@
 import type { PointerEvent } from "react";
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from "lucide-react";
 
 type CollapsedRailProps = {
   orientation: "horizontal" | "vertical";
@@ -8,15 +9,15 @@ type CollapsedRailProps = {
   onDragStart: (event: PointerEvent<HTMLDivElement>) => void;
 };
 
-function arrowFor(orientation: "horizontal" | "vertical", side: "start" | "end"): string {
+function renderChevron(orientation: "horizontal" | "vertical", side: "start" | "end") {
+  const className = "h-4 w-4 collapsed-rail-chevron";
   if (orientation === "horizontal") {
-    return side === "start" ? "▶" : "◀";
+    return side === "start" ? <ChevronRight className={className} /> : <ChevronLeft className={className} />;
   }
-  return side === "start" ? "▼" : "▲";
+  return side === "start" ? <ChevronDown className={className} /> : <ChevronUp className={className} />;
 }
 
 export function CollapsedRail({ orientation, side, label, onToggle, onDragStart }: CollapsedRailProps) {
-  const arrow = arrowFor(orientation, side);
   return (
     <div
       className={`collapsed-rail collapsed-rail-${orientation}`}
@@ -30,9 +31,11 @@ export function CollapsedRail({ orientation, side, label, onToggle, onDragStart 
         onClick={onToggle}
         onPointerDown={(event) => event.stopPropagation()}
         aria-label={`Expand ${label}`}
+        title={`Expand ${label}`}
       >
-        {arrow}
+        {renderChevron(orientation, side)}
       </button>
     </div>
   );
 }
+
