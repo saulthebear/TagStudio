@@ -13,7 +13,7 @@ import { type MouseEvent, type SyntheticEvent, useCallback, useEffect, useMemo, 
 import { AddTagsModal } from "@/components/AddTagsModal";
 import { MetadataContent } from "@/components/InspectorPane";
 
-type FullScreenMediaViewProps = {
+export type FullScreenMediaViewProps = {
   selectedEntry: EntryResponse | null;
   selectedEntryIds?: number[];
   selectedEntries?: EntrySummaryResponse[];

@@ -9,7 +9,7 @@ import {
 
 import { api } from "@/api/client";
 import { ErrorPanel } from "@/components/ErrorPanel";
-import { FullScreenMediaView } from "@/components/FullScreenMediaModal";
+import { FullScreenMediaView } from "@/components/FullScreenMediaView";
 import { InspectorPane } from "@/components/InspectorPane";
 import { LibraryGate } from "@/components/LibraryGate";
 import { LibrarySwitcherModal } from "@/components/LibrarySwitcherModal";
