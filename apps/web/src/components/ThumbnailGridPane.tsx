@@ -98,7 +98,7 @@ const ARCHIVE_SUFFIXES = new Set(["zip", "rar", "7z", "tar", "gz"]);
 
 const DEFAULT_TILE_SIZE = 180;
 const MIN_TILE_SIZE = 100;
-const MAX_TILE_SIZE = 320;
+const MAX_TILE_SIZE = 500;
 const TILE_SIZE_STEP = 10;
 const TILE_SIZE_STORAGE_KEY = "tagstudio:thumb-tile-size";
 
