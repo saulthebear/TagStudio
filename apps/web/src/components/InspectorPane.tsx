@@ -237,7 +237,7 @@ function PreviewContent({
 
   return (
     <div className="preview-content">
-      {!hasSelectedEntry ? <p className="text-sm text-slate-500">Select an entry to render preview.</p> : null}
+      {!hasSelectedEntry ? <p className="text-sm text-slate-500 dark:text-slate-400">Select an entry to render preview.</p> : null}
       {hasSelectedEntry && (preview?.preview_kind === "image" || preview?.preview_kind === "video") ? (
         <div className="inspector-media-wrapper">
           {preview.preview_kind === "image" ? (
@@ -435,7 +435,7 @@ function MetadataContent({
   }, [onRefreshSelection, onRemoveTagFromEntries, selectedEntryIds]);
 
   if (selectedCount === 0) {
-    return <p className="text-sm text-slate-500">Select one or more entries to inspect metadata.</p>;
+    return <p className="text-sm text-slate-500 dark:text-slate-400">Select one or more entries to inspect metadata.</p>;
   }
 
   const singleSelection = selectedCount === 1;
@@ -524,7 +524,7 @@ function MetadataContent({
                   <div className="mb-1 font-medium">{field.type_name}</div>
                   <div className="flex gap-2">
                     <input
-                      className="min-w-0 flex-1 rounded-xl border border-[var(--color-border-soft)] bg-white/95 px-2 py-1 text-sm"
+                      className="min-w-0 flex-1 rounded-xl border border-[var(--color-border-soft)] bg-white/95 px-2 py-1 text-sm dark:bg-slate-800/95 dark:text-slate-100"
                       value={fieldDrafts[field.type_key] ?? ""}
                       onChange={(event) => onFieldDraftChange(field.type_key, event.target.value)}
                     />
@@ -544,7 +544,7 @@ function MetadataContent({
             <strong>Add/Update Field</strong>
             <div className="flex gap-2">
               <select
-                className="rounded-xl border border-[var(--color-border-soft)] bg-white/95 px-2 py-1 text-sm"
+                className="rounded-xl border border-[var(--color-border-soft)] bg-white/95 px-2 py-1 text-sm dark:bg-slate-800/95 dark:text-slate-100"
                 value={newFieldKey}
                 onChange={(event) => onNewFieldKeyChange(event.target.value)}
               >
@@ -556,7 +556,7 @@ function MetadataContent({
                 ))}
               </select>
               <input
-                className="min-w-0 flex-1 rounded-xl border border-[var(--color-border-soft)] bg-white/95 px-2 py-1 text-sm"
+                className="min-w-0 flex-1 rounded-xl border border-[var(--color-border-soft)] bg-white/95 px-2 py-1 text-sm dark:bg-slate-800/95 dark:text-slate-100"
                 value={newFieldValue}
                 onChange={(event) => onNewFieldValueChange(event.target.value)}
                 placeholder="Field value"
@@ -568,7 +568,7 @@ function MetadataContent({
           </div>
         </>
       ) : (
-        <p className="text-sm text-slate-500">Field editing is available when a single entry is selected.</p>
+        <p className="text-sm text-slate-500 dark:text-slate-400">Field editing is available when a single entry is selected.</p>
       )}
 
       <AddTagsModal

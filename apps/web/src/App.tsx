@@ -32,6 +32,8 @@ import {
   toggleUntaggedInQuery
 } from "@/lib/entry-filters";
 
+import { useTheme } from "@/hooks/useTheme";
+
 function formatTrashFailureReason(reasonCode: TrashFailureReasonCode): string {
   switch (reasonCode) {
     case "ENTRY_NOT_FOUND":
@@ -52,6 +54,7 @@ function formatTrashFailureReason(reasonCode: TrashFailureReasonCode): string {
 }
 
 export function App() {
+  const { theme, setTheme } = useTheme();
   const [uiError, setUiError] = useState<string | null>(null);
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
   const [videoPreviewStartsMuted, setVideoPreviewStartsMuted] = useState(true);
@@ -472,6 +475,8 @@ export function App() {
               onRefresh={refreshLibrary}
               onOpenSettings={openSettings}
               onToggleMute={toggleVideoMute}
+              theme={theme}
+              onThemeChange={setTheme}
             />
 
             {refreshStatus ? <RefreshStatusPanel refreshStatus={refreshStatus} /> : null}
@@ -539,12 +544,14 @@ export function App() {
 
         <SettingsModal
           open={settingsOpen}
+          theme={theme}
           sortingMode={settingsDraft.sortingMode}
           ascending={settingsDraft.ascending}
           showHiddenEntries={settingsDraft.showHiddenEntries}
           pageSize={settingsDraft.pageSize}
           confirmBeforeTrash={settingsDraft.confirmBeforeTrash}
           savePending={savePending}
+          onThemeChange={setTheme}
           onSortingModeChange={(value) => setSettingsDraft((prev) => ({ ...prev, sortingMode: value }))}
           onAscendingChange={(value) => setSettingsDraft((prev) => ({ ...prev, ascending: value }))}
           onShowHiddenChange={(value) =>

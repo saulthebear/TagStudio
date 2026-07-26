@@ -61,13 +61,13 @@ export function EntryDetailPanel({
             <strong>Tag Actions:</strong>
             <div className="flex gap-2">
               <input
-                className="w-full rounded-xl border border-[var(--color-border-soft)] bg-white/95 px-2 py-1 text-sm"
+                className="w-full rounded-xl border border-[var(--color-border-soft)] bg-white/95 px-2 py-1 text-sm dark:bg-slate-800/95 dark:text-slate-100"
                 placeholder="Filter tags..."
                 value={tagQuery}
                 onChange={(event) => onTagQueryChange(event.target.value)}
               />
               <select
-                className="max-w-56 rounded-xl border border-[var(--color-border-soft)] bg-white/95 px-2 py-1 text-sm"
+                className="max-w-56 rounded-xl border border-[var(--color-border-soft)] bg-white/95 px-2 py-1 text-sm dark:bg-slate-800/95 dark:text-slate-100"
                 value={selectedTagId}
                 onChange={(event) => onSelectedTagChange(event.target.value)}
               >
@@ -103,7 +103,7 @@ export function EntryDetailPanel({
                   <div className="mb-1 font-medium">{field.type_name}</div>
                   <div className="flex gap-2">
                     <input
-                      className="w-full rounded-xl border border-[var(--color-border-soft)] bg-white/95 px-2 py-1 text-sm"
+                      className="w-full rounded-xl border border-[var(--color-border-soft)] bg-white/95 px-2 py-1 text-sm dark:bg-slate-800/95 dark:text-slate-100"
                       value={fieldDrafts[field.type_key] ?? ""}
                       onChange={(event) => onFieldDraftChange(field.type_key, event.target.value)}
                     />
@@ -123,7 +123,7 @@ export function EntryDetailPanel({
             <strong>Add/Update Field:</strong>
             <div className="flex gap-2">
               <select
-                className="rounded-xl border border-[var(--color-border-soft)] bg-white/95 px-2 py-1 text-sm"
+                className="rounded-xl border border-[var(--color-border-soft)] bg-white/95 px-2 py-1 text-sm dark:bg-slate-800/95 dark:text-slate-100"
                 value={newFieldKey}
                 onChange={(event) => onNewFieldKeyChange(event.target.value)}
               >
@@ -135,7 +135,7 @@ export function EntryDetailPanel({
                 ))}
               </select>
               <input
-                className="w-full rounded-xl border border-[var(--color-border-soft)] bg-white/95 px-2 py-1 text-sm"
+                className="w-full rounded-xl border border-[var(--color-border-soft)] bg-white/95 px-2 py-1 text-sm dark:bg-slate-800/95 dark:text-slate-100"
                 value={newFieldValue}
                 onChange={(event) => onNewFieldValueChange(event.target.value)}
                 placeholder="Field value"
@@ -147,7 +147,7 @@ export function EntryDetailPanel({
           </div>
         </div>
       ) : (
-        <p className="text-sm text-slate-500">Select a result to inspect tags and fields.</p>
+        <p className="text-sm text-slate-500 dark:text-slate-400">Select a result to inspect tags and fields.</p>
       )}
     </div>
   );

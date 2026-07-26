@@ -17,8 +17,8 @@ export function LibraryGate({
 }: LibraryGateProps) {
   return (
     <section className="library-gate panel" aria-label="Open or create a library">
-      <h1 className="m-0 text-3xl font-semibold tracking-tight text-slate-900">TagStudio</h1>
-      <p className="m-0 text-sm text-slate-600">
+      <h1 className="m-0 text-3xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">TagStudio</h1>
+      <p className="m-0 text-sm text-slate-600 dark:text-slate-300">
         Open a library to browse files, preview media, and edit tags.
       </p>
       <div className="library-gate-controls">

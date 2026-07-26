@@ -10,6 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
+import { type ThemeMode } from "@/hooks/useTheme";
 
 type TopFilterBarProps = {
   libraryPath: string;
@@ -27,6 +28,7 @@ type TopFilterBarProps = {
   refreshPending: boolean;
   searchResultsStale: boolean;
   videoMuted: boolean;
+  theme?: ThemeMode;
   onSearchInputChange: (value: string) => void;
   onSearch: () => void;
   onSortingModeChange: (value: SortingMode) => void;
@@ -37,6 +39,7 @@ type TopFilterBarProps = {
   onRefresh: () => void;
   onOpenSettings: () => void;
   onToggleMute: () => void;
+  onThemeChange?: (theme: ThemeMode) => void;
 };
 
 const SORTING_OPTIONS: Array<{ label: string; value: SortingMode }> = [
@@ -60,6 +63,7 @@ export function TopFilterBar({
   refreshPending,
   searchResultsStale,
   videoMuted,
+  theme,
   onSearchInputChange,
   onSearch,
   onSortingModeChange,
@@ -69,7 +73,8 @@ export function TopFilterBar({
   onOpenLibraryModal,
   onRefresh,
   onOpenSettings,
-  onToggleMute
+  onToggleMute,
+  onThemeChange
 }: TopFilterBarProps) {
   return (
     <section className="top-filter-bar panel">
@@ -165,6 +170,37 @@ export function TopFilterBar({
             <p className="top-filter-dropdown-hint">
               Advanced query detected. Untagged token removal is conservative.
             </p>
+          ) : null}
+
+          {onThemeChange && theme ? (
+            <>
+              <DropdownMenuSeparator className="top-filter-dropdown-separator" />
+              <DropdownMenuLabel className="top-filter-dropdown-label">
+                Theme
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator className="top-filter-dropdown-separator" />
+              <DropdownMenuCheckboxItem
+                checked={theme === "system"}
+                onCheckedChange={() => onThemeChange("system")}
+                onSelect={(e) => e.preventDefault()}
+              >
+                System (Auto)
+              </DropdownMenuCheckboxItem>
+              <DropdownMenuCheckboxItem
+                checked={theme === "light"}
+                onCheckedChange={() => onThemeChange("light")}
+                onSelect={(e) => e.preventDefault()}
+              >
+                Light
+              </DropdownMenuCheckboxItem>
+              <DropdownMenuCheckboxItem
+                checked={theme === "dark"}
+                onCheckedChange={() => onThemeChange("dark")}
+                onSelect={(e) => e.preventDefault()}
+              >
+                Dark
+              </DropdownMenuCheckboxItem>
+            </>
           ) : null}
         </DropdownMenuContent>
       </DropdownMenu>

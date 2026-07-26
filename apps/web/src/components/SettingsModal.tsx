@@ -1,14 +1,18 @@
 import { type SortingMode } from "@tagstudio/api-client";
 import { Button } from "@tagstudio/ui";
 
+import { type ThemeMode } from "@/hooks/useTheme";
+
 type SettingsModalProps = {
   open: boolean;
+  theme: ThemeMode;
   sortingMode: SortingMode;
   ascending: boolean;
   showHiddenEntries: boolean;
   pageSize: number;
   confirmBeforeTrash: boolean;
   savePending: boolean;
+  onThemeChange: (theme: ThemeMode) => void;
   onSortingModeChange: (value: SortingMode) => void;
   onAscendingChange: (value: boolean) => void;
   onShowHiddenChange: (value: boolean) => void;
@@ -26,12 +30,14 @@ const SORTING_OPTIONS: Array<{ label: string; value: SortingMode }> = [
 
 export function SettingsModal({
   open,
+  theme,
   sortingMode,
   ascending,
   showHiddenEntries,
   pageSize,
   confirmBeforeTrash,
   savePending,
+  onThemeChange,
   onSortingModeChange,
   onAscendingChange,
   onShowHiddenChange,
@@ -50,10 +56,23 @@ export function SettingsModal({
         className="overlay-panel panel"
         role="dialog"
         aria-modal="true"
-        aria-label="Search settings"
+        aria-label="App settings"
         onClick={(event) => event.stopPropagation()}
       >
-        <h2 className="panel-title mt-0">Search Defaults</h2>
+        <h2 className="panel-title mt-0">App Settings</h2>
+
+        <label className="settings-row">
+          <span>Theme</span>
+          <select
+            className="input-base"
+            value={theme}
+            onChange={(event) => onThemeChange(event.target.value as ThemeMode)}
+          >
+            <option value="system">System (Auto)</option>
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+          </select>
+        </label>
 
         <label className="settings-row">
           <span>Default sort</span>
@@ -126,3 +145,4 @@ export function SettingsModal({
     </div>
   );
 }
+

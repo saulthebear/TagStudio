@@ -516,8 +516,7 @@ test("applies top-bar filter menu toggles with live query sync and request flags
   await expect.poll(() => searchRequests.length).toBe(1);
 
   const searchInput = page.getByPlaceholder("Search entries (e.g. tag:\"favorite\" or path:\"*.png\")");
-  const searchButton = page.locator(".top-filter-search-action");
-  const filterButton = page.getByRole("button", { name: "Open filters menu" });
+  const filterButton = page.getByRole("button", { name: "Open view settings" });
 
   await searchInput.fill("special:untagged");
   await filterButton.click();
@@ -530,13 +529,13 @@ test("applies top-bar filter menu toggles with live query sync and request flags
   await expect.poll(() => searchRequests.at(-1)?.query).toBe("");
 
   await searchInput.fill("tag:foo");
-  await searchButton.click();
+  await searchInput.press("Enter");
   await expect.poll(() => searchRequests.at(-1)?.query).toBe("tag:foo");
 
   await filterButton.click();
   await page.getByRole("menuitemcheckbox", { name: "Untagged" }).click();
   await expect.poll(() => searchRequests.at(-1)?.query).toBe("tag:foo special:untagged");
-  await expect(filterButton).toHaveClass(/filter-trigger-warning/);
+  await expect(filterButton).toHaveClass(/border-amber-500/);
   await filterButton.click();
   await expect(page.getByText("usually returns zero results")).toBeVisible();
 
@@ -2057,3 +2056,68 @@ test("keeps split panes within bounds after collapse/expand and divider drags", 
   const hasHorizontalOverflowAtEnd = await hasNoHorizontalOverflow(page);
   expect(hasHorizontalOverflowAtEnd).toBe(true);
 });
+
+test("toggles dark mode theme via settings modal and persists to html element", async ({ page }) => {
+  await page.route(`${API_BASE_URL}/api/v1/**`, async (route) => {
+    const request = route.request();
+    const { pathname } = new URL(request.url());
+
+    if (pathname === "/api/v1/libraries/state") {
+      await fulfillJson(route, {
+        is_open: true,
+        library_path: "/tmp/library",
+        entries_count: 1,
+        tags_count: 0
+      });
+      return;
+    }
+
+    if (pathname === "/api/v1/settings") {
+      await fulfillJson(route, {
+        sorting_mode: "file.date_added",
+        ascending: false,
+        show_hidden_entries: false,
+        page_size: 200,
+        layout: {
+          main_split_ratio: 0.78,
+          main_left_collapsed: false,
+          main_right_collapsed: false,
+          main_last_open_ratio: 0.78,
+          inspector_split_ratio: 0.52,
+          preview_collapsed: false,
+          metadata_collapsed: false,
+          inspector_last_open_ratio: 0.52,
+          mobile_active_pane: "grid"
+        }
+      });
+      return;
+    }
+
+    if (pathname === "/api/v1/field-types" || pathname === "/api/v1/tags") {
+      await fulfillJson(route, []);
+      return;
+    }
+
+    if (pathname === "/api/v1/search" && request.method() === "POST") {
+      await fulfillJson(route, { total_count: 0, ids: [], entries: [] });
+      return;
+    }
+
+    await fulfillJson(route, { detail: `Unmocked endpoint: ${pathname}` }, 404);
+  });
+
+  await page.goto("/");
+  await expect(page.locator("html")).not.toHaveClass(/dark/);
+
+  // Open settings and change theme to Dark
+  await page.getByRole("button", { name: "Settings" }).click();
+  await expect(page.getByRole("dialog", { name: "App settings" })).toBeVisible();
+
+  const themeSelect = page.getByRole("combobox", { name: "Theme" });
+  await themeSelect.selectOption("dark");
+
+  await expect(page.locator("html")).toHaveClass(/dark/);
+  const storedTheme = await page.evaluate(() => localStorage.getItem("tagstudio-theme"));
+  expect(storedTheme).toBe("dark");
+});
+
