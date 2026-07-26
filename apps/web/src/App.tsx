@@ -636,6 +636,7 @@ export function App() {
           onConfirmBeforeTrashChange={(value) =>
             setSettingsDraft((prev) => ({ ...prev, confirmBeforeTrash: value }))
           }
+          onOpenShortcutsHelp={handleToggleShortcutsHelp}
           onSave={handleSaveSettings}
           onClose={closeSettings}
         />

@@ -18,6 +18,7 @@ type SettingsModalProps = {
   onShowHiddenChange: (value: boolean) => void;
   onPageSizeChange: (value: number) => void;
   onConfirmBeforeTrashChange: (value: boolean) => void;
+  onOpenShortcutsHelp?: () => void;
   onSave: () => void;
   onClose: () => void;
 };
@@ -43,6 +44,7 @@ export function SettingsModal({
   onShowHiddenChange,
   onPageSizeChange,
   onConfirmBeforeTrashChange,
+  onOpenShortcutsHelp,
   onSave,
   onClose
 }: SettingsModalProps) {
@@ -132,6 +134,23 @@ export function SettingsModal({
           />
           <span>Ask before moving files to Trash</span>
         </label>
+
+        {onOpenShortcutsHelp ? (
+          <div className="settings-row flex items-center justify-between pt-1">
+            <span>Keyboard Shortcuts</span>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                onClose();
+                onOpenShortcutsHelp();
+              }}
+            >
+              View Shortcuts (?)
+            </Button>
+          </div>
+        ) : null}
 
         <div className="overlay-panel-actions">
           <Button onClick={onSave} disabled={savePending}>

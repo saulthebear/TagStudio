@@ -228,18 +228,6 @@ export function TopFilterBar({
         {videoMuted ? <VolumeX size={18} /> : <Volume2 size={18} />}
       </button>
 
-      {onOpenShortcutsHelp ? (
-        <button
-          type="button"
-          className="filter-icon-btn"
-          onClick={onOpenShortcutsHelp}
-          title="Keyboard Shortcuts (?)"
-          aria-label="Keyboard Shortcuts"
-        >
-          <Keyboard size={18} />
-        </button>
-      ) : null}
-
       <button
         type="button"
         className="filter-icon-btn"
