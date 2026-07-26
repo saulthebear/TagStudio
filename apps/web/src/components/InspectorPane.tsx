@@ -8,6 +8,7 @@ import {
   type TagUpdatePayload
 } from "@tagstudio/api-client";
 import { Button } from "@tagstudio/ui";
+import { Maximize2 } from "lucide-react";
 import { type SyntheticEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { AddTagsModal } from "@/components/AddTagsModal";
@@ -59,6 +60,7 @@ type InspectorPaneProps = {
   addTagsModalRequestNonce: number;
   videoPreviewStartsMuted: boolean;
   onVideoPreviewUnmuted: () => void;
+  onOpenFullScreen?: () => void;
 };
 
 type AggregateTagRow = {
@@ -114,7 +116,8 @@ export function InspectorPane({
   mobileSection,
   addTagsModalRequestNonce,
   videoPreviewStartsMuted,
-  onVideoPreviewUnmuted
+  onVideoPreviewUnmuted,
+  onOpenFullScreen
 }: InspectorPaneProps) {
   const previewSection = (
     <div className="inspector-section">
@@ -127,6 +130,7 @@ export function InspectorPane({
         resolveApiUrl={resolveApiUrl}
         videoPreviewStartsMuted={videoPreviewStartsMuted}
         onVideoPreviewUnmuted={onVideoPreviewUnmuted}
+        onOpenFullScreen={onOpenFullScreen}
       />
     </div>
   );
@@ -208,6 +212,7 @@ type PreviewContentProps = {
   resolveApiUrl: (path: string) => string;
   videoPreviewStartsMuted: boolean;
   onVideoPreviewUnmuted: () => void;
+  onOpenFullScreen?: () => void;
 };
 
 function PreviewContent({
@@ -217,7 +222,8 @@ function PreviewContent({
   getThumbnailUrl,
   resolveApiUrl,
   videoPreviewStartsMuted,
-  onVideoPreviewUnmuted
+  onVideoPreviewUnmuted,
+  onOpenFullScreen
 }: PreviewContentProps) {
   const hasSelectedEntry = selectedEntry !== null;
   const animatedImageSource = useMemo(() => {
@@ -240,6 +246,17 @@ function PreviewContent({
       {!hasSelectedEntry ? <p className="text-sm text-slate-500 dark:text-slate-400">Select an entry to render preview.</p> : null}
       {hasSelectedEntry && (preview?.preview_kind === "image" || preview?.preview_kind === "video") ? (
         <div className="inspector-media-wrapper">
+          {onOpenFullScreen ? (
+            <button
+              type="button"
+              className="preview-fullscreen-btn"
+              onClick={onOpenFullScreen}
+              aria-label="Open full screen"
+              title="Full Screen"
+            >
+              <Maximize2 className="h-4 w-4" />
+            </button>
+          ) : null}
           {preview.preview_kind === "image" ? (
             <img
               src={

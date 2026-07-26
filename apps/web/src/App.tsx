@@ -9,6 +9,7 @@ import {
 
 import { api } from "@/api/client";
 import { ErrorPanel } from "@/components/ErrorPanel";
+import { FullScreenMediaModal } from "@/components/FullScreenMediaModal";
 import { InspectorPane } from "@/components/InspectorPane";
 import { LibraryGate } from "@/components/LibraryGate";
 import { LibrarySwitcherModal } from "@/components/LibrarySwitcherModal";
@@ -58,6 +59,7 @@ export function App() {
   const [uiError, setUiError] = useState<string | null>(null);
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
   const [videoPreviewStartsMuted, setVideoPreviewStartsMuted] = useState(true);
+  const [fullScreenModalOpen, setFullScreenModalOpen] = useState(false);
 
   const onClearError = useCallback(() => {
     setUiError(null);
@@ -228,6 +230,23 @@ export function App() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [closeSettings, settingsOpen]);
 
+  useEffect(() => {
+    if (!fullScreenModalOpen) {
+      return;
+    }
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") {
+        return;
+      }
+      event.preventDefault();
+      setFullScreenModalOpen(false);
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [fullScreenModalOpen]);
+
   const liveUntaggedState = useMemo(() => getUntaggedTokenState(searchInput), [searchInput]);
   const showUntaggedConflict = useMemo(() => hasUntaggedTagConflict(searchInput), [searchInput]);
   const showConservativeHint = useMemo(() => !isFlatQuery(searchInput), [searchInput]);
@@ -257,7 +276,11 @@ export function App() {
     addTagsModalRequestNonce,
     confirmTrashDialog,
     pasteTagsFromMetadata,
-    handleGridSelect
+    handleGridSelect,
+    navigatePrevious,
+    navigateNext,
+    hasPrevious,
+    hasNext
   } = useAppInteractions({
     activeLibraryPath,
     entries,
@@ -429,6 +452,7 @@ export function App() {
       addTagsModalRequestNonce={addTagsModalRequestNonce}
       videoPreviewStartsMuted={videoPreviewStartsMuted}
       onVideoPreviewUnmuted={handleVideoPreviewUnmuted}
+      onOpenFullScreen={() => setFullScreenModalOpen(true)}
     />
   );
 
@@ -642,6 +666,22 @@ export function App() {
             </Button>
           </div>
         ) : null}
+
+        <FullScreenMediaModal
+          open={fullScreenModalOpen}
+          selectedEntry={selectedEntry}
+          preview={preview}
+          getMediaUrl={(entryId) => api.getMediaUrl(entryId)}
+          getThumbnailUrl={(entryId, options) => api.getThumbnailUrl(entryId, options)}
+          resolveApiUrl={(path) => api.resolveUrl(path)}
+          videoPreviewStartsMuted={videoPreviewStartsMuted}
+          onVideoPreviewUnmuted={handleVideoPreviewUnmuted}
+          onClose={() => setFullScreenModalOpen(false)}
+          onNavigatePrevious={navigatePrevious}
+          onNavigateNext={navigateNext}
+          hasPrevious={hasPrevious}
+          hasNext={hasNext}
+        />
       </main>
     </ModalStackProvider>
   );

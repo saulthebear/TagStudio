@@ -71,6 +71,10 @@ type UseAppInteractionsResult = {
   confirmTrashDialog: () => void;
   pasteTagsFromMetadata: (targetEntryIds: number[]) => void;
   handleGridSelect: (entryId: number, event: ReactMouseEvent<HTMLButtonElement>) => void;
+  navigatePrevious: () => void;
+  navigateNext: () => void;
+  hasPrevious: boolean;
+  hasNext: boolean;
 };
 
 export function useAppInteractions({
@@ -417,6 +421,85 @@ export function useAppInteractions({
     ]
   );
 
+  const navigatePrevious = useCallback(() => {
+    if (entries.length === 0) return;
+    const currentIndex = selectedEntryId !== null ? entries.findIndex((e) => e.id === selectedEntryId) : -1;
+    let nextIndex: number;
+    if (currentIndex <= 0) {
+      nextIndex = 0;
+    } else {
+      nextIndex = currentIndex - 1;
+    }
+    const nextEntry = entries[nextIndex];
+    if (nextEntry) {
+      setSelectedEntryIds([nextEntry.id]);
+      setSelectionAnchorId(nextEntry.id);
+      selectEntry(nextEntry.id);
+    }
+  }, [entries, selectEntry, selectedEntryId]);
+
+  const navigateNext = useCallback(() => {
+    if (entries.length === 0) return;
+    const currentIndex = selectedEntryId !== null ? entries.findIndex((e) => e.id === selectedEntryId) : -1;
+    let nextIndex: number;
+    if (currentIndex < 0) {
+      nextIndex = 0;
+    } else if (currentIndex >= entries.length - 1) {
+      nextIndex = entries.length - 1;
+    } else {
+      nextIndex = currentIndex + 1;
+    }
+    const nextEntry = entries[nextIndex];
+    if (nextEntry) {
+      setSelectedEntryIds([nextEntry.id]);
+      setSelectionAnchorId(nextEntry.id);
+      selectEntry(nextEntry.id);
+    }
+  }, [entries, selectEntry, selectedEntryId]);
+
+  const hasPrevious = useMemo(() => {
+    if (entries.length === 0 || selectedEntryId === null) return false;
+    const currentIndex = entries.findIndex((e) => e.id === selectedEntryId);
+    return currentIndex > 0;
+  }, [entries, selectedEntryId]);
+
+  const hasNext = useMemo(() => {
+    if (entries.length === 0 || selectedEntryId === null) return false;
+    const currentIndex = entries.findIndex((e) => e.id === selectedEntryId);
+    return currentIndex >= 0 && currentIndex < entries.length - 1;
+  }, [entries, selectedEntryId]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") {
+        return;
+      }
+
+      const activeEl = document.activeElement;
+      if (
+        activeEl &&
+        (activeEl.tagName === "INPUT" ||
+          activeEl.tagName === "TEXTAREA" ||
+          activeEl.tagName === "SELECT" ||
+          (activeEl as HTMLElement).isContentEditable ||
+          activeEl.getAttribute("role") === "textbox")
+      ) {
+        return;
+      }
+
+      if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        navigatePrevious();
+      } else if (event.key === "ArrowRight") {
+        event.preventDefault();
+        navigateNext();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [navigateNext, navigatePrevious]);
+
   return {
     selectedEntryIds,
     hasPasteableTags,
@@ -434,6 +517,10 @@ export function useAppInteractions({
     addTagsModalRequestNonce,
     confirmTrashDialog,
     pasteTagsFromMetadata,
-    handleGridSelect
+    handleGridSelect,
+    navigatePrevious,
+    navigateNext,
+    hasPrevious,
+    hasNext
   };
 }

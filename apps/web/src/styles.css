@@ -1610,3 +1610,159 @@ body.modal-dragging {
   background: color-mix(in oklab, #3b82f6 20%, #151d2a 80%);
 }
 
+/* Preview Pane Fullscreen Button Overlay */
+.preview-fullscreen-btn {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  z-index: 10;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(15, 23, 42, 0.65);
+  color: #f8fafc;
+  backdrop-filter: blur(8px);
+  cursor: pointer;
+  opacity: 0.75;
+  transition: opacity 0.15s ease, background-color 0.15s ease, transform 0.15s ease;
+}
+
+.inspector-media-wrapper:hover .preview-fullscreen-btn {
+  opacity: 1;
+}
+
+.preview-fullscreen-btn:hover {
+  background: rgba(15, 23, 42, 0.9);
+  color: #ffffff;
+  transform: scale(1.05);
+}
+
+/* Full Screen Media Modal */
+.fullscreen-modal-overlay {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(3, 7, 18, 0.94);
+  backdrop-filter: blur(16px);
+  display: flex;
+  user-select: none;
+  overflow: hidden;
+}
+
+.fullscreen-modal-viewport {
+  position: relative;
+  flex: 1;
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.fullscreen-media-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 96vw;
+  max-height: 98vh;
+  will-change: transform;
+}
+
+.fullscreen-media-img,
+.fullscreen-media-video {
+  max-width: 96vw;
+  max-height: 98vh;
+  object-fit: contain;
+  border-radius: 0.375rem;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6);
+}
+
+/* Floating Vertical Control Bar on Right */
+.fullscreen-controls-bar {
+  position: absolute;
+  right: 1.5rem;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.85rem 0.6rem;
+  background: rgba(15, 23, 42, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 9999px;
+  backdrop-filter: blur(12px);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+}
+
+.fullscreen-control-icon-btn {
+  background: transparent;
+  border: none;
+  color: #cbd5e1;
+  padding: 0.4rem;
+  border-radius: 9999px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.fullscreen-control-icon-btn:hover:not(:disabled) {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.fullscreen-control-icon-btn:disabled {
+  color: #475569;
+  cursor: not-allowed;
+}
+
+.fullscreen-close-icon-btn:hover:not(:disabled) {
+  color: #f87171;
+  background: rgba(239, 68, 68, 0.2);
+}
+
+.fullscreen-zoom-slider-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 90px;
+  width: 24px;
+  margin: 0.25rem 0;
+}
+
+.fullscreen-zoom-slider {
+  writing-mode: bt-lr;
+  -webkit-appearance: slider-vertical;
+  width: 100%;
+  height: 100%;
+  accent-color: #3b82f6;
+  cursor: pointer;
+}
+
+.fullscreen-zoom-badge {
+  color: #93c5fd;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.fullscreen-controls-divider {
+  width: 1.25rem;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.18);
+  margin: 0.1rem 0;
+}
+
+
+
