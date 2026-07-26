@@ -1,11 +1,22 @@
-import { type EntryResponse, type PreviewResponse, type TagCreatePayload, type TagResponse, type TagUpdatePayload } from "@tagstudio/api-client";
-import { ChevronLeft, ChevronRight, RotateCcw, Tag, X, ZoomIn, ZoomOut } from "lucide-react";
+import {
+  type EntryResponse,
+  type EntrySummaryResponse,
+  type FieldTypeResponse,
+  type PreviewResponse,
+  type TagCreatePayload,
+  type TagResponse,
+  type TagUpdatePayload
+} from "@tagstudio/api-client";
+import { ChevronLeft, ChevronRight, FileText, RotateCcw, Tag, X, ZoomIn, ZoomOut } from "lucide-react";
 import { type MouseEvent, type SyntheticEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { AddTagsModal } from "@/components/AddTagsModal";
+import { MetadataContent } from "@/components/InspectorPane";
 
 type FullScreenMediaViewProps = {
   selectedEntry: EntryResponse | null;
+  selectedEntryIds?: number[];
+  selectedEntries?: EntrySummaryResponse[];
   preview: PreviewResponse | undefined;
   getMediaUrl: (entryId: number) => string;
   getThumbnailUrl: (
@@ -25,10 +36,25 @@ type FullScreenMediaViewProps = {
   hasPrevious: boolean;
   hasNext: boolean;
   allTags?: TagResponse[];
+  fieldTypes?: FieldTypeResponse[];
+  fieldDrafts?: Record<string, string>;
+  newFieldKey?: string;
+  newFieldValue?: string;
+  tagMutationPending?: boolean;
+  tagEditPending?: boolean;
+  updateFieldPending?: boolean;
+  canPasteTags?: boolean;
   onAddTagToEntries?: (entryIds: number[], tagId: number) => Promise<void>;
+  onPasteTagsToEntries?: (entryIds: number[]) => void;
+  onRemoveTagFromEntries?: (entryIds: number[], tagId: number) => Promise<void>;
   onCreateTag?: (payload: TagCreatePayload) => Promise<TagResponse | null>;
   onUpdateTag?: (tagId: number, payload: TagUpdatePayload) => Promise<TagResponse | null>;
   onRefreshSelection?: () => Promise<void>;
+  onFieldDraftChange?: (fieldKey: string, value: string) => void;
+  onSaveField?: (fieldKey: string, value: string) => void;
+  onNewFieldKeyChange?: (value: string) => void;
+  onNewFieldValueChange?: (value: string) => void;
+  onApplyField?: () => void;
 };
 
 const MIN_ZOOM = 1;
@@ -49,6 +75,8 @@ function isAnimatedFormat(suffix?: string | null, mediaType?: string | null): bo
 
 export function FullScreenMediaView({
   selectedEntry,
+  selectedEntryIds = [],
+  selectedEntries = [],
   preview,
   getMediaUrl,
   getThumbnailUrl,
@@ -61,15 +89,31 @@ export function FullScreenMediaView({
   hasPrevious,
   hasNext,
   allTags = [],
+  fieldTypes = [],
+  fieldDrafts = {},
+  newFieldKey = "",
+  newFieldValue = "",
+  tagMutationPending = false,
+  tagEditPending = false,
+  updateFieldPending = false,
+  canPasteTags = false,
   onAddTagToEntries,
+  onPasteTagsToEntries,
+  onRemoveTagFromEntries,
   onCreateTag,
   onUpdateTag,
-  onRefreshSelection
+  onRefreshSelection,
+  onFieldDraftChange,
+  onSaveField,
+  onNewFieldKeyChange,
+  onNewFieldValueChange,
+  onApplyField
 }: FullScreenMediaViewProps) {
   const [zoomScale, setZoomScale] = useState(1);
   const [panPosition, setPanPosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [addTagsOpen, setAddTagsOpen] = useState(false);
+  const [metadataOpen, setMetadataOpen] = useState(false);
   const dragStartRef = useRef<{ x: number; y: number; initialPanX: number; initialPanY: number } | null>(null);
 
   // Reset zoom & pan when selected entry changes
@@ -172,6 +216,11 @@ export function FullScreenMediaView({
     return new Map([[selectedEntry.id, new Set(selectedEntry.tags.map((t) => t.id))]]);
   }, [selectedEntry]);
 
+  const effectiveSelectedEntryIds = useMemo(() => {
+    if (selectedEntryIds.length > 0) return selectedEntryIds;
+    return selectedEntry ? [selectedEntry.id] : [];
+  }, [selectedEntry, selectedEntryIds]);
+
   if (!selectedEntry) {
     return null;
   }
@@ -183,7 +232,7 @@ export function FullScreenMediaView({
     <div className="fullscreen-modal-overlay" onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp}>
       {/* Media Viewport (Full Screen Base Layout) */}
       <div
-        className="fullscreen-modal-viewport"
+        className={`fullscreen-modal-viewport ${metadataOpen ? "fullscreen-viewport-with-drawer" : ""}`}
         onWheel={handleWheel}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
@@ -235,6 +284,63 @@ export function FullScreenMediaView({
         </div>
       </div>
 
+      {/* Collapsable Metadata Side Drawer */}
+      <aside className={`fullscreen-metadata-drawer ${metadataOpen ? "fullscreen-metadata-drawer-open" : ""}`}>
+        <div className="fullscreen-drawer-header">
+          <h2 className="text-base font-semibold text-slate-100 m-0">Metadata</h2>
+          <button
+            type="button"
+            className="fullscreen-control-icon-btn"
+            onClick={() => setMetadataOpen(false)}
+            aria-label="Close metadata panel"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <div className="fullscreen-drawer-body">
+          {onAddTagToEntries &&
+          onPasteTagsToEntries &&
+          onRemoveTagFromEntries &&
+          onCreateTag &&
+          onUpdateTag &&
+          onRefreshSelection &&
+          onFieldDraftChange &&
+          onSaveField &&
+          onNewFieldKeyChange &&
+          onNewFieldValueChange &&
+          onApplyField ? (
+            <MetadataContent
+              selectedEntry={selectedEntry}
+              selectedEntryIds={effectiveSelectedEntryIds}
+              selectedEntries={selectedEntries}
+              fieldDrafts={fieldDrafts}
+              newFieldKey={newFieldKey}
+              newFieldValue={newFieldValue}
+              allTags={allTags}
+              fieldTypes={fieldTypes}
+              tagMutationPending={tagMutationPending}
+              tagEditPending={tagEditPending}
+              updateFieldPending={updateFieldPending}
+              canPasteTags={canPasteTags}
+              onAddTagToEntries={onAddTagToEntries}
+              onPasteTagsToEntries={onPasteTagsToEntries}
+              onRemoveTagFromEntries={onRemoveTagFromEntries}
+              onCreateTag={onCreateTag}
+              onUpdateTag={onUpdateTag}
+              onRefreshSelection={onRefreshSelection}
+              onFieldDraftChange={onFieldDraftChange}
+              onSaveField={onSaveField}
+              onNewFieldKeyChange={onNewFieldKeyChange}
+              onNewFieldValueChange={onNewFieldValueChange}
+              onApplyField={onApplyField}
+              openAddTagsRequestNonce={0}
+            />
+          ) : (
+            <p className="text-sm text-slate-400">Metadata not available.</p>
+          )}
+        </div>
+      </aside>
+
       {/* Floating Vertical Control Bar on Right */}
       <div className="fullscreen-controls-bar" onClick={(e) => e.stopPropagation()}>
         {/* Close Button (returns to standard view) */}
@@ -250,6 +356,17 @@ export function FullScreenMediaView({
 
         <div className="fullscreen-controls-divider" />
 
+        {/* Metadata Panel Toggle Button */}
+        <button
+          type="button"
+          className={`fullscreen-control-icon-btn ${metadataOpen ? "fullscreen-control-icon-btn-active" : ""}`}
+          onClick={() => setMetadataOpen((prev) => !prev)}
+          aria-label="Toggle metadata panel"
+          title="Toggle Metadata Panel"
+        >
+          <FileText className="h-4 w-4" />
+        </button>
+
         {/* Add Tag Button */}
         {onAddTagToEntries && onCreateTag && onUpdateTag ? (
           <button
@@ -263,7 +380,7 @@ export function FullScreenMediaView({
           </button>
         ) : null}
 
-        {onAddTagToEntries ? <div className="fullscreen-controls-divider" /> : null}
+        <div className="fullscreen-controls-divider" />
 
         {/* Zoom In Button */}
         <button

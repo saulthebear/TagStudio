@@ -856,7 +856,7 @@ test("defers special:untagged result refresh until explicit search", async ({ pa
   await expect(page.locator(".top-filter-stale-pill")).toBeVisible();
   await expect(searchButton).toHaveClass(/btn-search-stale/);
 
-  await page.getByRole("button", { name: "Done" }).click();
+  await page.getByRole("button", { name: "Close" }).click();
   await expect(page.locator(".metadata-tag-chip").first()).toContainText("Favorite");
 
   await page.locator(".top-filter-stale-pill").click();
@@ -870,7 +870,7 @@ test("defers special:untagged result refresh until explicit search", async ({ pa
   await page.getByRole("button", { name: "Add Tag" }).click();
   await page.getByRole("button", { name: /Favorite/ }).first().click();
   await expect.poll(() => addTagRequests.length).toBe(2);
-  await page.getByRole("button", { name: "Done" }).click();
+  await page.getByRole("button", { name: "Close" }).click();
   await expect(page.locator(".top-filter-stale-pill")).toBeVisible();
 
   const searchCountBeforeEnter = searchRequests.length;
@@ -1017,7 +1017,7 @@ test("marks results stale for non-untagged tag changes until explicit search", a
   await expect.poll(() => searchRequests.length).toBe(searchCountAfterMutation);
   await expect(page.locator(".top-filter-stale-pill")).toBeVisible();
 
-  await page.getByRole("button", { name: "Done" }).click();
+  await page.getByRole("button", { name: "Close" }).click();
   await page.locator(".top-filter-search-action").click();
   await expect.poll(() => searchRequests.length).toBe(searchCountAfterMutation + 1);
   await expect(page.locator(".top-filter-stale-pill")).toHaveCount(0);
@@ -1167,7 +1167,7 @@ test("keeps stale hint visible when a manual search fails", async ({ page }) => 
   await page.locator(".thumb-card").filter({ hasText: "error-case.png" }).click();
   await page.getByRole("button", { name: "Add Tag" }).click();
   await page.getByRole("button", { name: /Queue/ }).first().click();
-  await page.getByRole("button", { name: "Done" }).click();
+  await page.getByRole("button", { name: "Close" }).click();
   await expect(page.locator(".top-filter-stale-pill")).toBeVisible();
 
   failNextSearch = true;
@@ -1354,7 +1354,7 @@ test("refresh completion clears stale state via non-append search", async ({ pag
   await page.locator(".thumb-card").filter({ hasText: "refresh-case.png" }).click();
   await page.getByRole("button", { name: "Add Tag" }).click();
   await page.getByRole("button", { name: /Needs Review/ }).first().click();
-  await page.getByRole("button", { name: "Done" }).click();
+  await page.getByRole("button", { name: "Close" }).click();
   await expect(page.locator(".top-filter-stale-pill")).toBeVisible();
 
   const searchCountBeforeRefresh = searchRequests.length;
@@ -1774,7 +1774,7 @@ test("supports add-tags modal create-and-add workflow", async ({ page }) => {
   await expectDialogWithinViewport(page, addTagsDialog, 8);
   await dragDialogBy(page, addTagsDialog, addTagsDragHandle, { x: 90, y: 0 });
   await expectDialogWithinViewport(page, addTagsDialog, 8);
-  await expect(page.locator(".modal-layer-backdrop-dim")).toHaveCount(1);
+  await expect(page.locator(".modal-layer-backdrop-dim")).toHaveCount(0);
 
   await searchTags.press("Control+Enter");
   const editTagDialog = page.getByRole("dialog", { name: "Edit tag" });
@@ -1835,7 +1835,7 @@ test("supports add-tags modal create-and-add workflow", async ({ page }) => {
   await expect(editTagDialog).toBeVisible();
   await editTagDialog.getByRole("button", { name: "Cancel" }).click();
 
-  await page.getByRole("button", { name: "Done" }).click();
+  await page.getByRole("button", { name: "Close" }).click();
   const colorMetadataChip = page.locator(".metadata-tag-chip").filter({ hasText: "Color (Design)" }).first();
   await expect(colorMetadataChip).toBeVisible();
   await expect(colorMetadataChip).toHaveAttribute("style", /background-color:/);

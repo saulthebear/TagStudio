@@ -1,5 +1,5 @@
 import { type TagCreatePayload, type TagResponse, type TagUpdatePayload } from "@tagstudio/api-client";
-import { Button } from "@tagstudio/ui";
+import { X } from "lucide-react";
 import { useMemo } from "react";
 import { Virtuoso } from "react-virtuoso";
 
@@ -21,15 +21,6 @@ type AddTagsModalProps = {
   onUpdateTag: (tagId: number, payload: TagUpdatePayload) => Promise<TagResponse | null>;
   onAfterTagChanged: () => Promise<void>;
 };
-
-const LIMIT_OPTIONS: Array<{ label: string; value: number }> = [
-  { label: "25", value: 25 },
-  { label: "50", value: 50 },
-  { label: "100", value: 100 },
-  { label: "250", value: 250 },
-  { label: "500", value: 500 },
-  { label: "All", value: -1 }
-];
 
 export function AddTagsModal({
   open,
@@ -72,7 +63,7 @@ export function AddTagsModal({
   }
 
   return (
-    <ModalLayerPortal open={open} onBackdropClick={onClose}>
+    <ModalLayerPortal open={open} dimBackdrop={false} onBackdropClick={onClose}>
       <div
         ref={workflow.panelRef}
         className={`overlay-panel panel tag-workflow-panel add-tags-panel modal-draggable-panel ${workflow.isDragging ? "modal-panel-dragging" : ""}`}
@@ -81,25 +72,21 @@ export function AddTagsModal({
         aria-label="Add tags"
         style={workflow.panelStyle}
       >
-        <div className="modal-drag-handle" {...workflow.dragHandleProps}>
-          <h2 className="panel-title m-0">Add Tags</h2>
+        <div className="add-tags-header">
+          <div className="modal-drag-handle" {...workflow.dragHandleProps}>
+            <h2 className="panel-title m-0">Add Tags</h2>
+          </div>
+          <button
+            type="button"
+            className="add-tags-close-btn"
+            onClick={onClose}
+            aria-label="Close"
+          >
+            <X size={18} />
+          </button>
         </div>
 
         <div className="add-tags-controls">
-          <label className="settings-row add-tags-limit-row">
-            <span>View Limit:</span>
-            <select
-              className="input-base"
-              value={String(workflow.limit)}
-              onChange={(event) => workflow.setLimit(Number(event.target.value))}
-            >
-              {LIMIT_OPTIONS.map((option) => (
-                <option key={option.label} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
           <input
             ref={workflow.searchInputRef}
             className="input-base"
@@ -163,12 +150,6 @@ export function AddTagsModal({
               );
             }}
           />
-        </div>
-
-        <div className="overlay-panel-actions">
-          <Button variant="secondary" onClick={onClose}>
-            Done
-          </Button>
         </div>
 
         <TagEditorModal

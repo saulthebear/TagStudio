@@ -474,6 +474,8 @@ export function App() {
         ) : fullScreenModalOpen ? (
           <FullScreenMediaView
             selectedEntry={selectedEntry}
+            selectedEntryIds={selectedEntryIds}
+            selectedEntries={selectedEntries}
             preview={preview}
             getMediaUrl={(entryId) => api.getMediaUrl(entryId)}
             getThumbnailUrl={(entryId, options) => api.getThumbnailUrl(entryId, options)}
@@ -486,10 +488,25 @@ export function App() {
             hasPrevious={hasPrevious}
             hasNext={hasNext}
             allTags={allTags}
+            fieldTypes={fieldTypes}
+            fieldDrafts={fieldDrafts}
+            newFieldKey={newFieldKey}
+            newFieldValue={newFieldValue}
+            tagMutationPending={tagMutationPending}
+            tagEditPending={tagEditPending}
+            updateFieldPending={updateFieldPending}
+            canPasteTags={hasPasteableTags}
             onAddTagToEntries={addTagToEntries}
+            onPasteTagsToEntries={pasteTagsFromMetadata}
+            onRemoveTagFromEntries={removeTagFromEntries}
             onCreateTag={createTag}
             onUpdateTag={updateTag}
             onRefreshSelection={refreshSelectedEntry}
+            onFieldDraftChange={setFieldDraft}
+            onSaveField={saveField}
+            onNewFieldKeyChange={setNewFieldKey}
+            onNewFieldValueChange={setNewFieldValue}
+            onApplyField={applyField}
           />
         ) : (
           <>

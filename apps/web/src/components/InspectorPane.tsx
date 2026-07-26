@@ -303,7 +303,7 @@ function PreviewContent({
   );
 }
 
-type MetadataContentProps = {
+export type MetadataContentProps = {
   selectedEntry: EntryResponse | null;
   selectedEntryIds: number[];
   selectedEntries: EntrySummaryResponse[];
@@ -330,7 +330,7 @@ type MetadataContentProps = {
   openAddTagsRequestNonce: number;
 };
 
-function MetadataContent({
+export function MetadataContent({
   selectedEntry,
   selectedEntryIds,
   selectedEntries,

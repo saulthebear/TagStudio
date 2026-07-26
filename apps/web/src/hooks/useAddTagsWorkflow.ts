@@ -77,7 +77,6 @@ export function useAddTagsWorkflow({
   onAfterTagChanged
 }: UseAddTagsWorkflowParams) {
   const [query, setQuery] = useState("");
-  const [limit, setLimit] = useState(25);
   const [highlightedIndex, setHighlightedIndex] = useState(0);
   const [autoHighlightTagMatch, setAutoHighlightTagMatch] = useState(true);
   const [pendingTagId, setPendingTagId] = useState<number | null>(null);
@@ -127,8 +126,8 @@ export function useAddTagsWorkflow({
   }, [open, editorOpen, onClose]);
 
   const tagsQuery = useQuery({
-    queryKey: ["add-tags", query, limit],
-    queryFn: () => api.getTags(query, limit),
+    queryKey: ["add-tags", query],
+    queryFn: () => api.getTags(query, -1),
     enabled: open
   });
 
@@ -138,7 +137,6 @@ export function useAddTagsWorkflow({
     }
 
     clearSearchState();
-    setLimit(25);
     setPendingTagId(null);
     setEditorOpen(false);
     setEditorTag(null);
@@ -325,7 +323,6 @@ export function useAddTagsWorkflow({
     isDragging,
     searchInputRef,
     query,
-    limit,
     highlightedIndex,
     pendingTagId,
     editorOpen,
@@ -335,7 +332,6 @@ export function useAddTagsWorkflow({
     rows,
     selectedCount: selectedEntryIds.length,
     membershipByTagId,
-    setLimit,
     onQueryChange,
     onQueryKeyDown,
     openCreateEditor,
