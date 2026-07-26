@@ -516,7 +516,7 @@ test("applies top-bar filter menu toggles with live query sync and request flags
   await expect.poll(() => searchRequests.length).toBe(1);
 
   const searchInput = page.getByPlaceholder("Search entries (e.g. tag:\"favorite\" or path:\"*.png\")");
-  const filterButton = page.getByRole("button", { name: "Open view settings" });
+  const filterButton = page.getByRole("button", { name: "Filter options" });
 
   await searchInput.fill("special:untagged");
   await filterButton.click();
@@ -658,12 +658,12 @@ test("random sorting reshuffles on search and reuses seed for pagination", async
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Files" })).toBeVisible();
 
-  await page.locator(".top-filter-sort-mode").selectOption("sorting.mode.random");
+  await page.getByRole("button", { name: "Filter options" }).click();
+  await page.getByRole("menuitemcheckbox", { name: "Random" }).click();
   await expect.poll(() => randomResponses.filter((response) => response.pageIndex === 0).length).toBe(1);
   const initialRandomRequest = randomRequests.find((request) => request.pageIndex === 0);
   const initialRandomPage = randomResponses.find((response) => response.pageIndex === 0);
   expect(initialRandomRequest?.randomSeed).toBeUndefined();
-  expect(initialRandomPage).toBeTruthy();
 
   const firstRandomSeed = initialRandomPage!.randomSeed;
   const firstRandomIds = initialRandomPage!.ids;
@@ -673,11 +673,14 @@ test("random sorting reshuffles on search and reuses seed for pagination", async
   });
   await expect.poll(() => randomResponses.some((response) => response.pageIndex === 1)).toBe(true);
   const appendRandomRequest = randomRequests.find((request) => request.pageIndex === 1);
-  expect(appendRandomRequest).toBeTruthy();
-  expect(appendRandomRequest!.randomSeed).toBe(firstRandomSeed);
+  expect(appendRandomRequest?.randomSeed).toBe(firstRandomSeed);
 
   const pageZeroCountBeforeSearch = randomResponses.filter((response) => response.pageIndex === 0).length;
-  await page.getByRole("button", { name: "Search" }).click();
+  await page.locator(".thumb-grid-scroll").evaluate((element) => {
+    element.scrollTo({ top: 0 });
+  });
+  const searchInput = page.getByPlaceholder("Search entries (e.g. tag:\"favorite\" or path:\"*.png\")");
+  await searchInput.press("Enter");
   await expect
     .poll(() => randomResponses.filter((response) => response.pageIndex === 0).length)
     .toBe(pageZeroCountBeforeSearch + 1);
@@ -840,10 +843,9 @@ test("defers special:untagged result refresh until explicit search", async ({ pa
   await expect(page.getByRole("heading", { name: "Files" })).toBeVisible();
 
   const searchInput = page.getByPlaceholder("Search entries (e.g. tag:\"favorite\" or path:\"*.png\")");
-  const searchButton = page.locator(".top-filter-search-action");
 
   await searchInput.fill("special:untagged");
-  await searchButton.click();
+  await searchInput.press("Enter");
   await expect.poll(() => searchRequests.at(-1)).toBe("special:untagged");
 
   await page.locator(".thumb-card").filter({ hasText: "untagged-a.png" }).click();
@@ -854,7 +856,6 @@ test("defers special:untagged result refresh until explicit search", async ({ pa
   const searchCountAfterMutation = searchRequests.length;
   await expect.poll(() => searchRequests.length).toBe(searchCountAfterMutation);
   await expect(page.locator(".top-filter-stale-pill")).toBeVisible();
-  await expect(searchButton).toHaveClass(/btn-search-stale/);
 
   await page.getByRole("button", { name: "Close" }).click();
   await expect(page.locator(".metadata-tag-chip").first()).toContainText("Favorite");
@@ -863,7 +864,6 @@ test("defers special:untagged result refresh until explicit search", async ({ pa
   await expect.poll(() => searchRequests.length).toBe(searchCountAfterMutation + 1);
   await expect.poll(() => searchRequests.at(-1)).toBe("special:untagged");
   await expect(page.locator(".top-filter-stale-pill")).toHaveCount(0);
-  await expect(searchButton).not.toHaveClass(/btn-search-stale/);
   await expect(page.locator(".thumb-card").filter({ hasText: "untagged-a.png" })).toHaveCount(0);
 
   await page.locator(".thumb-card").filter({ hasText: "untagged-b.png" }).click();
@@ -2110,7 +2110,7 @@ test("toggles dark mode theme via settings modal and persists to html element", 
   await expect(page.locator("html")).not.toHaveClass(/dark/);
 
   // Open settings and change theme to Dark
-  await page.getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
   await expect(page.getByRole("dialog", { name: "App settings" })).toBeVisible();
 
   const themeSelect = page.getByRole("combobox", { name: "Theme" });

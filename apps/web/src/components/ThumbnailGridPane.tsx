@@ -1,5 +1,5 @@
 import { type EntrySummaryResponse } from "@tagstudio/api-client";
-import { Archive, Star } from "lucide-react";
+import { Archive, RefreshCw, Star } from "lucide-react";
 import {
   type MouseEvent as ReactMouseEvent,
   useCallback,
@@ -36,6 +36,9 @@ export type ThumbnailContextMenuAction =
 type ThumbnailGridPaneProps = {
   entries: EntrySummaryResponse[];
   totalCount: number;
+  filterSummary: string;
+  searchResultsStale: boolean;
+  onSearch: () => void;
   selectedEntryIds: number[];
   activeQuery: string;
   searchPending: boolean;
@@ -128,6 +131,9 @@ function iconForSuffix(rawSuffix: string): string {
 export function ThumbnailGridPane({
   entries,
   totalCount,
+  filterSummary,
+  searchResultsStale,
+  onSearch,
   selectedEntryIds,
   activeQuery,
   searchPending,
@@ -327,7 +333,19 @@ export function ThumbnailGridPane({
     <section ref={paneRef} className="pane panel thumb-pane">
       <header className="thumb-pane-header">
         <h2 className="panel-title m-0">Files</h2>
-        <p className="thumb-pane-subtitle m-0">{subtitle}</p>
+        <div className="top-filter-status" aria-live="polite">
+          Results: <strong>{totalCount}</strong> | Filter: {filterSummary}
+          {searchResultsStale ? (
+            <>
+              {" "}
+              |{" "}
+              <button type="button" className="top-filter-stale-pill" onClick={onSearch}>
+                <span>Results are stale</span>
+                <RefreshCw size={12} aria-hidden="true" />
+              </button>
+            </>
+          ) : null}
+        </div>
       </header>
 
       <div className="thumb-grid-scroll">

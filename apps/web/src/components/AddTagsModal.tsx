@@ -1,8 +1,8 @@
 import { type TagCreatePayload, type TagResponse, type TagUpdatePayload } from "@tagstudio/api-client";
-import { X } from "lucide-react";
 import { useMemo } from "react";
 import { Virtuoso } from "react-virtuoso";
 
+import { ModalHeader } from "@/components/ModalHeader";
 import { ModalLayerPortal } from "@/components/ModalLayerPortal";
 import { TagEditorModal } from "@/components/TagEditorModal";
 import { useAddTagsWorkflow } from "@/hooks/useAddTagsWorkflow";
@@ -72,19 +72,12 @@ export function AddTagsModal({
         aria-label="Add tags"
         style={workflow.panelStyle}
       >
-        <div className="add-tags-header">
-          <div className="modal-drag-handle" {...workflow.dragHandleProps}>
-            <h2 className="panel-title m-0">Add Tags</h2>
-          </div>
-          <button
-            type="button"
-            className="add-tags-close-btn"
-            onClick={onClose}
-            aria-label="Close"
-          >
-            <X size={18} />
-          </button>
-        </div>
+        <ModalHeader
+          title="Add Tags"
+          dragHandleProps={workflow.dragHandleProps}
+          onClose={onClose}
+          className="add-tags-header"
+        />
 
         <div className="add-tags-controls">
           <input

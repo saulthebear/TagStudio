@@ -1,6 +1,9 @@
 import { type SortingMode } from "@tagstudio/api-client";
 import { Button } from "@tagstudio/ui";
 
+import { ModalHeader } from "@/components/ModalHeader";
+import { ModalLayerPortal } from "@/components/ModalLayerPortal";
+import { useDraggableModalPosition } from "@/hooks/useDraggableModalPosition";
 import { type ThemeMode } from "@/hooks/useTheme";
 
 type SettingsModalProps = {
@@ -48,20 +51,28 @@ export function SettingsModal({
   onSave,
   onClose
 }: SettingsModalProps) {
+  const { panelRef, panelStyle, dragHandleProps, isDragging } = useDraggableModalPosition({
+    open,
+    margin: 16,
+    initialPlacement: "center"
+  });
+
   if (!open) {
     return null;
   }
 
   return (
-    <div className="overlay" role="presentation" onClick={onClose}>
+    <ModalLayerPortal open={open} dimBackdrop={true} onBackdropClick={onClose}>
       <div
-        className="overlay-panel panel"
+        ref={panelRef}
+        className={`overlay-panel panel modal-draggable-panel ${isDragging ? "modal-panel-dragging" : ""}`}
         role="dialog"
         aria-modal="true"
         aria-label="App settings"
+        style={panelStyle}
         onClick={(event) => event.stopPropagation()}
       >
-        <h2 className="panel-title mt-0">App Settings</h2>
+        <ModalHeader title="App Settings" dragHandleProps={dragHandleProps} onClose={onClose} />
 
         <label className="settings-row">
           <span>Theme</span>
@@ -161,7 +172,7 @@ export function SettingsModal({
           </Button>
         </div>
       </div>
-    </div>
+    </ModalLayerPortal>
   );
 }
 

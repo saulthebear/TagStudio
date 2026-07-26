@@ -1,6 +1,17 @@
+import { useEffect, useRef, useState } from "react";
 import { type SortingMode } from "@tagstudio/api-client";
 import { Button } from "@tagstudio/ui";
-import { ArrowUpDown, Keyboard, RefreshCw, Settings, SlidersHorizontal, Volume2, VolumeX } from "lucide-react";
+import {
+  ArrowUpDown,
+  FolderOpen,
+  Keyboard,
+  RefreshCw,
+  Settings,
+  SlidersHorizontal,
+  Volume2,
+  VolumeX,
+  X
+} from "lucide-react";
 
 import {
   DropdownMenu,
@@ -15,7 +26,6 @@ import { type ThemeMode } from "@/hooks/useTheme";
 type TopFilterBarProps = {
   libraryPath: string;
   searchInput: string;
-  filterSummary: string;
   sortingMode: SortingMode;
   ascending: boolean;
   untaggedChecked: boolean;
@@ -23,10 +33,8 @@ type TopFilterBarProps = {
   showConservativeHint: boolean;
   showHiddenEntries: boolean;
   activeFilterCount: number;
-  totalCount: number;
   searchPending: boolean;
   refreshPending: boolean;
-  searchResultsStale: boolean;
   videoMuted: boolean;
   theme?: ThemeMode;
   onSearchInputChange: (value: string) => void;
@@ -52,7 +60,6 @@ const SORTING_OPTIONS: Array<{ label: string; value: SortingMode }> = [
 export function TopFilterBar({
   libraryPath,
   searchInput,
-  filterSummary,
   sortingMode,
   ascending,
   untaggedChecked,
@@ -60,9 +67,7 @@ export function TopFilterBar({
   showConservativeHint,
   showHiddenEntries,
   activeFilterCount,
-  totalCount,
   refreshPending,
-  searchResultsStale,
   videoMuted,
   theme,
   onSearchInputChange,
@@ -78,16 +83,86 @@ export function TopFilterBar({
   onOpenShortcutsHelp,
   onThemeChange
 }: TopFilterBarProps) {
+  const [isVaultExpanded, setIsVaultExpanded] = useState(false);
+  const vaultContainerRef = useRef<HTMLDivElement>(null);
+  const vaultInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isVaultExpanded && vaultInputRef.current) {
+      vaultInputRef.current.focus();
+    }
+  }, [isVaultExpanded]);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (
+        vaultContainerRef.current &&
+        !vaultContainerRef.current.contains(event.target as Node)
+      ) {
+        setIsVaultExpanded(false);
+      }
+    }
+    if (isVaultExpanded) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [isVaultExpanded]);
+
   return (
     <section className="top-filter-bar panel">
-      <button
-        type="button"
-        className="library-chip"
-        onClick={onOpenLibraryModal}
-        aria-label="Open library switcher"
-      >
-        {libraryPath}
-      </button>
+      <div ref={vaultContainerRef} className="vault-control">
+        {!isVaultExpanded ? (
+          <button
+            type="button"
+            className="filter-icon-btn vault-icon-btn"
+            onClick={() => setIsVaultExpanded(true)}
+            aria-label="Open library switcher"
+            title={`Vault: ${libraryPath || "None selected"}`}
+          >
+            <FolderOpen size={18} />
+          </button>
+        ) : (
+          <div className="vault-expanded-box">
+            <button
+              type="button"
+              className="vault-box-action"
+              onClick={onOpenLibraryModal}
+              title="Switch Vault"
+              aria-label="Switch Vault"
+            >
+              <FolderOpen size={16} />
+            </button>
+            <input
+              ref={vaultInputRef}
+              type="text"
+              readOnly
+              className="input-base vault-input"
+              value={libraryPath}
+              title={`Vault: ${libraryPath}`}
+              onClick={onOpenLibraryModal}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") {
+                  setIsVaultExpanded(false);
+                } else if (e.key === "Enter") {
+                  onOpenLibraryModal();
+                }
+              }}
+              style={{
+                width: `${Math.min(Math.max((libraryPath || "").length + 2, 8), 24)}ch`
+              }}
+            />
+            <button
+              type="button"
+              className="vault-collapse-btn"
+              onClick={() => setIsVaultExpanded(false)}
+              title="Collapse Vault input"
+              aria-label="Collapse Vault input"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        )}
+      </div>
 
       <input
         className="input-base top-filter-search"
@@ -106,8 +181,8 @@ export function TopFilterBar({
           <button
             type="button"
             className={`filter-icon-btn ${showUntaggedConflict ? "border-amber-500" : ""}`}
-            aria-label="Open view settings"
-            title="Open view settings"
+            aria-label="Filter options"
+            title="Filter options"
           >
             <SlidersHorizontal size={18} />
             {activeFilterCount > 0 ? (
@@ -237,20 +312,6 @@ export function TopFilterBar({
       >
         <Settings size={18} />
       </button>
-
-      <div className="top-filter-status" aria-live="polite">
-        Results: <strong>{totalCount}</strong> | Filter: {filterSummary}
-        {searchResultsStale ? (
-          <>
-            {" "}
-            |{" "}
-            <button type="button" className="top-filter-stale-pill" onClick={onSearch}>
-              <span>Results are stale</span>
-              <RefreshCw size={12} aria-hidden="true" />
-            </button>
-          </>
-        ) : null}
-      </div>
     </section>
   );
 }

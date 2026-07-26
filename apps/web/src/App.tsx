@@ -14,12 +14,15 @@ import { InspectorPane } from "@/components/InspectorPane";
 import { KeyboardShortcutsHelpModal } from "@/components/KeyboardShortcutsHelpModal";
 import { LibraryGate } from "@/components/LibraryGate";
 import { LibrarySwitcherModal } from "@/components/LibrarySwitcherModal";
+import { ModalHeader } from "@/components/ModalHeader";
+import { ModalLayerPortal } from "@/components/ModalLayerPortal";
 import { RefreshStatusPanel } from "@/components/RefreshStatusPanel";
 import { SettingsModal } from "@/components/SettingsModal";
 import { SplitPane } from "@/components/SplitPane";
 import { ThumbnailGridPane } from "@/components/ThumbnailGridPane";
 import { TopFilterBar } from "@/components/TopFilterBar";
 import { useAppInteractions } from "@/hooks/useAppInteractions";
+import { useDraggableModalPosition } from "@/hooks/useDraggableModalPosition";
 import { useInspectorWorkflow } from "@/hooks/useInspectorWorkflow";
 import { useLibraryWorkflow } from "@/hooks/useLibraryWorkflow";
 import { ModalStackProvider } from "@/hooks/useModalStackDepth";
@@ -308,6 +311,12 @@ export function App() {
     }
   });
 
+  const trashModalDrag = useDraggableModalPosition({
+    open: Boolean(trashDialogState),
+    margin: 16,
+    initialPlacement: "center"
+  });
+
   const handleToggleFavorite = useCallback(() => {
     const targetIds =
       selectedEntryIds.length > 0
@@ -409,6 +418,9 @@ export function App() {
     <ThumbnailGridPane
       entries={entries}
       totalCount={totalCount}
+      filterSummary={filterSummary}
+      searchResultsStale={searchResultsStale}
+      onSearch={handleSearch}
       selectedEntryIds={selectedEntryIds}
       activeQuery={activeQuery}
       searchPending={searchPending}
@@ -526,7 +538,6 @@ export function App() {
             <TopFilterBar
               libraryPath={activeLibraryPath ?? ""}
               searchInput={searchInput}
-              filterSummary={filterSummary}
               sortingMode={sortingMode}
               ascending={ascending}
               untaggedChecked={liveUntaggedState.positive}
@@ -534,10 +545,8 @@ export function App() {
               showConservativeHint={showConservativeHint}
               showHiddenEntries={showHiddenEntries}
               activeFilterCount={activeFilterCount}
-              totalCount={totalCount}
               searchPending={searchPending}
               refreshPending={refreshPending}
-              searchResultsStale={searchResultsStale}
               videoMuted={videoPreviewStartsMuted}
               onSearchInputChange={setSearchInput}
               onSearch={handleSearch}
@@ -646,16 +655,18 @@ export function App() {
           onClose={() => setShortcutsHelpOpen(false)}
         />
 
-        {trashDialogState ? (
-          <div className="overlay" role="presentation" onClick={() => setTrashDialogState(null)}>
+        <ModalLayerPortal open={Boolean(trashDialogState)} dimBackdrop={true} onBackdropClick={() => setTrashDialogState(null)}>
+          {trashDialogState ? (
             <div
-              className="overlay-panel panel trash-confirm-panel"
+              ref={trashModalDrag.panelRef}
+              className={`overlay-panel panel trash-confirm-panel modal-draggable-panel ${trashModalDrag.isDragging ? "modal-panel-dragging" : ""}`}
               role="dialog"
               aria-modal="true"
               aria-label="Delete confirmation"
+              style={trashModalDrag.panelStyle}
               onClick={(event) => event.stopPropagation()}
             >
-              <h2 className="panel-title mt-0">Move to Trash</h2>
+              <ModalHeader title="Move to Trash" dragHandleProps={trashModalDrag.dragHandleProps} onClose={() => setTrashDialogState(null)} />
               <p className="trash-confirm-copy">
                 {trashTargetCount === 1
                   ? "Move 1 selected entry to Trash?"
@@ -712,8 +723,8 @@ export function App() {
                 </Button>
               </div>
             </div>
-          </div>
-        ) : null}
+          ) : null}
+        </ModalLayerPortal>
 
         {undoState ? (
           <div className="undo-snackbar" role="status" aria-live="polite">

@@ -1,6 +1,7 @@
 import { type TagCreatePayload, type TagResponse, type TagUpdatePayload } from "@tagstudio/api-client";
 import { Button } from "@tagstudio/ui";
 
+import { ModalHeader } from "@/components/ModalHeader";
 import { ModalLayerPortal } from "@/components/ModalLayerPortal";
 import { useTagEditorWorkflow } from "@/hooks/useTagEditorWorkflow";
 
@@ -50,9 +51,11 @@ export function TagEditorModal({
         aria-label={mode === "create" ? "Create tag" : "Edit tag"}
         style={workflow.tagEditorDrag.panelStyle}
       >
-        <div className="modal-drag-handle" {...workflow.tagEditorDrag.dragHandleProps}>
-          <h2 className="panel-title m-0">{mode === "create" ? "New Tag" : "Edit Tag"}</h2>
-        </div>
+        <ModalHeader
+          title={mode === "create" ? "New Tag" : "Edit Tag"}
+          dragHandleProps={workflow.tagEditorDrag.dragHandleProps}
+          onClose={onClose}
+        />
 
         <label className="settings-row">
           <span>Name</span>
@@ -187,9 +190,11 @@ export function TagEditorModal({
             aria-label="Add parent tags"
             style={workflow.parentPickerDrag.panelStyle}
           >
-            <div className="modal-drag-handle" {...workflow.parentPickerDrag.dragHandleProps}>
-              <h3 className="panel-title m-0">Add Parent Tag(s)</h3>
-            </div>
+            <ModalHeader
+              title="Add Parent Tag(s)"
+              dragHandleProps={workflow.parentPickerDrag.dragHandleProps}
+              onClose={() => workflow.setParentPickerOpen(false)}
+            />
             <div className="tag-editor-parent-controls">
               <input
                 ref={workflow.parentSearchInputRef}
@@ -233,9 +238,11 @@ export function TagEditorModal({
             aria-label="Choose tag color"
             style={workflow.colorPickerDrag.panelStyle}
           >
-            <div className="modal-drag-handle" {...workflow.colorPickerDrag.dragHandleProps}>
-              <h3 className="panel-title m-0">Choose Tag Color</h3>
-            </div>
+            <ModalHeader
+              title="Choose Tag Color"
+              dragHandleProps={workflow.colorPickerDrag.dragHandleProps}
+              onClose={() => workflow.setColorPickerOpen(false)}
+            />
             <div className="tag-editor-color-grid">
               <button type="button" className="tag-editor-color-row" onClick={workflow.clearColor}>
                 <span className="tag-editor-color-swatch" aria-hidden="true" />

@@ -1,5 +1,9 @@
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { Button } from "@tagstudio/ui";
+
+import { ModalHeader } from "@/components/ModalHeader";
+import { ModalLayerPortal } from "@/components/ModalLayerPortal";
+import { useDraggableModalPosition } from "@/hooks/useDraggableModalPosition";
 
 type LibrarySwitcherModalProps = {
   open: boolean;
@@ -20,7 +24,11 @@ export function LibrarySwitcherModal({
   onCreate,
   onClose
 }: LibrarySwitcherModalProps) {
-  const panelRef = useRef<HTMLDivElement | null>(null);
+  const { panelRef, panelStyle, dragHandleProps, isDragging } = useDraggableModalPosition({
+    open,
+    margin: 16,
+    initialPlacement: "center"
+  });
 
   useEffect(() => {
     if (!open) {
@@ -50,17 +58,18 @@ export function LibrarySwitcherModal({
   }
 
   return (
-    <div className="overlay" role="presentation" onClick={onClose}>
+    <ModalLayerPortal open={open} dimBackdrop={true} onBackdropClick={onClose}>
       <div
         ref={panelRef}
-        className="overlay-panel panel"
+        className={`overlay-panel panel modal-draggable-panel ${isDragging ? "modal-panel-dragging" : ""}`}
         role="dialog"
         aria-modal="true"
         aria-label="Switch library"
         tabIndex={-1}
+        style={panelStyle}
         onClick={(event) => event.stopPropagation()}
       >
-        <h2 className="panel-title mt-0">Switch Library</h2>
+        <ModalHeader title="Switch Library" dragHandleProps={dragHandleProps} onClose={onClose} />
         <input
           className="input-base"
           placeholder="/path/to/library"
@@ -89,6 +98,6 @@ export function LibrarySwitcherModal({
           </Button>
         </div>
       </div>
-    </div>
+    </ModalLayerPortal>
   );
 }

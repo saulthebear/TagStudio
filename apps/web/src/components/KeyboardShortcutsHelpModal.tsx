@@ -1,8 +1,10 @@
 import { Button } from "@tagstudio/ui";
-import { Keyboard, Search, X } from "lucide-react";
+import { Keyboard, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 
+import { ModalHeader } from "@/components/ModalHeader";
 import { ModalLayerPortal } from "@/components/ModalLayerPortal";
+import { useDraggableModalPosition } from "@/hooks/useDraggableModalPosition";
 import { SHORTCUT_REGISTRY, type ShortcutCategory, type ShortcutDefinition } from "@/lib/shortcuts";
 
 type KeyboardShortcutsHelpModalProps = {
@@ -19,6 +21,11 @@ const CATEGORIES: ShortcutCategory[] = [
 
 export function KeyboardShortcutsHelpModal({ open, onClose }: KeyboardShortcutsHelpModalProps) {
   const [searchQuery, setSearchQuery] = useState("");
+  const { panelRef, panelStyle, dragHandleProps, isDragging } = useDraggableModalPosition({
+    open,
+    margin: 16,
+    initialPlacement: "center"
+  });
 
   const filteredShortcuts = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -55,28 +62,20 @@ export function KeyboardShortcutsHelpModal({ open, onClose }: KeyboardShortcutsH
   return (
     <ModalLayerPortal open={open} dimBackdrop={true} onBackdropClick={onClose}>
       <div
-        className="overlay-panel panel shortcuts-help-panel"
+        ref={panelRef}
+        className={`overlay-panel panel shortcuts-help-panel modal-draggable-panel ${isDragging ? "modal-panel-dragging" : ""}`}
         role="dialog"
         aria-modal="true"
         aria-label="Keyboard Shortcuts Help"
         onClick={(event) => event.stopPropagation()}
-        style={{ width: 620, maxWidth: "92vw", maxHeight: "85vh", display: "flex", flexDirection: "column" }}
+        style={{ width: 620, maxWidth: "92vw", maxHeight: "85vh", display: "flex", flexDirection: "column", ...panelStyle }}
       >
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-[var(--color-border-soft)] pb-3 mb-3">
-          <div className="flex items-center gap-2">
-            <Keyboard className="h-5 w-5 text-blue-500" />
-            <h2 className="panel-title m-0 text-base font-bold">Keyboard Shortcuts</h2>
-          </div>
-          <button
-            type="button"
-            className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-200 dark:text-slate-400 dark:hover:bg-slate-800 transition-colors"
-            onClick={onClose}
-            aria-label="Close"
-          >
-            <X size={18} />
-          </button>
-        </div>
+        <ModalHeader
+          title="Keyboard Shortcuts"
+          icon={<Keyboard className="h-5 w-5 text-blue-500" />}
+          dragHandleProps={dragHandleProps}
+          onClose={onClose}
+        />
 
         {/* Search Bar */}
         <div className="relative mb-3">
