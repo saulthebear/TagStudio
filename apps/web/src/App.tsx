@@ -230,23 +230,6 @@ export function App() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [closeSettings, settingsOpen]);
 
-  useEffect(() => {
-    if (!fullScreenModalOpen) {
-      return;
-    }
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") {
-        return;
-      }
-      event.preventDefault();
-      setFullScreenModalOpen(false);
-    };
-
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [fullScreenModalOpen]);
-
   const liveUntaggedState = useMemo(() => getUntaggedTokenState(searchInput), [searchInput]);
   const showUntaggedConflict = useMemo(() => hasUntaggedTagConflict(searchInput), [searchInput]);
   const showConservativeHint = useMemo(() => !isFlatQuery(searchInput), [searchInput]);
@@ -258,6 +241,10 @@ export function App() {
     () => formatAppliedFilterSummary(activeQuery, showHiddenEntries),
     [activeQuery, showHiddenEntries]
   );
+
+  const toggleFullScreenModal = useCallback(() => {
+    setFullScreenModalOpen((prev) => !prev);
+  }, []);
 
   const {
     selectedEntryIds,
@@ -302,6 +289,9 @@ export function App() {
     formatTrashFailureReason,
     onError,
     onClearError,
+    onToggleFullScreen: toggleFullScreenModal,
+    onToggleMute: toggleVideoMute,
+    isFullScreenOpen: fullScreenModalOpen,
     busyFlags: {
       tagMutationPending,
       trashPending,
@@ -310,6 +300,19 @@ export function App() {
       searchPending
     }
   });
+
+  const handleToggleFavorite = useCallback(() => {
+    const targetIds =
+      selectedEntryIds.length > 0
+        ? selectedEntryIds
+        : selectedEntryId !== null
+          ? [selectedEntryId]
+          : [];
+    if (targetIds.length > 0) {
+      const state = getContextMenuState(targetIds[0]);
+      handleContextMenuAction("favorite_toggle", state);
+    }
+  }, [getContextMenuState, handleContextMenuAction, selectedEntryId, selectedEntryIds]);
 
   const selectedEntries = useMemo(() => {
     const selectedSet = new Set(selectedEntryIds);
@@ -482,6 +485,8 @@ export function App() {
             resolveApiUrl={(path) => api.resolveUrl(path)}
             videoPreviewStartsMuted={videoPreviewStartsMuted}
             onVideoPreviewUnmuted={handleVideoPreviewUnmuted}
+            onToggleMute={toggleVideoMute}
+            onToggleFavorite={handleToggleFavorite}
             onClose={() => setFullScreenModalOpen(false)}
             onNavigatePrevious={navigatePrevious}
             onNavigateNext={navigateNext}

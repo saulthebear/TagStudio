@@ -118,6 +118,8 @@ export function useAddTagsWorkflow({
         return;
       }
       event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
       onClose();
     };
 

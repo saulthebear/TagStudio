@@ -30,6 +30,8 @@ export type FullScreenMediaViewProps = {
   resolveApiUrl: (path: string) => string;
   videoPreviewStartsMuted: boolean;
   onVideoPreviewUnmuted: () => void;
+  onToggleMute?: () => void;
+  onToggleFavorite?: () => void;
   onClose: () => void;
   onNavigatePrevious: () => void;
   onNavigateNext: () => void;
@@ -83,6 +85,8 @@ export function FullScreenMediaView({
   resolveApiUrl,
   videoPreviewStartsMuted,
   onVideoPreviewUnmuted,
+  onToggleMute,
+  onToggleFavorite,
   onClose,
   onNavigatePrevious,
   onNavigateNext,
@@ -122,6 +126,92 @@ export function FullScreenMediaView({
     setPanPosition({ x: 0, y: 0 });
     setAddTagsOpen(false);
   }, [selectedEntry?.id]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const activeEl = document.activeElement;
+      if (
+        activeEl &&
+        (activeEl.tagName === "INPUT" ||
+          activeEl.tagName === "TEXTAREA" ||
+          activeEl.tagName === "SELECT" ||
+          (activeEl as HTMLElement).isContentEditable ||
+          activeEl.getAttribute("role") === "textbox")
+      ) {
+        return;
+      }
+
+      if (event.ctrlKey || event.metaKey) {
+        return;
+      }
+
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
+        if (addTagsOpen) {
+          setAddTagsOpen(false);
+        } else if (metadataOpen) {
+          setMetadataOpen(false);
+        } else {
+          onClose();
+        }
+        return;
+      }
+
+      if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        onNavigatePrevious();
+        return;
+      }
+      if (event.key === "ArrowRight") {
+        event.preventDefault();
+        onNavigateNext();
+        return;
+      }
+
+      if (event.key === "f") {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+
+      if (event.key === "m" || event.key === "M") {
+        event.preventDefault();
+        onToggleMute?.();
+        return;
+      }
+
+      if (event.key === "t" || event.key === "T") {
+        event.preventDefault();
+        setAddTagsOpen((prev) => !prev);
+        return;
+      }
+
+      if (event.key === "i" || event.key === "I") {
+        event.preventDefault();
+        setMetadataOpen((prev) => !prev);
+        return;
+      }
+
+      if ((event.key === "F" && event.shiftKey) || event.key === "s" || event.key === "S") {
+        event.preventDefault();
+        onToggleFavorite?.();
+        return;
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [
+    addTagsOpen,
+    metadataOpen,
+    onClose,
+    onNavigateNext,
+    onNavigatePrevious,
+    onToggleFavorite,
+    onToggleMute
+  ]);
 
   const handleZoomChange = useCallback((newScale: number) => {
     const clampedScale = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, newScale));

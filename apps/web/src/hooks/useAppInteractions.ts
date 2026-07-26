@@ -44,6 +44,9 @@ type UseAppInteractionsArgs = {
   formatTrashFailureReason: (reasonCode: TrashFailureReasonCode) => string;
   onError: (message: string) => void;
   onClearError: () => void;
+  onToggleFullScreen?: () => void;
+  onToggleMute?: () => void;
+  isFullScreenOpen?: boolean;
   busyFlags: {
     tagMutationPending: boolean;
     trashPending: boolean;
@@ -98,6 +101,9 @@ export function useAppInteractions({
   formatTrashFailureReason,
   onError,
   onClearError,
+  onToggleFullScreen,
+  onToggleMute,
+  isFullScreenOpen,
   busyFlags
 }: UseAppInteractionsArgs): UseAppInteractionsResult {
   const [selectedEntryIds, setSelectedEntryIds] = useState<number[]>([]);
@@ -471,7 +477,7 @@ export function useAppInteractions({
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") {
+      if (isFullScreenOpen) {
         return;
       }
 
@@ -487,18 +493,125 @@ export function useAppInteractions({
         return;
       }
 
+      const isCtrlOrMeta = event.ctrlKey || event.metaKey;
+
+      if (isCtrlOrMeta) {
+        const key = event.key.toLowerCase();
+        if (key === "a") {
+          if (entries.length > 0) {
+            event.preventDefault();
+            setSelectedEntryIds(entries.map((e) => e.id));
+          }
+          return;
+        }
+        if (key === "c") {
+          const targetIds =
+            selectedEntryIds.length > 0
+              ? selectedEntryIds
+              : selectedEntryId !== null
+                ? [selectedEntryId]
+                : [];
+          if (targetIds.length > 0) {
+            event.preventDefault();
+            copyTagsFromEntries(targetIds);
+          }
+          return;
+        }
+        if (key === "v") {
+          const targetIds =
+            selectedEntryIds.length > 0
+              ? selectedEntryIds
+              : selectedEntryId !== null
+                ? [selectedEntryId]
+                : [];
+          if (hasPasteableTags && targetIds.length > 0) {
+            event.preventDefault();
+            pasteTagsFromMetadata(targetIds);
+          }
+          return;
+        }
+        return;
+      }
+
       if (event.key === "ArrowLeft") {
         event.preventDefault();
         navigatePrevious();
-      } else if (event.key === "ArrowRight") {
+        return;
+      }
+      if (event.key === "ArrowRight") {
         event.preventDefault();
         navigateNext();
+        return;
+      }
+
+      if (event.key === "f") {
+        event.preventDefault();
+        onToggleFullScreen?.();
+        return;
+      }
+
+      if ((event.key === "F" && event.shiftKey) || event.key === "s" || event.key === "S") {
+        event.preventDefault();
+        const targetIds =
+          selectedEntryIds.length > 0
+            ? selectedEntryIds
+            : selectedEntryId !== null
+              ? [selectedEntryId]
+              : [];
+        if (targetIds.length > 0) {
+          const state = getContextMenuState(targetIds[0]);
+          handleContextMenuAction("favorite_toggle", state);
+        }
+        return;
+      }
+
+      if (event.key === "m" || event.key === "M") {
+        event.preventDefault();
+        onToggleMute?.();
+        return;
+      }
+
+      if (event.key === "t" || event.key === "T") {
+        event.preventDefault();
+        if (selectedEntryId !== null || selectedEntryIds.length > 0) {
+          setAddTagsModalRequestNonce((prev) => prev + 1);
+        }
+        return;
+      }
+
+      if (event.key === "Delete" || event.key === "Backspace") {
+        event.preventDefault();
+        const targetIds =
+          selectedEntryIds.length > 0
+            ? selectedEntryIds
+            : selectedEntryId !== null
+              ? [selectedEntryId]
+              : [];
+        if (targetIds.length > 0) {
+          const state = getContextMenuState(targetIds[0]);
+          handleContextMenuAction("delete_to_trash", state);
+        }
+        return;
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [navigateNext, navigatePrevious]);
+  }, [
+    copyTagsFromEntries,
+    entries,
+    getContextMenuState,
+    handleContextMenuAction,
+    hasPasteableTags,
+    isFullScreenOpen,
+    navigateNext,
+    navigatePrevious,
+    onToggleFullScreen,
+    onToggleMute,
+    pasteTagsFromMetadata,
+    selectedEntryId,
+    selectedEntryIds
+  ]);
 
   return {
     selectedEntryIds,
