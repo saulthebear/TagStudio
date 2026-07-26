@@ -54,7 +54,8 @@ export function SettingsModal({
   const { panelRef, panelStyle, dragHandleProps, isDragging } = useDraggableModalPosition({
     open,
     margin: 16,
-    initialPlacement: "center"
+    initialPlacement: "center",
+    panelId: "settings-modal"
   });
 
   if (!open) {

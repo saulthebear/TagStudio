@@ -314,7 +314,9 @@ export function App() {
   const trashModalDrag = useDraggableModalPosition({
     open: Boolean(trashDialogState),
     margin: 16,
-    initialPlacement: "center"
+    initialPlacement: "center",
+    panelId: "trash-confirm-modal",
+    savePositionOnClose: false
   });
 
   const handleToggleFavorite = useCallback(() => {

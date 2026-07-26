@@ -24,7 +24,8 @@ export function KeyboardShortcutsHelpModal({ open, onClose }: KeyboardShortcutsH
   const { panelRef, panelStyle, dragHandleProps, isDragging } = useDraggableModalPosition({
     open,
     margin: 16,
-    initialPlacement: "center"
+    initialPlacement: "center",
+    panelId: "keyboard-shortcuts-modal"
   });
 
   const filteredShortcuts = useMemo(() => {

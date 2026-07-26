@@ -27,7 +27,8 @@ export function LibrarySwitcherModal({
   const { panelRef, panelStyle, dragHandleProps, isDragging } = useDraggableModalPosition({
     open,
     margin: 16,
-    initialPlacement: "center"
+    initialPlacement: "center",
+    panelId: "library-switcher-modal"
   });
 
   useEffect(() => {

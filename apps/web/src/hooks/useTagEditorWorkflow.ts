@@ -121,17 +121,20 @@ export function useTagEditorWorkflow({
   const tagEditorDrag = useDraggableModalPosition({
     open,
     initialPlacement: "left",
-    initialOffset: { left: 20, top: 20 }
+    initialOffset: { left: 20, top: 20 },
+    panelId: "tag-editor-modal"
   });
   const parentPickerDrag = useDraggableModalPosition({
     open: open && parentPickerOpen,
     initialPlacement: "left",
-    initialOffset: { left: 32, top: 32 }
+    initialOffset: { left: 32, top: 32 },
+    panelId: "parent-picker-modal"
   });
   const colorPickerDrag = useDraggableModalPosition({
     open: open && colorPickerOpen,
     initialPlacement: "left",
-    initialOffset: { left: 44, top: 44 }
+    initialOffset: { left: 44, top: 44 },
+    panelId: "color-picker-modal"
   });
 
   const allTagsQuery = useQuery({

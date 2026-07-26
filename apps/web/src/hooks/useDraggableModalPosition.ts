@@ -18,6 +18,8 @@ type UseDraggableModalPositionOptions = {
     left: number;
     top: number;
   };
+  panelId?: string;
+  savePositionOnClose?: boolean;
 };
 
 type DragState = {
@@ -36,6 +38,56 @@ type ViewportSize = {
   width: number;
   height: number;
 };
+
+const POS_STORAGE_PREFIX = "tagstudio:panel-pos:";
+const inMemoryPositions = new Map<string, DragPosition>();
+
+export function getSavedPanelPosition(panelId?: string): DragPosition | null {
+  if (!panelId) {
+    return null;
+  }
+  const memoryPos = inMemoryPositions.get(panelId);
+  if (memoryPos) {
+    return memoryPos;
+  }
+  if (typeof localStorage !== "undefined") {
+    try {
+      const raw = localStorage.getItem(`${POS_STORAGE_PREFIX}${panelId}`);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (typeof parsed?.left === "number" && typeof parsed?.top === "number") {
+          inMemoryPositions.set(panelId, parsed);
+          return parsed;
+        }
+      }
+    } catch {
+      // Ignore storage errors
+    }
+  }
+  return null;
+}
+
+export function savePanelPosition(panelId: string, pos: DragPosition): void {
+  inMemoryPositions.set(panelId, pos);
+  if (typeof localStorage !== "undefined") {
+    try {
+      localStorage.setItem(`${POS_STORAGE_PREFIX}${panelId}`, JSON.stringify(pos));
+    } catch {
+      // Ignore storage errors
+    }
+  }
+}
+
+export function clearSavedPanelPosition(panelId: string): void {
+  inMemoryPositions.delete(panelId);
+  if (typeof localStorage !== "undefined") {
+    try {
+      localStorage.removeItem(`${POS_STORAGE_PREFIX}${panelId}`);
+    } catch {
+      // Ignore storage errors
+    }
+  }
+}
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
@@ -107,7 +159,9 @@ export function useDraggableModalPosition({
   open,
   margin = 16,
   initialPlacement = "center",
-  initialOffset
+  initialOffset,
+  panelId,
+  savePositionOnClose = true
 }: UseDraggableModalPositionOptions): {
   panelRef: RefObject<HTMLDivElement | null>;
   panelStyle: CSSProperties | undefined;
@@ -120,6 +174,7 @@ export function useDraggableModalPosition({
   const panelRef = useRef<HTMLDivElement | null>(null);
   const dragStateRef = useRef<DragState | null>(null);
   const dragCleanupRef = useRef<(() => void) | null>(null);
+  const localSavedPositionRef = useRef<DragPosition | null>(null);
   const [position, setPosition] = useState<DragPosition | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const initialLeft = initialOffset?.left ?? margin;
@@ -146,8 +201,17 @@ export function useDraggableModalPosition({
       return;
     }
 
+    if (savePositionOnClose) {
+      const savedPos = (panelId ? getSavedPanelPosition(panelId) : null) ?? localSavedPositionRef.current;
+      if (savedPos) {
+        const rect = panel.getBoundingClientRect();
+        setPosition(clampToViewport(rect.width, rect.height, savedPos, margin));
+        return;
+      }
+    }
+
     setPosition(placeInViewport(panel, margin, initialPlacement, initialLeft, initialTop));
-  }, [initialLeft, initialPlacement, initialTop, margin, open]);
+  }, [initialLeft, initialPlacement, initialTop, margin, open, panelId, savePositionOnClose]);
 
   useEffect(() => {
     return () => {
@@ -237,6 +301,12 @@ export function useDraggableModalPosition({
         margin
       );
       setPosition(next);
+      if (savePositionOnClose) {
+        localSavedPositionRef.current = next;
+        if (panelId) {
+          savePanelPosition(panelId, next);
+        }
+      }
     };
 
     const removeListeners = () => {
