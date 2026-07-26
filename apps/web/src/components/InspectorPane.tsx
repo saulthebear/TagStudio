@@ -8,7 +8,7 @@ import {
   type TagUpdatePayload
 } from "@tagstudio/api-client";
 import { Button } from "@tagstudio/ui";
-import { Maximize2 } from "lucide-react";
+import { Maximize2, Trash2 } from "lucide-react";
 import { type SyntheticEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { AddTagsModal } from "@/components/AddTagsModal";
@@ -61,6 +61,7 @@ type InspectorPaneProps = {
   videoPreviewStartsMuted: boolean;
   onVideoPreviewUnmuted: () => void;
   onOpenFullScreen?: () => void;
+  onDeleteEntries?: () => void;
 };
 
 type AggregateTagRow = {
@@ -117,7 +118,8 @@ export function InspectorPane({
   addTagsModalRequestNonce,
   videoPreviewStartsMuted,
   onVideoPreviewUnmuted,
-  onOpenFullScreen
+  onOpenFullScreen,
+  onDeleteEntries
 }: InspectorPaneProps) {
   const previewSection = (
     <div className="inspector-section">
@@ -137,7 +139,21 @@ export function InspectorPane({
 
   const metadataSection = (
     <div className="inspector-section inspector-meta-section">
-      <h2 className="panel-title m-0">Metadata</h2>
+      <div className="inspector-meta-section-header">
+        <h2 className="panel-title m-0">Metadata</h2>
+        {onDeleteEntries ? (
+          <button
+            type="button"
+            className="inspector-delete-btn"
+            onClick={onDeleteEntries}
+            disabled={selectedEntryIds.length === 0}
+            aria-label="Move to trash"
+            title="Move to Trash"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        ) : null}
+      </div>
       <MetadataContent
         selectedEntry={selectedEntry}
         selectedEntryIds={selectedEntryIds}

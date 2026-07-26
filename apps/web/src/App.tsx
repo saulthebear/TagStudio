@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState
 } from "react";
 
@@ -332,6 +333,62 @@ export function App() {
     }
   }, [getContextMenuState, handleContextMenuAction, selectedEntryId, selectedEntryIds]);
 
+  // Tracks the index of the entry being deleted so we can navigate to a
+  // replacement after the entry list refreshes (fullscreen mode only).
+  const fullscreenDeleteIndexRef = useRef<number | null>(null);
+
+  const handleDeleteEntries = useCallback(() => {
+    const targetIds =
+      selectedEntryIds.length > 0
+        ? selectedEntryIds
+        : selectedEntryId !== null
+          ? [selectedEntryId]
+          : [];
+    if (targetIds.length > 0) {
+      // Capture the current index before the trash so we can land on a
+      // sensible neighbour once the entry list updates (fullscreen only).
+      if (fullScreenModalOpen && selectedEntryId !== null) {
+        const idx = entries.findIndex((e) => e.id === selectedEntryId);
+        fullscreenDeleteIndexRef.current = idx >= 0 ? idx : null;
+      }
+      const state = getContextMenuState(targetIds[0]);
+      handleContextMenuAction("delete_to_trash", state);
+    }
+  }, [entries, fullScreenModalOpen, getContextMenuState, handleContextMenuAction, selectedEntryId, selectedEntryIds]);
+
+  // After a fullscreen delete, navigate to the next available entry so the
+  // user is never left looking at a blank screen.
+  useEffect(() => {
+    if (!fullScreenModalOpen) {
+      fullscreenDeleteIndexRef.current = null;
+      return;
+    }
+    const savedIndex = fullscreenDeleteIndexRef.current;
+    if (savedIndex === null) return;          // no pending post-delete navigation
+    if (selectedEntryId !== null) {           // selection already resolved itself
+      fullscreenDeleteIndexRef.current = null;
+      return;
+    }
+
+    // After trash, deleted entries stay in `entries` but are marked inactive.
+    // Filter them out so we pick a live entry to navigate to.
+    const activeEntries = entries.filter((e) => !inactiveEntryIds.has(e.id));
+
+    if (activeEntries.length === 0) {
+      // Nothing left — exit fullscreen gracefully.
+      fullscreenDeleteIndexRef.current = null;
+      setFullScreenModalOpen(false);
+      return;
+    }
+    // Land on the same visual position (clamped), within the active list.
+    const targetIndex = Math.min(savedIndex, activeEntries.length - 1);
+    const targetEntry = activeEntries[targetIndex];
+    if (targetEntry) {
+      fullscreenDeleteIndexRef.current = null;
+      selectEntry(targetEntry.id);
+    }
+  }, [entries, fullScreenModalOpen, inactiveEntryIds, selectEntry, selectedEntryId]);
+
   const selectedEntries = useMemo(() => {
     const selectedSet = new Set(selectedEntryIds);
     return entries.filter((entry) => selectedSet.has(entry.id));
@@ -477,6 +534,7 @@ export function App() {
       videoPreviewStartsMuted={videoPreviewStartsMuted}
       onVideoPreviewUnmuted={handleVideoPreviewUnmuted}
       onOpenFullScreen={() => setFullScreenModalOpen(true)}
+      onDeleteEntries={handleDeleteEntries}
     />
   );
 
@@ -534,6 +592,7 @@ export function App() {
             onNewFieldKeyChange={setNewFieldKey}
             onNewFieldValueChange={setNewFieldValue}
             onApplyField={applyField}
+            onDeleteEntries={handleDeleteEntries}
           />
         ) : (
           <>

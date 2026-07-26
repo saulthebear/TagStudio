@@ -7,7 +7,7 @@ import {
   type TagResponse,
   type TagUpdatePayload
 } from "@tagstudio/api-client";
-import { ChevronLeft, ChevronRight, FileText, RotateCcw, Tag, X, ZoomIn, ZoomOut } from "lucide-react";
+import { ChevronLeft, ChevronRight, FileText, RotateCcw, Tag, Trash2, X, ZoomIn, ZoomOut } from "lucide-react";
 import { type MouseEvent, type SyntheticEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { AddTagsModal } from "@/components/AddTagsModal";
@@ -59,6 +59,7 @@ export type FullScreenMediaViewProps = {
   onNewFieldKeyChange?: (value: string) => void;
   onNewFieldValueChange?: (value: string) => void;
   onApplyField?: () => void;
+  onDeleteEntries?: () => void;
 };
 
 const MIN_ZOOM = 1;
@@ -114,7 +115,8 @@ export function FullScreenMediaView({
   onSaveField,
   onNewFieldKeyChange,
   onNewFieldValueChange,
-  onApplyField
+  onApplyField,
+  onDeleteEntries
 }: FullScreenMediaViewProps) {
   const [zoomScale, setZoomScale] = useState(1);
   const [panPosition, setPanPosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
@@ -378,14 +380,27 @@ export function FullScreenMediaView({
       <aside className={`fullscreen-metadata-drawer ${metadataOpen ? "fullscreen-metadata-drawer-open" : ""}`}>
         <div className="fullscreen-drawer-header">
           <h2 className="text-base font-semibold text-slate-100 m-0">Metadata</h2>
-          <button
-            type="button"
-            className="fullscreen-control-icon-btn"
-            onClick={() => setMetadataOpen(false)}
-            aria-label="Close metadata panel"
-          >
-            <X className="h-5 w-5" />
-          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}>
+            {onDeleteEntries ? (
+              <button
+                type="button"
+                className="inspector-delete-btn"
+                onClick={onDeleteEntries}
+                aria-label="Move to trash"
+                title="Move to Trash"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className="fullscreen-control-icon-btn"
+              onClick={() => setMetadataOpen(false)}
+              aria-label="Close metadata panel"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
         </div>
         <div className="fullscreen-drawer-body">
           {onAddTagToEntries &&
