@@ -1,6 +1,6 @@
 import { type SortingMode } from "@tagstudio/api-client";
 import { Button } from "@tagstudio/ui";
-import { ArrowUpDown, RefreshCw, Settings, SlidersHorizontal, Volume2, VolumeX } from "lucide-react";
+import { ArrowUpDown, Keyboard, RefreshCw, Settings, SlidersHorizontal, Volume2, VolumeX } from "lucide-react";
 
 import {
   DropdownMenu,
@@ -39,6 +39,7 @@ type TopFilterBarProps = {
   onRefresh: () => void;
   onOpenSettings: () => void;
   onToggleMute: () => void;
+  onOpenShortcutsHelp?: () => void;
   onThemeChange?: (theme: ThemeMode) => void;
 };
 
@@ -74,6 +75,7 @@ export function TopFilterBar({
   onRefresh,
   onOpenSettings,
   onToggleMute,
+  onOpenShortcutsHelp,
   onThemeChange
 }: TopFilterBarProps) {
   return (
@@ -225,6 +227,18 @@ export function TopFilterBar({
       >
         {videoMuted ? <VolumeX size={18} /> : <Volume2 size={18} />}
       </button>
+
+      {onOpenShortcutsHelp ? (
+        <button
+          type="button"
+          className="filter-icon-btn"
+          onClick={onOpenShortcutsHelp}
+          title="Keyboard Shortcuts (?)"
+          aria-label="Keyboard Shortcuts"
+        >
+          <Keyboard size={18} />
+        </button>
+      ) : null}
 
       <button
         type="button"

@@ -6,6 +6,7 @@ import { useEntryContextActions } from "@/hooks/useEntryContextActions";
 import { type TrashDialogState, useTrashActions } from "@/hooks/useTrashActions";
 import { type UndoState, useUndoState } from "@/hooks/useUndoState";
 import { TAG_ARCHIVED_ID, TAG_FAVORITE_ID } from "@/lib/reserved-tags";
+import { findMatchingShortcut } from "@/lib/shortcuts";
 import { computeDesktopSelection } from "@/lib/tag-workflows";
 
 function getFileManagerRevealLabel(): string {
@@ -46,6 +47,7 @@ type UseAppInteractionsArgs = {
   onClearError: () => void;
   onToggleFullScreen?: () => void;
   onToggleMute?: () => void;
+  onOpenShortcutsHelp?: () => void;
   isFullScreenOpen?: boolean;
   busyFlags: {
     tagMutationPending: boolean;
@@ -103,6 +105,7 @@ export function useAppInteractions({
   onClearError,
   onToggleFullScreen,
   onToggleMute,
+  onOpenShortcutsHelp,
   isFullScreenOpen,
   busyFlags
 }: UseAppInteractionsArgs): UseAppInteractionsResult {
@@ -481,76 +484,66 @@ export function useAppInteractions({
         return;
       }
 
-      const activeEl = document.activeElement;
-      if (
-        activeEl &&
-        (activeEl.tagName === "INPUT" ||
-          activeEl.tagName === "TEXTAREA" ||
-          activeEl.tagName === "SELECT" ||
-          (activeEl as HTMLElement).isContentEditable ||
-          activeEl.getAttribute("role") === "textbox")
-      ) {
+      const match = findMatchingShortcut(event);
+      if (!match) {
         return;
       }
 
-      const isCtrlOrMeta = event.ctrlKey || event.metaKey;
-
-      if (isCtrlOrMeta) {
-        const key = event.key.toLowerCase();
-        if (key === "a") {
-          if (entries.length > 0) {
-            event.preventDefault();
-            setSelectedEntryIds(entries.map((e) => e.id));
-          }
-          return;
-        }
-        if (key === "c") {
-          const targetIds =
-            selectedEntryIds.length > 0
-              ? selectedEntryIds
-              : selectedEntryId !== null
-                ? [selectedEntryId]
-                : [];
-          if (targetIds.length > 0) {
-            event.preventDefault();
-            copyTagsFromEntries(targetIds);
-          }
-          return;
-        }
-        if (key === "v") {
-          const targetIds =
-            selectedEntryIds.length > 0
-              ? selectedEntryIds
-              : selectedEntryId !== null
-                ? [selectedEntryId]
-                : [];
-          if (hasPasteableTags && targetIds.length > 0) {
-            event.preventDefault();
-            pasteTagsFromMetadata(targetIds);
-          }
-          return;
+      if (match.id === "select-all") {
+        if (entries.length > 0) {
+          event.preventDefault();
+          setSelectedEntryIds(entries.map((e) => e.id));
         }
         return;
       }
 
-      if (event.key === "ArrowLeft") {
+      if (match.id === "copy-tags") {
+        const targetIds =
+          selectedEntryIds.length > 0
+            ? selectedEntryIds
+            : selectedEntryId !== null
+              ? [selectedEntryId]
+              : [];
+        if (targetIds.length > 0) {
+          event.preventDefault();
+          copyTagsFromEntries(targetIds);
+        }
+        return;
+      }
+
+      if (match.id === "paste-tags") {
+        const targetIds =
+          selectedEntryIds.length > 0
+            ? selectedEntryIds
+            : selectedEntryId !== null
+              ? [selectedEntryId]
+              : [];
+        if (hasPasteableTags && targetIds.length > 0) {
+          event.preventDefault();
+          pasteTagsFromMetadata(targetIds);
+        }
+        return;
+      }
+
+      if (match.id === "navigate-prev") {
         event.preventDefault();
         navigatePrevious();
         return;
       }
-      if (event.key === "ArrowRight") {
+
+      if (match.id === "navigate-next") {
         event.preventDefault();
         navigateNext();
         return;
       }
 
-      if (event.key === "f") {
+      if (match.id === "toggle-fullscreen") {
         event.preventDefault();
         onToggleFullScreen?.();
         return;
       }
 
-      if ((event.key === "F" && event.shiftKey) || event.key === "s" || event.key === "S") {
+      if (match.id === "toggle-favorite") {
         event.preventDefault();
         const targetIds =
           selectedEntryIds.length > 0
@@ -565,13 +558,13 @@ export function useAppInteractions({
         return;
       }
 
-      if (event.key === "m" || event.key === "M") {
+      if (match.id === "toggle-mute") {
         event.preventDefault();
         onToggleMute?.();
         return;
       }
 
-      if (event.key === "t" || event.key === "T") {
+      if (match.id === "toggle-add-tags") {
         event.preventDefault();
         if (selectedEntryId !== null || selectedEntryIds.length > 0) {
           setAddTagsModalRequestNonce((prev) => prev + 1);
@@ -579,7 +572,7 @@ export function useAppInteractions({
         return;
       }
 
-      if (event.key === "Delete" || event.key === "Backspace") {
+      if (match.id === "delete-entries") {
         event.preventDefault();
         const targetIds =
           selectedEntryIds.length > 0
@@ -591,6 +584,12 @@ export function useAppInteractions({
           const state = getContextMenuState(targetIds[0]);
           handleContextMenuAction("delete_to_trash", state);
         }
+        return;
+      }
+
+      if (match.id === "show-help") {
+        event.preventDefault();
+        onOpenShortcutsHelp?.();
         return;
       }
     };
@@ -606,6 +605,7 @@ export function useAppInteractions({
     isFullScreenOpen,
     navigateNext,
     navigatePrevious,
+    onOpenShortcutsHelp,
     onToggleFullScreen,
     onToggleMute,
     pasteTagsFromMetadata,

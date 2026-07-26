@@ -12,6 +12,7 @@ import { type MouseEvent, type SyntheticEvent, useCallback, useEffect, useMemo, 
 
 import { AddTagsModal } from "@/components/AddTagsModal";
 import { MetadataContent } from "@/components/InspectorPane";
+import { findMatchingShortcut } from "@/lib/shortcuts";
 
 export type FullScreenMediaViewProps = {
   selectedEntry: EntryResponse | null;
@@ -32,6 +33,7 @@ export type FullScreenMediaViewProps = {
   onVideoPreviewUnmuted: () => void;
   onToggleMute?: () => void;
   onToggleFavorite?: () => void;
+  onOpenShortcutsHelp?: () => void;
   onClose: () => void;
   onNavigatePrevious: () => void;
   onNavigateNext: () => void;
@@ -87,6 +89,7 @@ export function FullScreenMediaView({
   onVideoPreviewUnmuted,
   onToggleMute,
   onToggleFavorite,
+  onOpenShortcutsHelp,
   onClose,
   onNavigatePrevious,
   onNavigateNext,
@@ -129,22 +132,6 @@ export function FullScreenMediaView({
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      const activeEl = document.activeElement;
-      if (
-        activeEl &&
-        (activeEl.tagName === "INPUT" ||
-          activeEl.tagName === "TEXTAREA" ||
-          activeEl.tagName === "SELECT" ||
-          (activeEl as HTMLElement).isContentEditable ||
-          activeEl.getAttribute("role") === "textbox")
-      ) {
-        return;
-      }
-
-      if (event.ctrlKey || event.metaKey) {
-        return;
-      }
-
       if (event.key === "Escape") {
         event.preventDefault();
         event.stopPropagation();
@@ -159,44 +146,56 @@ export function FullScreenMediaView({
         return;
       }
 
-      if (event.key === "ArrowLeft") {
-        event.preventDefault();
-        onNavigatePrevious();
-        return;
-      }
-      if (event.key === "ArrowRight") {
-        event.preventDefault();
-        onNavigateNext();
+      const match = findMatchingShortcut(event, "fullscreen");
+      if (!match) {
         return;
       }
 
-      if (event.key === "f") {
+      if (match.id === "toggle-fullscreen") {
         event.preventDefault();
         onClose();
         return;
       }
 
-      if (event.key === "m" || event.key === "M") {
+      if (match.id === "toggle-mute") {
         event.preventDefault();
         onToggleMute?.();
         return;
       }
 
-      if (event.key === "t" || event.key === "T") {
+      if (match.id === "toggle-add-tags") {
         event.preventDefault();
         setAddTagsOpen((prev) => !prev);
         return;
       }
 
-      if (event.key === "i" || event.key === "I") {
+      if (match.id === "toggle-metadata") {
         event.preventDefault();
         setMetadataOpen((prev) => !prev);
         return;
       }
 
-      if ((event.key === "F" && event.shiftKey) || event.key === "s" || event.key === "S") {
+      if (match.id === "toggle-favorite") {
         event.preventDefault();
         onToggleFavorite?.();
+        return;
+      }
+
+      if (match.id === "navigate-prev") {
+        event.preventDefault();
+        onNavigatePrevious();
+        return;
+      }
+
+      if (match.id === "navigate-next") {
+        event.preventDefault();
+        onNavigateNext();
+        return;
+      }
+
+      if (match.id === "show-help") {
+        event.preventDefault();
+        onOpenShortcutsHelp?.();
         return;
       }
     };
@@ -209,6 +208,7 @@ export function FullScreenMediaView({
     onClose,
     onNavigateNext,
     onNavigatePrevious,
+    onOpenShortcutsHelp,
     onToggleFavorite,
     onToggleMute
   ]);

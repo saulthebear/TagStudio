@@ -11,6 +11,7 @@ import { api } from "@/api/client";
 import { ErrorPanel } from "@/components/ErrorPanel";
 import { FullScreenMediaView } from "@/components/FullScreenMediaView";
 import { InspectorPane } from "@/components/InspectorPane";
+import { KeyboardShortcutsHelpModal } from "@/components/KeyboardShortcutsHelpModal";
 import { LibraryGate } from "@/components/LibraryGate";
 import { LibrarySwitcherModal } from "@/components/LibrarySwitcherModal";
 import { RefreshStatusPanel } from "@/components/RefreshStatusPanel";
@@ -60,6 +61,11 @@ export function App() {
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
   const [videoPreviewStartsMuted, setVideoPreviewStartsMuted] = useState(true);
   const [fullScreenModalOpen, setFullScreenModalOpen] = useState(false);
+  const [shortcutsHelpOpen, setShortcutsHelpOpen] = useState(false);
+
+  const handleToggleShortcutsHelp = useCallback(() => {
+    setShortcutsHelpOpen((prev) => !prev);
+  }, []);
 
   const onClearError = useCallback(() => {
     setUiError(null);
@@ -291,6 +297,7 @@ export function App() {
     onClearError,
     onToggleFullScreen: toggleFullScreenModal,
     onToggleMute: toggleVideoMute,
+    onOpenShortcutsHelp: handleToggleShortcutsHelp,
     isFullScreenOpen: fullScreenModalOpen,
     busyFlags: {
       tagMutationPending,
@@ -487,6 +494,7 @@ export function App() {
             onVideoPreviewUnmuted={handleVideoPreviewUnmuted}
             onToggleMute={toggleVideoMute}
             onToggleFavorite={handleToggleFavorite}
+            onOpenShortcutsHelp={handleToggleShortcutsHelp}
             onClose={() => setFullScreenModalOpen(false)}
             onNavigatePrevious={navigatePrevious}
             onNavigateNext={navigateNext}
@@ -541,6 +549,7 @@ export function App() {
               onRefresh={refreshLibrary}
               onOpenSettings={openSettings}
               onToggleMute={toggleVideoMute}
+              onOpenShortcutsHelp={handleToggleShortcutsHelp}
               theme={theme}
               onThemeChange={setTheme}
             />
@@ -629,6 +638,11 @@ export function App() {
           }
           onSave={handleSaveSettings}
           onClose={closeSettings}
+        />
+
+        <KeyboardShortcutsHelpModal
+          open={shortcutsHelpOpen}
+          onClose={() => setShortcutsHelpOpen(false)}
         />
 
         {trashDialogState ? (
