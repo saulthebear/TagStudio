@@ -1,5 +1,5 @@
 import { type EntrySummaryResponse } from "@tagstudio/api-client";
-import { Archive, RefreshCw, Star } from "lucide-react";
+import { Archive, Grid, RefreshCw, Star } from "lucide-react";
 import {
   type MouseEvent as ReactMouseEvent,
   useCallback,
@@ -96,6 +96,12 @@ const AUDIO_SUFFIXES = new Set(["mp3", "wav", "ogg", "flac", "m4a"]);
 const PDF_SUFFIXES = new Set(["pdf"]);
 const ARCHIVE_SUFFIXES = new Set(["zip", "rar", "7z", "tar", "gz"]);
 
+const DEFAULT_TILE_SIZE = 180;
+const MIN_TILE_SIZE = 100;
+const MAX_TILE_SIZE = 320;
+const TILE_SIZE_STEP = 10;
+const TILE_SIZE_STORAGE_KEY = "tagstudio:thumb-tile-size";
+
 function normalizeSuffix(rawSuffix: string): string {
   return rawSuffix.trim().toLowerCase().replace(/^\./, "");
 }
@@ -153,6 +159,24 @@ export function ThumbnailGridPane({
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
   const [failedMediaIds, setFailedMediaIds] = useState<Set<number>>(() => new Set());
   const [contextMenu, setContextMenu] = useState<ContextMenuRenderState | null>(null);
+
+  const [tileSize, setTileSize] = useState<number>(() => {
+    if (typeof window === "undefined") {
+      return DEFAULT_TILE_SIZE;
+    }
+    const stored = localStorage.getItem(TILE_SIZE_STORAGE_KEY);
+    const num = stored ? Number(stored) : NaN;
+    return !Number.isNaN(num) && num >= MIN_TILE_SIZE && num <= MAX_TILE_SIZE ? num : DEFAULT_TILE_SIZE;
+  });
+
+  const handleTileSizeChange = useCallback((newSize: number) => {
+    setTileSize(newSize);
+    try {
+      localStorage.setItem(TILE_SIZE_STORAGE_KEY, String(newSize));
+    } catch {
+      // ignore storage errors
+    }
+  }, []);
 
   const closeContextMenu = useCallback(() => {
     setContextMenu(null);
@@ -330,21 +354,42 @@ export function ThumbnailGridPane({
   const selectedEntryIdSet = useMemo(() => new Set(selectedEntryIds), [selectedEntryIds]);
 
   return (
-    <section ref={paneRef} className="pane panel thumb-pane">
+    <section
+      ref={paneRef}
+      className="pane panel thumb-pane"
+      style={{ "--thumb-tile-size": `${tileSize}px` } as React.CSSProperties}
+    >
       <header className="thumb-pane-header">
-        <h2 className="panel-title m-0">Files</h2>
-        <div className="top-filter-status" aria-live="polite">
-          Results: <strong>{totalCount}</strong> | Filter: {filterSummary}
-          {searchResultsStale ? (
-            <>
-              {" "}
-              |{" "}
-              <button type="button" className="top-filter-stale-pill" onClick={onSearch}>
-                <span>Results are stale</span>
-                <RefreshCw size={12} aria-hidden="true" />
-              </button>
-            </>
-          ) : null}
+        <div className="thumb-pane-title-group">
+          <h2 className="panel-title m-0">Files</h2>
+          <div className="top-filter-status" aria-live="polite">
+            Results: <strong>{totalCount}</strong> | Filter: {filterSummary}
+            {searchResultsStale ? (
+              <>
+                {" "}
+                |{" "}
+                <button type="button" className="top-filter-stale-pill" onClick={onSearch}>
+                  <span>Results are stale</span>
+                  <RefreshCw size={12} aria-hidden="true" />
+                </button>
+              </>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="thumb-size-control" title={`Tile size: ${tileSize}px`}>
+          <Grid size={14} className="thumb-size-icon" aria-hidden="true" />
+          <input
+            type="range"
+            min={MIN_TILE_SIZE}
+            max={MAX_TILE_SIZE}
+            step={TILE_SIZE_STEP}
+            value={tileSize}
+            onChange={(e) => handleTileSizeChange(Number(e.target.value))}
+            className="thumb-size-slider"
+            aria-label="Grid tile size"
+          />
+          <span className="thumb-size-value">{tileSize}px</span>
         </div>
       </header>
 

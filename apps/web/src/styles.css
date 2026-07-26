@@ -453,9 +453,50 @@ select {
 
 .thumb-pane-header {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.thumb-pane-title-group {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.thumb-size-control {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 0.5rem;
+  background: var(--color-surface-hover, rgba(0, 0, 0, 0.04));
+  border: 1px solid var(--color-border-soft, rgba(0, 0, 0, 0.08));
+  font-size: 0.75rem;
+  color: #64748b;
+  user-select: none;
+}
+
+.thumb-size-icon {
+  color: #64748b;
+  flex-shrink: 0;
+}
+
+.thumb-size-slider {
+  accent-color: #3b82f6;
+  width: 90px;
+  height: 4px;
+  cursor: pointer;
+}
+
+.thumb-size-value {
+  font-size: 0.7rem;
+  font-weight: 500;
+  min-width: 2.3rem;
+  text-align: right;
+  color: #64748b;
 }
 
 .thumb-pane-subtitle {
@@ -485,8 +526,9 @@ select {
 
 .thumb-grid-item {
   min-width: 0;
-  width: clamp(120px, 16vw, 220px);
-  flex: 0 0 clamp(120px, 16vw, 220px);
+  width: var(--thumb-tile-size, 180px);
+  flex: 1 1 var(--thumb-tile-size, 180px);
+  max-width: calc(var(--thumb-tile-size, 180px) * 1.35);
 }
 
 .thumb-card {
@@ -1533,6 +1575,17 @@ body.modal-dragging {
 }
 
 .dark .top-filter-status {
+  color: #94a3b8;
+}
+
+.dark .thumb-size-control {
+  background: rgba(30, 41, 59, 0.6);
+  border-color: rgba(255, 255, 255, 0.1);
+  color: #94a3b8;
+}
+
+.dark .thumb-size-icon,
+.dark .thumb-size-value {
   color: #94a3b8;
 }
 
