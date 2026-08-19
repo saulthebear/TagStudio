@@ -10,25 +10,34 @@ containing browser-compatible codecs) and to perform a lossless remux using
 FFmpeg.
 """
 
+from enum import Enum
 import json
 import os
+from pathlib import Path
 import shutil
 import subprocess
-from pathlib import Path
 
 import structlog
 
 logger = structlog.get_logger(__name__)
 
-# Container format names reported by ffprobe that browsers can play natively.
-# "mov,mp4,m4a,m4v,3gp,3g2,mj2" is how ffprobe identifies the MP4/MOV family.
-BROWSER_NATIVE_CONTAINERS: set[str] = {
-    "mov,mp4,m4a,m4v,3gp,3g2,mj2",
+# Container format tokens reported by ffprobe that browsers can play natively.
+BROWSER_NATIVE_CONTAINER_TOKENS: set[str] = {
+    "mov",
+    "mp4",
+    "m4a",
+    "m4v",
+    "3gp",
+    "3g2",
+    "mj2",
+    "quicktime",
 }
 
 # Video codecs that browsers can decode.
 BROWSER_COMPATIBLE_VIDEO_CODECS: set[str] = {
     "h264",
+    "hevc",
+    "h265",
     "vp8",
     "vp9",
     "av1",
@@ -76,13 +85,20 @@ def find_ffprobe() -> str | None:
     return _find_tool("ffprobe")
 
 
+def is_browser_native_container(format_name: str) -> bool:
+    """Return True if the container format string corresponds to a browser-native MP4/MOV container."""
+    if not format_name:
+        return False
+    tokens = {tok.strip().lower() for tok in format_name.split(",")}
+    return bool(tokens & BROWSER_NATIVE_CONTAINER_TOKENS)
+
 
 def _run_ffprobe(path: Path, ffprobe_cmd: str, timeout: float = 30.0) -> dict | None:
     """Run ffprobe and return parsed JSON output, or None on failure."""
     cmd = [
         ffprobe_cmd,
         "-v", "error",
-        "-show_entries", "format=format_name:stream=codec_name,codec_type",
+        "-show_entries", "format=format_name:stream=codec_name,codec_type,disposition",
         "-of", "json",
         str(path),
     ]
@@ -105,9 +121,6 @@ def _run_ffprobe(path: Path, ffprobe_cmd: str, timeout: float = 30.0) -> dict | 
         return None
 
 
-from enum import Enum
-
-
 class VideoInspectionStatus(str, Enum):
     NATIVE = "native"
     REMUXABLE = "remuxable"
@@ -126,24 +139,36 @@ def inspect_video(path: Path, ffprobe_cmd: str) -> VideoInspectionStatus:
         return VideoInspectionStatus.CORRUPTED
 
     format_name = probe.get("format", {}).get("format_name", "")
-    if format_name in BROWSER_NATIVE_CONTAINERS:
+    is_native_container = is_browser_native_container(format_name)
+
+    # Separate primary video streams and audio streams, ignoring attached cover art
+    video_streams: list[dict] = []
+    audio_streams: list[dict] = []
+    for s in streams:
+        codec_type = s.get("codec_type")
+        disposition = s.get("disposition", {}) or {}
+        is_attached_pic = bool(disposition.get("attached_pic", 0))
+        if codec_type == "video":
+            if not is_attached_pic:
+                video_streams.append(s)
+        elif codec_type == "audio":
+            audio_streams.append(s)
+
+    if not video_streams:
+        return VideoInspectionStatus.CORRUPTED
+
+    if is_native_container:
         return VideoInspectionStatus.NATIVE
 
-    has_video = False
-    for stream in streams:
-        codec_name = stream.get("codec_name", "")
-        codec_type = stream.get("codec_type", "")
+    for s in video_streams:
+        codec_name = str(s.get("codec_name", "")).lower()
+        if codec_name not in BROWSER_COMPATIBLE_VIDEO_CODECS:
+            return VideoInspectionStatus.UNSUPPORTED
 
-        if codec_type == "video":
-            has_video = True
-            if codec_name not in BROWSER_COMPATIBLE_VIDEO_CODECS:
-                return VideoInspectionStatus.UNSUPPORTED
-        elif codec_type == "audio":
-            if codec_name not in BROWSER_COMPATIBLE_AUDIO_CODECS:
-                return VideoInspectionStatus.UNSUPPORTED
-
-    if not has_video:
-        return VideoInspectionStatus.CORRUPTED
+    for s in audio_streams:
+        codec_name = str(s.get("codec_name", "")).lower()
+        if codec_name not in BROWSER_COMPATIBLE_AUDIO_CODECS:
+            return VideoInspectionStatus.UNSUPPORTED
 
     return VideoInspectionStatus.REMUXABLE
 
@@ -186,95 +211,89 @@ def remux_to_mp4(
         extension, the returned path will have .mp4 extension.
 
     Raises:
-        subprocess.CalledProcessError: If ffmpeg exits with a non-zero code.
-        subprocess.TimeoutExpired: If ffmpeg exceeds the timeout.
-        OSError: If file operations (move/rename) fail.
+        RuntimeError: If FFmpeg fails or times out.
+        FileNotFoundError: If the input file does not exist.
     """
-    # Determine output path — always .mp4
-    if path.suffix.lower() != ".mp4":
-        final_path = path.with_suffix(".mp4")
-    else:
-        final_path = path
+    if not path.is_file():
+        raise FileNotFoundError(f"Video file not found: {path}")
 
-    # Use a temp file next to the original to avoid partial writes.
-    tmp_path = path.with_name(path.stem + ".remux.tmp.mp4")
+    # Determine destination path.
+    target_mp4_path = path.with_suffix(".mp4")
+    # Temporary output file created alongside the target.
+    temp_output_path = target_mp4_path.with_name(f".{target_mp4_path.stem}.remux.tmp.mp4")
 
+    # Clean up any leftover temporary file from a prior failed attempt.
+    if temp_output_path.exists():
+        temp_output_path.unlink()
+
+    cmd = [
+        ffmpeg_cmd,
+        "-y",
+        "-i", str(path),
+        "-c", "copy",
+        "-movflags", "+faststart",
+        str(temp_output_path),
+    ]
+
+    logger.info("remux.start", source=str(path), target=str(target_mp4_path))
     try:
-        cmd = [
-            ffmpeg_cmd,
-            "-y",                   # Overwrite output without asking
-            "-i", str(path),
-            "-c", "copy",           # Copy all streams without re-encoding
-            "-movflags", "+faststart",  # Move moov atom to start for streaming
-            str(tmp_path),
-        ]
-
-        logger.info("remux.start", src=str(path), dst=str(final_path))
-        subprocess.run(
+        result = subprocess.run(
             cmd,
             capture_output=True,
             text=True,
             timeout=timeout,
-            check=True,
         )
+        if result.returncode != 0:
+            if temp_output_path.exists():
+                temp_output_path.unlink()
+            raise RuntimeError(
+                f"FFmpeg remux failed (exit code {result.returncode}): {result.stderr.strip()}"
+            )
+    except subprocess.TimeoutExpired as exc:
+        if temp_output_path.exists():
+            temp_output_path.unlink()
+        raise RuntimeError(f"FFmpeg remux timed out after {timeout}s: {path}") from exc
 
-        # Back up original if requested.
-        if backup_dir is not None:
-            if library_dir is None:
-                raise ValueError("library_dir is required when backup_dir is set")
+    # If backup mode is requested, move original to backup_dir before replacing.
+    if backup_dir is not None:
+        if library_dir is None:
+            raise ValueError("library_dir must be provided when backup_dir is specified.")
+        try:
+            rel_path = path.relative_to(library_dir)
+        except ValueError:
+            rel_path = Path(path.name)
 
-            try:
-                rel = path.relative_to(library_dir)
-            except ValueError:
-                rel = Path(path.name)
-
-            backup_path = backup_dir / rel
-            backup_path.parent.mkdir(parents=True, exist_ok=True)
-            shutil.move(str(path), str(backup_path))
-            logger.info("remux.backup", original=str(path), backup=str(backup_path))
-        else:
-            # Remove the original (we already have the remuxed copy).
-            if path != final_path:
-                path.unlink()
-            # If same path, we'll overwrite below via rename.
-
-        # Move temp file to final location.
-        if final_path.exists() and final_path != path:
-            # Edge case: a file with the .mp4 name already exists.
-            final_path.unlink()
-        elif path == final_path and backup_dir is None:
-            # Original was .mp4 and no backup — remove before rename.
+        backup_file_path = backup_dir / rel_path
+        backup_file_path.parent.mkdir(parents=True, exist_ok=True)
+        # Move original to backup location
+        shutil.move(str(path), str(backup_file_path))
+        logger.info("remux.backup_created", original=str(path), backup=str(backup_file_path))
+    else:
+        # If target has a different extension and we aren't backing up, remove old file.
+        if target_mp4_path != path and path.exists():
             path.unlink()
 
-        shutil.move(str(tmp_path), str(final_path))
-        logger.info("remux.complete", path=str(final_path))
-        return final_path
+    # Move temp remux output into final location.
+    shutil.move(str(temp_output_path), str(target_mp4_path))
+    logger.info("remux.complete", target=str(target_mp4_path))
 
-    except Exception:
-        # Clean up temp file on any failure.
-        if tmp_path.exists():
-            try:
-                tmp_path.unlink()
-            except OSError:
-                pass
-        raise
+    return target_mp4_path
 
 
 def get_backup_size(backup_dir: Path) -> tuple[int, int]:
-    """Return (total_bytes, file_count) for all files in the backup directory.
+    """Calculate the total bytes and file count of remux backups.
 
-    Returns (0, 0) if the directory doesn't exist.
+    Returns (total_bytes, file_count).
     """
     if not backup_dir.exists():
         return 0, 0
 
     total_bytes = 0
     file_count = 0
-    for root, _dirs, files in os.walk(backup_dir):
-        for f in files:
-            fp = Path(root) / f
+    for file_path in backup_dir.rglob("*"):
+        if file_path.is_file():
             try:
-                total_bytes += fp.stat().st_size
+                total_bytes += file_path.stat().st_size
                 file_count += 1
             except OSError:
                 pass
@@ -282,28 +301,27 @@ def get_backup_size(backup_dir: Path) -> tuple[int, int]:
 
 
 def purge_backups(backup_dir: Path) -> int:
-    """Delete all backup files and empty directories.
+    """Delete all files in the remux backup directory.
 
     Returns the number of files deleted.
     """
     if not backup_dir.exists():
         return 0
 
-    count = 0
-    for root, _dirs, files in os.walk(backup_dir, topdown=False):
-        for f in files:
-            fp = Path(root) / f
+    deleted_count = 0
+    for item in list(backup_dir.rglob("*")):
+        if item.is_file():
             try:
-                fp.unlink()
-                count += 1
-            except OSError as exc:
-                logger.warning("purge_backups.unlink_failed", path=str(fp), error=str(exc))
+                item.unlink()
+                deleted_count += 1
+            except OSError as err:
+                logger.warning("purge_backups.unlink_failed", path=str(item), error=str(err))
 
-    # Remove empty directories.
-    try:
-        shutil.rmtree(backup_dir)
-    except OSError:
-        pass
+    # Clean up empty directories
+    for dirpath, dirnames, filenames in os.walk(backup_dir, topdown=False):
+        try:
+            os.rmdir(dirpath)
+        except OSError:
+            pass
 
-    logger.info("purge_backups.complete", files_deleted=count)
-    return count
+    return deleted_count

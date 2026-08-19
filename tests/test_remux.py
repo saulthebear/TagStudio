@@ -7,7 +7,9 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from tagstudio.core.media.remux import (
+    VideoInspectionStatus,
     get_backup_size,
+    inspect_video,
     needs_remux,
     purge_backups,
     remux_to_mp4,
@@ -23,7 +25,45 @@ def test_needs_remux_native_mp4() -> None:
         ],
     }
     with patch("tagstudio.core.media.remux._run_ffprobe", return_value=probe_output):
+        assert inspect_video(Path("test.mp4"), "ffprobe") == VideoInspectionStatus.NATIVE
         assert needs_remux(Path("test.mp4"), "ffprobe") is False
+
+
+def test_inspect_video_hevc_and_cover_art() -> None:
+    # MP4 with HEVC and container format without m4v
+    probe_output_hevc = {
+        "format": {"format_name": "mov,mp4,m4a,3gp,3g2,mj2"},
+        "streams": [
+            {"codec_name": "hevc", "codec_type": "video"},
+            {"codec_name": "aac", "codec_type": "audio"},
+        ],
+    }
+    with patch("tagstudio.core.media.remux._run_ffprobe", return_value=probe_output_hevc):
+        assert inspect_video(Path("test.mp4"), "ffprobe") == VideoInspectionStatus.NATIVE
+
+    # MP4 with H264 and MJPEG attached cover art
+    probe_output_cover_art = {
+        "format": {"format_name": "mov,mp4,m4a,3gp,3g2,mj2"},
+        "streams": [
+            {"codec_name": "h264", "codec_type": "video"},
+            {"codec_name": "aac", "codec_type": "audio"},
+            {"codec_name": "mjpeg", "codec_type": "video", "disposition": {"attached_pic": 1}},
+        ],
+    }
+    with patch("tagstudio.core.media.remux._run_ffprobe", return_value=probe_output_cover_art):
+        assert inspect_video(Path("test.mp4"), "ffprobe") == VideoInspectionStatus.NATIVE
+
+
+def test_inspect_video_unsupported_mpeg2() -> None:
+    probe_output = {
+        "format": {"format_name": "mpeg"},
+        "streams": [
+            {"codec_name": "mpeg2video", "codec_type": "video"},
+        ],
+    }
+    with patch("tagstudio.core.media.remux._run_ffprobe", return_value=probe_output):
+        assert inspect_video(Path("test.mp4"), "ffprobe") == VideoInspectionStatus.UNSUPPORTED
+
 
 
 def test_needs_remux_mpegts_with_h264_aac() -> None:
