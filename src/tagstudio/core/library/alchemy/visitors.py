@@ -107,7 +107,12 @@ class SQLBoolExpressionBuilder(BaseVisitor[ColumnElement[bool]]):
             )
         elif node.type == ConstraintType.Special:  # noqa: SIM102 unnecessary once there is a second special constraint
             if node.value.lower() == "untagged":
-                return ~Entry.id.in_(select(Entry.id).join(TagEntry))
+                user_tag_entries = (
+                    select(TagEntry.entry_id)
+                    .join(Tag, Tag.id == TagEntry.tag_id)
+                    .where(~Tag.name.ilike("system:%"))
+                )
+                return ~Entry.id.in_(user_tag_entries)
 
         # raise exception if Constraint stays unhandled
         raise NotImplementedError("This type of constraint is not implemented yet")

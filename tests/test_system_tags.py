@@ -119,3 +119,41 @@ def test_sync_retroactive_system_tags(tmp_path: Path) -> None:
     assert any(t.name == "system:corrupted" for t in e2_full.tags)
 
     lib.close()
+
+
+def test_untagged_search_ignores_system_tags(tmp_path: Path) -> None:
+    lib_path = tmp_path / "lib"
+    lib_path.mkdir(parents=True, exist_ok=True)
+    lib = Library()
+    status = lib.open_library(lib_path)
+    assert status.success
+
+    folder = unwrap(lib.folder)
+    e_no_tags = Entry(path=Path("no_tags.mp4"), folder=folder, fields=lib.default_fields)
+    e_sys_only = Entry(path=Path("sys_only.mp4"), folder=folder, fields=lib.default_fields)
+    e_user_tagged = Entry(path=Path("user_tagged.mp4"), folder=folder, fields=lib.default_fields)
+    assert lib.add_entries([e_no_tags, e_sys_only, e_user_tagged])
+
+    # Tag e_sys_only with system:remuxed
+    tag_entries_with_system_tag(lib, e_sys_only.id, TAG_SYSTEM_REMUXED)
+
+    # Create a user tag and tag e_user_tagged with both a user tag and system:remuxed
+    user_tag = lib.add_tag(Tag(name="MyUserTag"))
+    assert user_tag is not None
+    lib.add_tags_to_entries([e_user_tagged.id], user_tag.id)
+    tag_entries_with_system_tag(lib, e_user_tagged.id, TAG_SYSTEM_REMUXED)
+
+    # Search for untagged entries
+    from tagstudio.core.library.alchemy.enums import BrowsingState
+    state = BrowsingState(query="special:untagged")
+    res = lib.search_library(state, page_size=100)
+    found_ids = set(res.ids)
+
+    # e_no_tags and e_sys_only SHOULD be in untagged results
+    assert e_no_tags.id in found_ids
+    assert e_sys_only.id in found_ids
+    # e_user_tagged SHOULD NOT be in untagged results
+    assert e_user_tagged.id not in found_ids
+
+    lib.close()
+
