@@ -1,5 +1,5 @@
 import { type EntrySummaryResponse, type OpenEntriesResponse, type TrashEntriesResponse, type TrashFailureReasonCode } from "@tagstudio/api-client";
-import { type Dispatch, type MouseEvent as ReactMouseEvent, type SetStateAction, useCallback, useEffect, useMemo, useState } from "react";
+import { type Dispatch, type MouseEvent as ReactMouseEvent, type SetStateAction, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { type ThumbnailContextMenuAction, type ThumbnailContextMenuState } from "@/components/ThumbnailGridPane";
 import { useEntryContextActions } from "@/hooks/useEntryContextActions";
@@ -120,15 +120,66 @@ export function useAppInteractions({
     onClearError
   });
 
-  const handleDeletedEntries = useCallback((deletedIds: Set<number>) => {
-    setSelectedEntryIds((prev) => prev.filter((entryId) => !deletedIds.has(entryId)));
-    setSelectionAnchorId((prev) => {
-      if (prev === null || !deletedIds.has(prev)) {
-        return prev;
+  const inactiveEntryIdsRef = useRef<ReadonlySet<number>>(new Set());
+
+  const handleDeletedEntries = useCallback(
+    (deletedIds: Set<number>) => {
+      const nextSelectedIds = selectedEntryIds.filter((entryId) => !deletedIds.has(entryId));
+      const activeEntryWasDeleted = selectedEntryId !== null && deletedIds.has(selectedEntryId);
+
+      if (activeEntryWasDeleted) {
+        const currentInactive = inactiveEntryIdsRef.current;
+        const activeEntries = entries.filter(
+          (entry) => !currentInactive.has(entry.id) && !deletedIds.has(entry.id)
+        );
+
+        if (activeEntries.length === 0) {
+          setSelectedEntryIds([]);
+          setSelectionAnchorId(null);
+          clearSelection();
+          if (isFullScreenOpen) {
+            onToggleFullScreen?.();
+          }
+        } else {
+          const deletedIndex = entries.findIndex((entry) => entry.id === selectedEntryId);
+          let targetEntry: EntrySummaryResponse | undefined;
+
+          if (deletedIndex >= 0) {
+            targetEntry = entries
+              .slice(deletedIndex)
+              .find((entry) => !currentInactive.has(entry.id) && !deletedIds.has(entry.id));
+          }
+
+          if (!targetEntry) {
+            targetEntry = activeEntries[activeEntries.length - 1];
+          }
+
+          if (targetEntry) {
+            setSelectedEntryIds([targetEntry.id]);
+            setSelectionAnchorId(targetEntry.id);
+            selectEntry(targetEntry.id);
+          }
+        }
+      } else {
+        setSelectedEntryIds(nextSelectedIds);
+        setSelectionAnchorId((prev) => {
+          if (prev === null || !deletedIds.has(prev)) {
+            return prev;
+          }
+          return null;
+        });
       }
-      return null;
-    });
-  }, []);
+    },
+    [
+      clearSelection,
+      entries,
+      isFullScreenOpen,
+      onToggleFullScreen,
+      selectEntry,
+      selectedEntryId,
+      selectedEntryIds
+    ]
+  );
 
   const {
     skipTrashConfirmSession,
@@ -144,13 +195,13 @@ export function useAppInteractions({
     confirmBeforeTrash,
     setConfirmBeforeTrashPreference,
     trashEntries,
-    selectedEntryId,
-    clearSelection,
     formatTrashFailureReason,
     onDeletedEntries: handleDeletedEntries,
     onError,
     onClearError
   });
+
+  inactiveEntryIdsRef.current = inactiveEntryIds;
 
   useEffect(() => {
     setSelectedEntryIds([]);
@@ -431,52 +482,56 @@ export function useAppInteractions({
   );
 
   const navigatePrevious = useCallback(() => {
-    if (entries.length === 0) return;
-    const currentIndex = selectedEntryId !== null ? entries.findIndex((e) => e.id === selectedEntryId) : -1;
+    const activeEntries = entries.filter((entry) => !inactiveEntryIds.has(entry.id));
+    if (activeEntries.length === 0) return;
+    const currentIndex = selectedEntryId !== null ? activeEntries.findIndex((e) => e.id === selectedEntryId) : -1;
     let nextIndex: number;
     if (currentIndex <= 0) {
       nextIndex = 0;
     } else {
       nextIndex = currentIndex - 1;
     }
-    const nextEntry = entries[nextIndex];
+    const nextEntry = activeEntries[nextIndex];
     if (nextEntry) {
       setSelectedEntryIds([nextEntry.id]);
       setSelectionAnchorId(nextEntry.id);
       selectEntry(nextEntry.id);
     }
-  }, [entries, selectEntry, selectedEntryId]);
+  }, [entries, inactiveEntryIds, selectEntry, selectedEntryId]);
 
   const navigateNext = useCallback(() => {
-    if (entries.length === 0) return;
-    const currentIndex = selectedEntryId !== null ? entries.findIndex((e) => e.id === selectedEntryId) : -1;
+    const activeEntries = entries.filter((entry) => !inactiveEntryIds.has(entry.id));
+    if (activeEntries.length === 0) return;
+    const currentIndex = selectedEntryId !== null ? activeEntries.findIndex((e) => e.id === selectedEntryId) : -1;
     let nextIndex: number;
     if (currentIndex < 0) {
       nextIndex = 0;
-    } else if (currentIndex >= entries.length - 1) {
-      nextIndex = entries.length - 1;
+    } else if (currentIndex >= activeEntries.length - 1) {
+      nextIndex = activeEntries.length - 1;
     } else {
       nextIndex = currentIndex + 1;
     }
-    const nextEntry = entries[nextIndex];
+    const nextEntry = activeEntries[nextIndex];
     if (nextEntry) {
       setSelectedEntryIds([nextEntry.id]);
       setSelectionAnchorId(nextEntry.id);
       selectEntry(nextEntry.id);
     }
-  }, [entries, selectEntry, selectedEntryId]);
+  }, [entries, inactiveEntryIds, selectEntry, selectedEntryId]);
 
   const hasPrevious = useMemo(() => {
-    if (entries.length === 0 || selectedEntryId === null) return false;
-    const currentIndex = entries.findIndex((e) => e.id === selectedEntryId);
+    const activeEntries = entries.filter((entry) => !inactiveEntryIds.has(entry.id));
+    if (activeEntries.length === 0 || selectedEntryId === null) return false;
+    const currentIndex = activeEntries.findIndex((e) => e.id === selectedEntryId);
     return currentIndex > 0;
-  }, [entries, selectedEntryId]);
+  }, [entries, inactiveEntryIds, selectedEntryId]);
 
   const hasNext = useMemo(() => {
-    if (entries.length === 0 || selectedEntryId === null) return false;
-    const currentIndex = entries.findIndex((e) => e.id === selectedEntryId);
-    return currentIndex >= 0 && currentIndex < entries.length - 1;
-  }, [entries, selectedEntryId]);
+    const activeEntries = entries.filter((entry) => !inactiveEntryIds.has(entry.id));
+    if (activeEntries.length === 0 || selectedEntryId === null) return false;
+    const currentIndex = activeEntries.findIndex((e) => e.id === selectedEntryId);
+    return currentIndex >= 0 && currentIndex < activeEntries.length - 1;
+  }, [entries, inactiveEntryIds, selectedEntryId]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {

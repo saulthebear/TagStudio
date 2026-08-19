@@ -75,7 +75,7 @@ export const SHORTCUT_REGISTRY: ShortcutDefinition[] = [
     name: "Move to Trash",
     description: "Move selected entries to Trash",
     category: "Selection & Edit",
-    scope: "grid",
+    scope: "global",
     combos: [{ key: "Delete" }, { key: "Backspace" }],
     displayCombos: ["Del", "Backspace"]
   },

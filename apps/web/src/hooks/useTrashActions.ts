@@ -11,8 +11,6 @@ type UseTrashActionsArgs = {
   confirmBeforeTrash: boolean;
   setConfirmBeforeTrashPreference: (enabled: boolean) => Promise<void>;
   trashEntries: (entryIds: number[]) => Promise<TrashEntriesResponse>;
-  selectedEntryId: number | null;
-  clearSelection: () => void;
   formatTrashFailureReason: (reasonCode: TrashFailureReasonCode) => string;
   onDeletedEntries: (deletedIds: Set<number>) => void;
   onError: (message: string) => void;
@@ -44,8 +42,6 @@ export function useTrashActions({
   confirmBeforeTrash,
   setConfirmBeforeTrashPreference,
   trashEntries,
-  selectedEntryId,
-  clearSelection,
   formatTrashFailureReason,
   onDeletedEntries,
   onError,
@@ -143,9 +139,6 @@ export function useTrashActions({
           return next;
         });
         onDeletedEntries(deletedIds);
-        if (selectedEntryId !== null && deletedIds.has(selectedEntryId)) {
-          clearSelection();
-        }
       }
 
       if (response.failed_count > 0) {
@@ -169,14 +162,12 @@ export function useTrashActions({
       }
     },
     [
-      clearSelection,
       clearTrashFailureHighlights,
       failureTimeoutMs,
       formatTrashFailureReason,
       onClearError,
       onDeletedEntries,
       onError,
-      selectedEntryId,
       setConfirmBeforeTrashPreference,
       trashEntries
     ]

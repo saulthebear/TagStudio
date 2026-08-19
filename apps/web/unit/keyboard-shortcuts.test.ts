@@ -58,5 +58,9 @@ describe("SHORTCUT_REGISTRY & matching engine", () => {
 
     const fullscreenSearch = findMatchingShortcut(metadataEvent, "fullscreen");
     expect(fullscreenSearch?.id).toBe("toggle-metadata");
+
+    const deleteEvent = { key: "Delete" };
+    expect(findMatchingShortcut(deleteEvent, "grid")?.id).toBe("delete-entries");
+    expect(findMatchingShortcut(deleteEvent, "fullscreen")?.id).toBe("delete-entries");
   });
 });

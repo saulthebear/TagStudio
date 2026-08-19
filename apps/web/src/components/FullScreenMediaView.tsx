@@ -195,6 +195,12 @@ export function FullScreenMediaView({
         return;
       }
 
+      if (match.id === "delete-entries") {
+        event.preventDefault();
+        onDeleteEntries?.();
+        return;
+      }
+
       if (match.id === "show-help") {
         event.preventDefault();
         onOpenShortcutsHelp?.();
@@ -208,6 +214,7 @@ export function FullScreenMediaView({
     addTagsOpen,
     metadataOpen,
     onClose,
+    onDeleteEntries,
     onNavigateNext,
     onNavigatePrevious,
     onOpenShortcutsHelp,
