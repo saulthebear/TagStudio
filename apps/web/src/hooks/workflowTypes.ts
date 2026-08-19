@@ -2,6 +2,8 @@ import {
   type EntrySummaryResponse,
   type LayoutSettings,
   type LayoutSettingsUpdateRequest,
+  type RemuxMode,
+  type RemuxOnImport,
   type SortingMode
 } from "@tagstudio/api-client";
 
@@ -22,6 +24,8 @@ export type SettingsDraft = {
   showHiddenEntries: boolean;
   pageSize: number;
   confirmBeforeTrash: boolean;
+  remuxMode: RemuxMode;
+  remuxOnImport: RemuxOnImport;
 };
 
 export const DEFAULT_MAIN_SPLIT: SplitPaneState = {
@@ -43,7 +47,9 @@ export const DEFAULT_DRAFT: SettingsDraft = {
   ascending: false,
   showHiddenEntries: false,
   pageSize: 200,
-  confirmBeforeTrash: true
+  confirmBeforeTrash: true,
+  remuxMode: "backup",
+  remuxOnImport: "ask"
 };
 
 export function dedupeEntries(entries: EntrySummaryResponse[]): EntrySummaryResponse[] {

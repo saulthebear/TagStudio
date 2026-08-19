@@ -219,11 +219,46 @@ export type JobStatusResponse = {
   message: string | null;
   error: string | null;
   is_terminal: boolean;
+  remux_candidates_count?: number | null;
 };
 
 export type JobEventPayload = JobStatusResponse & {
   timestamp: string;
 };
+
+export type RemuxMode = "backup" | "replace";
+export type RemuxOnImport = "off" | "ask" | "auto";
+
+export type RemuxSettings = {
+  mode: RemuxMode;
+  on_import: RemuxOnImport;
+};
+
+export type RemuxSettingsUpdateRequest = {
+  mode?: RemuxMode;
+  on_import?: RemuxOnImport;
+};
+
+export type RemuxCheckResponse = {
+  candidates_count: number;
+  total_scanned: number;
+};
+
+export type RemuxBackupInfoResponse = {
+  total_bytes: number;
+  file_count: number;
+};
+
+export type RemuxPurgeResponse = {
+  files_deleted: number;
+};
+
+export type SystemTagsSyncResponse = {
+  remuxed_tagged: number;
+  corrupted_tagged: number;
+  unsupported_tagged: number;
+};
+
 
 export type SettingsResponse = {
   sorting_mode: SortingMode;
@@ -233,6 +268,7 @@ export type SettingsResponse = {
   layout: LayoutSettings;
   thumbnails: ThumbnailSettings;
   confirmations: ConfirmationSettings;
+  remux: RemuxSettings;
 };
 
 export type LayoutSettings = {
@@ -289,7 +325,9 @@ export type SettingsUpdateRequest = {
   layout?: LayoutSettingsUpdateRequest;
   thumbnails?: ThumbnailSettingsUpdateRequest;
   confirmations?: ConfirmationSettingsUpdateRequest;
+  remux?: RemuxSettingsUpdateRequest;
 };
+
 
 export type ApiConfig = {
   baseUrl: string;
@@ -526,6 +564,34 @@ export class TagStudioApiClient {
 
   async startRefreshJob(): Promise<JobCreateResponse> {
     return this.request("/api/v1/jobs/refresh", {
+      method: "POST"
+    });
+  }
+
+  async startRemuxJob(): Promise<JobCreateResponse> {
+    return this.request("/api/v1/jobs/remux", {
+      method: "POST"
+    });
+  }
+
+  async checkRemux(): Promise<RemuxCheckResponse> {
+    return this.request("/api/v1/jobs/remux:check", {
+      method: "POST"
+    });
+  }
+
+  async getRemuxBackups(): Promise<RemuxBackupInfoResponse> {
+    return this.request("/api/v1/remux/backups");
+  }
+
+  async purgeRemuxBackups(): Promise<RemuxPurgeResponse> {
+    return this.request("/api/v1/remux/purge-backups", {
+      method: "POST"
+    });
+  }
+
+  async syncSystemTags(): Promise<SystemTagsSyncResponse> {
+    return this.request("/api/v1/system-tags:sync", {
       method: "POST"
     });
   }

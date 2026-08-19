@@ -188,14 +188,17 @@ export function App() {
     tagMutationPending,
     tagEditPending,
     refreshPending,
+    remuxPending,
     trashPending,
     shellActionPending,
     refreshStatus,
+    remuxStatus,
     selectEntry,
     clearSelection,
     saveField,
     applyField,
     refreshLibrary,
+    startRemux,
     refreshSelectedEntry,
     trashEntries,
     openEntries,
@@ -624,7 +627,14 @@ export function App() {
               onThemeChange={setTheme}
             />
 
-            {refreshStatus ? <RefreshStatusPanel refreshStatus={refreshStatus} /> : null}
+            {refreshStatus || remuxStatus ? (
+              <RefreshStatusPanel
+                refreshStatus={refreshStatus}
+                remuxStatus={remuxStatus}
+                onStartRemux={startRemux}
+                remuxPending={remuxPending}
+              />
+            ) : null}
 
             {isMobile ? (
               <section className="mobile-pane-tabs panel">
@@ -695,6 +705,8 @@ export function App() {
           showHiddenEntries={settingsDraft.showHiddenEntries}
           pageSize={settingsDraft.pageSize}
           confirmBeforeTrash={settingsDraft.confirmBeforeTrash}
+          remuxMode={settingsDraft.remuxMode}
+          remuxOnImport={settingsDraft.remuxOnImport}
           savePending={savePending}
           onThemeChange={setTheme}
           onSortingModeChange={(value) => setSettingsDraft((prev) => ({ ...prev, sortingMode: value }))}
@@ -706,6 +718,14 @@ export function App() {
           onConfirmBeforeTrashChange={(value) =>
             setSettingsDraft((prev) => ({ ...prev, confirmBeforeTrash: value }))
           }
+          onRemuxModeChange={(value) =>
+            setSettingsDraft((prev) => ({ ...prev, remuxMode: value }))
+          }
+          onRemuxOnImportChange={(value) =>
+            setSettingsDraft((prev) => ({ ...prev, remuxOnImport: value }))
+          }
+          onStartRemux={startRemux}
+          remuxPending={remuxPending}
           onOpenShortcutsHelp={handleToggleShortcutsHelp}
           onSave={handleSaveSettings}
           onClose={closeSettings}

@@ -1026,6 +1026,96 @@
         }
       }
     },
+    "/api/v1/jobs/remux": {
+      "post": {
+        "summary": "Start Remux Job",
+        "operationId": "start_remux_job_api_v1_jobs_remux_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobCreateResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/jobs/remux:check": {
+      "post": {
+        "summary": "Check Remux Candidates",
+        "operationId": "check_remux_candidates_api_v1_jobs_remux_check_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemuxCheckResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/remux/backups": {
+      "get": {
+        "summary": "Get Remux Backup Info",
+        "operationId": "get_remux_backup_info_api_v1_remux_backups_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemuxBackupInfoResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/remux/purge-backups": {
+      "post": {
+        "summary": "Purge Remux Backups Endpoint",
+        "operationId": "purge_remux_backups_endpoint_api_v1_remux_purge_backups_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemuxPurgeResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/system-tags:sync": {
+      "post": {
+        "summary": "Sync System Tags Endpoint",
+        "operationId": "sync_system_tags_endpoint_api_v1_system_tags_sync_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemTagsSyncResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/jobs/{job_id}": {
       "get": {
         "summary": "Get Job",
@@ -1471,6 +1561,17 @@
           "is_terminal": {
             "type": "boolean",
             "title": "Is Terminal"
+          },
+          "remux_candidates_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remux Candidates Count"
           }
         },
         "type": "object",
@@ -1864,6 +1965,112 @@
         ],
         "title": "PreviewResponse"
       },
+      "RemuxBackupInfoResponse": {
+        "properties": {
+          "total_bytes": {
+            "type": "integer",
+            "title": "Total Bytes"
+          },
+          "file_count": {
+            "type": "integer",
+            "title": "File Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total_bytes",
+          "file_count"
+        ],
+        "title": "RemuxBackupInfoResponse"
+      },
+      "RemuxCheckResponse": {
+        "properties": {
+          "candidates_count": {
+            "type": "integer",
+            "title": "Candidates Count"
+          },
+          "total_scanned": {
+            "type": "integer",
+            "title": "Total Scanned"
+          }
+        },
+        "type": "object",
+        "required": [
+          "candidates_count",
+          "total_scanned"
+        ],
+        "title": "RemuxCheckResponse"
+      },
+      "RemuxMode": {
+        "type": "string",
+        "enum": [
+          "backup",
+          "replace"
+        ],
+        "title": "RemuxMode"
+      },
+      "RemuxOnImport": {
+        "type": "string",
+        "enum": [
+          "off",
+          "ask",
+          "auto"
+        ],
+        "title": "RemuxOnImport"
+      },
+      "RemuxPurgeResponse": {
+        "properties": {
+          "files_deleted": {
+            "type": "integer",
+            "title": "Files Deleted"
+          }
+        },
+        "type": "object",
+        "required": [
+          "files_deleted"
+        ],
+        "title": "RemuxPurgeResponse"
+      },
+      "RemuxSettings": {
+        "properties": {
+          "mode": {
+            "$ref": "#/components/schemas/RemuxMode",
+            "default": "backup"
+          },
+          "on_import": {
+            "$ref": "#/components/schemas/RemuxOnImport",
+            "default": "ask"
+          }
+        },
+        "type": "object",
+        "title": "RemuxSettings"
+      },
+      "RemuxSettingsUpdateRequest": {
+        "properties": {
+          "mode": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RemuxMode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "on_import": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RemuxOnImport"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "title": "RemuxSettingsUpdateRequest"
+      },
       "RevealEntryRequest": {
         "properties": {
           "entry_id": {
@@ -2004,6 +2211,9 @@
           },
           "confirmations": {
             "$ref": "#/components/schemas/ConfirmationSettings"
+          },
+          "remux": {
+            "$ref": "#/components/schemas/RemuxSettings"
           }
         },
         "type": "object",
@@ -2085,6 +2295,16 @@
                 "type": "null"
               }
             ]
+          },
+          "remux": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RemuxSettingsUpdateRequest"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -2112,6 +2332,29 @@
           "success"
         ],
         "title": "SuccessResponse"
+      },
+      "SystemTagsSyncResponse": {
+        "properties": {
+          "remuxed_tagged": {
+            "type": "integer",
+            "title": "Remuxed Tagged"
+          },
+          "corrupted_tagged": {
+            "type": "integer",
+            "title": "Corrupted Tagged"
+          },
+          "unsupported_tagged": {
+            "type": "integer",
+            "title": "Unsupported Tagged"
+          }
+        },
+        "type": "object",
+        "required": [
+          "remuxed_tagged",
+          "corrupted_tagged",
+          "unsupported_tagged"
+        ],
+        "title": "SystemTagsSyncResponse"
       },
       "TagColorNamespaceResponse": {
         "properties": {

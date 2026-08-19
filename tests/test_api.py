@@ -929,3 +929,52 @@ def test_thumbnail_pipeline_ffmpeg_and_ffprobe_timeout_returns_none() -> None:
                 assert pipeline._extract_video_frame_with_ffmpeg(video_path, 0.0) is None
         finally:
             pipeline.close()
+
+
+def test_remux_settings_and_endpoints() -> None:
+    with TemporaryDirectory() as tmp:
+        library_path = Path(tmp) / "library"
+        app = create_app(require_token=False)
+        with TestClient(app) as client:
+            create_res = client.post("/api/v1/libraries/create", json={"path": str(library_path)})
+            assert create_res.status_code == 200
+
+            # Check default settings include remux
+            settings_res = client.get("/api/v1/settings")
+            assert settings_res.status_code == 200
+            settings_data = settings_res.json()
+            assert "remux" in settings_data
+            assert settings_data["remux"] == {"mode": "backup", "on_import": "ask"}
+
+            # Patch remux settings
+            patch_res = client.patch("/api/v1/settings", json={"remux": {"mode": "replace", "on_import": "auto"}})
+            assert patch_res.status_code == 200
+            assert patch_res.json()["remux"] == {"mode": "replace", "on_import": "auto"}
+
+            # Check remux check endpoint
+            with patch("tagstudio.api.routes.find_ffprobe", return_value="ffprobe"), \
+                 patch("tagstudio.api.routes.needs_remux", return_value=False):
+                check_res = client.post("/api/v1/jobs/remux:check")
+                assert check_res.status_code == 200
+                assert check_res.json() == {"candidates_count": 0, "total_scanned": 0}
+
+            # Check remux backups info
+            backup_res = client.get("/api/v1/remux/backups")
+            assert backup_res.status_code == 200
+            assert backup_res.json() == {"total_bytes": 0, "file_count": 0}
+
+            # Check remux purge backups
+            purge_res = client.post("/api/v1/remux/purge-backups")
+            assert purge_res.status_code == 200
+            assert purge_res.json() == {"files_deleted": 0}
+
+            # Start remux job
+            with patch("tagstudio.api.jobs.find_ffmpeg", return_value="ffmpeg"), \
+                 patch("tagstudio.api.jobs.find_ffprobe", return_value="ffprobe"):
+                job_res = client.post("/api/v1/jobs/remux")
+                assert job_res.status_code == 200
+                job_id = job_res.json()["job_id"]
+
+                status_res = client.get(f"/api/v1/jobs/{job_id}")
+                assert status_res.status_code == 200
+                assert status_res.json()["operation"] == "remux"

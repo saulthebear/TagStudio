@@ -47,6 +47,10 @@ DEFAULT_WEB_SETTINGS: dict[str, Any] = {
     "confirmations": {
         "confirm_before_trash": True,
     },
+    "remux": {
+        "mode": "backup",
+        "on_import": "ask",
+    },
 }
 
 
@@ -243,7 +247,24 @@ class ApiState:
             confirmations.get("confirm_before_trash", True)
         )
 
+        remux = settings.get("remux")
+        if not isinstance(remux, dict):
+            remux = deepcopy(DEFAULT_WEB_SETTINGS["remux"])
+        raw_mode = remux.get("mode", "backup")
+        remux_mode = str(getattr(raw_mode, "value", raw_mode)).lower()
+        if remux_mode not in {"backup", "replace"}:
+            remux_mode = "backup"
+        remux["mode"] = remux_mode
+
+        raw_on_import = remux.get("on_import", "ask")
+        remux_on_import = str(getattr(raw_on_import, "value", raw_on_import)).lower()
+        if remux_on_import not in {"off", "ask", "auto"}:
+            remux_on_import = "ask"
+        remux["on_import"] = remux_on_import
+
         settings["layout"] = layout
         settings["thumbnails"] = thumbs
         settings["confirmations"] = confirmations
+        settings["remux"] = remux
         return settings
+

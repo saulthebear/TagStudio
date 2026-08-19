@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { type SortingMode } from "@tagstudio/api-client";
+import { type RemuxMode, type RemuxOnImport, type SortingMode } from "@tagstudio/api-client";
 
 import { type SplitPaneState } from "@/components/SplitPane";
 import { api } from "@/api/client";
@@ -34,6 +34,10 @@ type UseSettingsWorkflowResult = {
   confirmBeforeTrash: boolean;
   setConfirmBeforeTrash: (value: boolean) => void;
   setConfirmBeforeTrashPreference: (value: boolean) => Promise<void>;
+  remuxMode: RemuxMode;
+  setRemuxMode: (value: RemuxMode) => void;
+  remuxOnImport: RemuxOnImport;
+  setRemuxOnImport: (value: RemuxOnImport) => void;
   settingsDraft: SettingsDraft;
   setSettingsDraft: (value: SettingsDraft | ((prev: SettingsDraft) => SettingsDraft)) => void;
   settingsOpen: boolean;
@@ -55,8 +59,21 @@ type SettingsConfirmations = {
   confirm_before_trash?: boolean;
 } | null | undefined;
 
+type SettingsRemux = {
+  mode?: RemuxMode;
+  on_import?: RemuxOnImport;
+} | null | undefined;
+
 function resolveConfirmBeforeTrashValue(confirmations: SettingsConfirmations): boolean {
   return confirmations?.confirm_before_trash ?? DEFAULT_DRAFT.confirmBeforeTrash;
+}
+
+function resolveRemuxModeValue(remux: SettingsRemux): RemuxMode {
+  return remux?.mode ?? DEFAULT_DRAFT.remuxMode;
+}
+
+function resolveRemuxOnImportValue(remux: SettingsRemux): RemuxOnImport {
+  return remux?.on_import ?? DEFAULT_DRAFT.remuxOnImport;
 }
 
 export function useSettingsWorkflow({
@@ -72,6 +89,8 @@ export function useSettingsWorkflow({
   const [showHiddenEntries, setShowHiddenEntries] = useState(DEFAULT_DRAFT.showHiddenEntries);
   const [pageSize, setPageSize] = useState(DEFAULT_DRAFT.pageSize);
   const [confirmBeforeTrash, setConfirmBeforeTrash] = useState(DEFAULT_DRAFT.confirmBeforeTrash);
+  const [remuxMode, setRemuxMode] = useState<RemuxMode>(DEFAULT_DRAFT.remuxMode);
+  const [remuxOnImport, setRemuxOnImport] = useState<RemuxOnImport>(DEFAULT_DRAFT.remuxOnImport);
 
   const [mainSplitState, setMainSplitState] = useState<SplitPaneState>(DEFAULT_MAIN_SPLIT);
   const [inspectorSplitState, setInspectorSplitState] = useState<SplitPaneState>(
@@ -104,18 +123,24 @@ export function useSettingsWorkflow({
     }
 
     const confirmBeforeTrashValue = resolveConfirmBeforeTrashValue(settings.data.confirmations);
+    const remuxModeValue = resolveRemuxModeValue(settings.data.remux);
+    const remuxOnImportValue = resolveRemuxOnImportValue(settings.data.remux);
 
     setSortingMode(settings.data.sorting_mode);
     setAscending(settings.data.ascending);
     setShowHiddenEntries(settings.data.show_hidden_entries);
     setPageSize(settings.data.page_size);
     setConfirmBeforeTrash(confirmBeforeTrashValue);
+    setRemuxMode(remuxModeValue);
+    setRemuxOnImport(remuxOnImportValue);
     setSettingsDraft({
       sortingMode: settings.data.sorting_mode,
       ascending: settings.data.ascending,
       showHiddenEntries: settings.data.show_hidden_entries,
       pageSize: settings.data.page_size,
-      confirmBeforeTrash: confirmBeforeTrashValue
+      confirmBeforeTrash: confirmBeforeTrashValue,
+      remuxMode: remuxModeValue,
+      remuxOnImport: remuxOnImportValue
     });
     setMainSplitState(layoutToMainSplit(settings.data.layout));
     setInspectorSplitState(layoutToInspectorSplit(settings.data.layout));
@@ -132,10 +157,16 @@ export function useSettingsWorkflow({
         page_size: draft.pageSize,
         confirmations: {
           confirm_before_trash: draft.confirmBeforeTrash
+        },
+        remux: {
+          mode: draft.remuxMode,
+          on_import: draft.remuxOnImport
         }
       }),
     onSuccess: (nextSettings) => {
       const confirmBeforeTrashValue = resolveConfirmBeforeTrashValue(nextSettings.confirmations);
+      const remuxModeValue = resolveRemuxModeValue(nextSettings.remux);
+      const remuxOnImportValue = resolveRemuxOnImportValue(nextSettings.remux);
       onClearError();
       queryClient.setQueryData(settingsQueryKey, nextSettings);
       setSortingMode(nextSettings.sorting_mode);
@@ -143,12 +174,16 @@ export function useSettingsWorkflow({
       setShowHiddenEntries(nextSettings.show_hidden_entries);
       setPageSize(nextSettings.page_size);
       setConfirmBeforeTrash(confirmBeforeTrashValue);
+      setRemuxMode(remuxModeValue);
+      setRemuxOnImport(remuxOnImportValue);
       setSettingsDraft({
         sortingMode: nextSettings.sorting_mode,
         ascending: nextSettings.ascending,
         showHiddenEntries: nextSettings.show_hidden_entries,
         pageSize: nextSettings.page_size,
-        confirmBeforeTrash: confirmBeforeTrashValue
+        confirmBeforeTrash: confirmBeforeTrashValue,
+        remuxMode: remuxModeValue,
+        remuxOnImport: remuxOnImportValue
       });
       setSettingsOpen(false);
     },
@@ -197,10 +232,12 @@ export function useSettingsWorkflow({
       ascending,
       showHiddenEntries,
       pageSize,
-      confirmBeforeTrash
+      confirmBeforeTrash,
+      remuxMode,
+      remuxOnImport
     });
     setSettingsOpen(true);
-  }, [ascending, confirmBeforeTrash, pageSize, showHiddenEntries, sortingMode]);
+  }, [ascending, confirmBeforeTrash, pageSize, remuxMode, remuxOnImport, showHiddenEntries, sortingMode]);
 
   const closeSettings = useCallback(() => {
     setSettingsOpen(false);
@@ -210,12 +247,16 @@ export function useSettingsWorkflow({
     try {
       const nextSettings = await saveSettingsMutation.mutateAsync(settingsDraft);
       const confirmBeforeTrashValue = resolveConfirmBeforeTrashValue(nextSettings.confirmations);
+      const remuxModeValue = resolveRemuxModeValue(nextSettings.remux);
+      const remuxOnImportValue = resolveRemuxOnImportValue(nextSettings.remux);
       return {
         sortingMode: nextSettings.sorting_mode,
         ascending: nextSettings.ascending,
         showHiddenEntries: nextSettings.show_hidden_entries,
         pageSize: nextSettings.page_size,
-        confirmBeforeTrash: confirmBeforeTrashValue
+        confirmBeforeTrash: confirmBeforeTrashValue,
+        remuxMode: remuxModeValue,
+        remuxOnImport: remuxOnImportValue
       };
     } catch {
       return null;
@@ -231,11 +272,17 @@ export function useSettingsWorkflow({
           }
         });
         const confirmBeforeTrashValue = resolveConfirmBeforeTrashValue(nextSettings.confirmations);
+        const remuxModeValue = resolveRemuxModeValue(nextSettings.remux);
+        const remuxOnImportValue = resolveRemuxOnImportValue(nextSettings.remux);
         queryClient.setQueryData(settingsQueryKey, nextSettings);
         setConfirmBeforeTrash(confirmBeforeTrashValue);
+        setRemuxMode(remuxModeValue);
+        setRemuxOnImport(remuxOnImportValue);
         setSettingsDraft((prev) => ({
           ...prev,
-          confirmBeforeTrash: confirmBeforeTrashValue
+          confirmBeforeTrash: confirmBeforeTrashValue,
+          remuxMode: remuxModeValue,
+          remuxOnImport: remuxOnImportValue
         }));
         onClearError();
       } catch (error) {
@@ -257,6 +304,10 @@ export function useSettingsWorkflow({
     confirmBeforeTrash,
     setConfirmBeforeTrash,
     setConfirmBeforeTrashPreference,
+    remuxMode,
+    setRemuxMode,
+    remuxOnImport,
+    setRemuxOnImport,
     settingsDraft,
     setSettingsDraft,
     settingsOpen,

@@ -278,6 +278,8 @@ class JobStatusResponse(BaseModel):
     message: str | None = None
     error: str | None = None
     is_terminal: bool
+    remux_candidates_count: int | None = None
+
 
 
 class JobCreateResponse(BaseModel):
@@ -331,6 +333,48 @@ class ConfirmationSettingsUpdateRequest(BaseModel):
     confirm_before_trash: bool | None = None
 
 
+class RemuxMode(str, Enum):
+    BACKUP = "backup"
+    REPLACE = "replace"
+
+
+class RemuxOnImport(str, Enum):
+    OFF = "off"
+    ASK = "ask"
+    AUTO = "auto"
+
+
+class RemuxSettings(BaseModel):
+    mode: RemuxMode = RemuxMode.BACKUP
+    on_import: RemuxOnImport = RemuxOnImport.ASK
+
+
+class RemuxSettingsUpdateRequest(BaseModel):
+    mode: RemuxMode | None = None
+    on_import: RemuxOnImport | None = None
+
+
+class RemuxCheckResponse(BaseModel):
+    candidates_count: int
+    total_scanned: int
+
+
+class RemuxBackupInfoResponse(BaseModel):
+    total_bytes: int
+    file_count: int
+
+
+class RemuxPurgeResponse(BaseModel):
+    files_deleted: int
+
+
+class SystemTagsSyncResponse(BaseModel):
+    remuxed_tagged: int
+    corrupted_tagged: int
+    unsupported_tagged: int
+
+
+
 class SettingsResponse(BaseModel):
     sorting_mode: SortingMode = SortingMode.DATE_ADDED
     ascending: bool = True
@@ -339,6 +383,7 @@ class SettingsResponse(BaseModel):
     layout: LayoutSettings = Field(default_factory=LayoutSettings)
     thumbnails: ThumbnailSettings = Field(default_factory=ThumbnailSettings)
     confirmations: ConfirmationSettings = Field(default_factory=ConfirmationSettings)
+    remux: RemuxSettings = Field(default_factory=RemuxSettings)
 
 
 class SettingsUpdateRequest(BaseModel):
@@ -349,7 +394,9 @@ class SettingsUpdateRequest(BaseModel):
     layout: LayoutSettingsUpdateRequest | None = None
     thumbnails: ThumbnailSettingsUpdateRequest | None = None
     confirmations: ConfirmationSettingsUpdateRequest | None = None
+    remux: RemuxSettingsUpdateRequest | None = None
 
 
 class SuccessResponse(BaseModel):
     success: bool
+

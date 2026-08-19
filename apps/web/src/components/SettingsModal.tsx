@@ -1,6 +1,8 @@
-import { type SortingMode } from "@tagstudio/api-client";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { type RemuxMode, type RemuxOnImport, type SortingMode } from "@tagstudio/api-client";
 import { Button } from "@tagstudio/ui";
 
+import { api } from "@/api/client";
 import { ModalHeader } from "@/components/ModalHeader";
 import { ModalLayerPortal } from "@/components/ModalLayerPortal";
 import { useDraggableModalPosition } from "@/hooks/useDraggableModalPosition";
@@ -14,6 +16,8 @@ type SettingsModalProps = {
   showHiddenEntries: boolean;
   pageSize: number;
   confirmBeforeTrash: boolean;
+  remuxMode: RemuxMode;
+  remuxOnImport: RemuxOnImport;
   savePending: boolean;
   onThemeChange: (theme: ThemeMode) => void;
   onSortingModeChange: (value: SortingMode) => void;
@@ -21,6 +25,10 @@ type SettingsModalProps = {
   onShowHiddenChange: (value: boolean) => void;
   onPageSizeChange: (value: number) => void;
   onConfirmBeforeTrashChange: (value: boolean) => void;
+  onRemuxModeChange: (value: RemuxMode) => void;
+  onRemuxOnImportChange: (value: RemuxOnImport) => void;
+  onStartRemux?: () => void;
+  remuxPending?: boolean;
   onOpenShortcutsHelp?: () => void;
   onSave: () => void;
   onClose: () => void;
@@ -32,6 +40,14 @@ const SORTING_OPTIONS: Array<{ label: string; value: SortingMode }> = [
   { label: "Random", value: "sorting.mode.random" }
 ];
 
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return "0 B";
+  const k = 1024;
+  const sizes = ["B", "KB", "MB", "GB", "TB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
+}
+
 export function SettingsModal({
   open,
   theme,
@@ -40,6 +56,8 @@ export function SettingsModal({
   showHiddenEntries,
   pageSize,
   confirmBeforeTrash,
+  remuxMode,
+  remuxOnImport,
   savePending,
   onThemeChange,
   onSortingModeChange,
@@ -47,10 +65,15 @@ export function SettingsModal({
   onShowHiddenChange,
   onPageSizeChange,
   onConfirmBeforeTrashChange,
+  onRemuxModeChange,
+  onRemuxOnImportChange,
+  onStartRemux,
+  remuxPending = false,
   onOpenShortcutsHelp,
   onSave,
   onClose
 }: SettingsModalProps) {
+  const queryClient = useQueryClient();
   const { panelRef, panelStyle, dragHandleProps, isDragging } = useDraggableModalPosition({
     open,
     margin: 16,
@@ -58,9 +81,24 @@ export function SettingsModal({
     panelId: "settings-modal"
   });
 
+  const backupsQuery = useQuery({
+    queryKey: ["remux-backups"],
+    queryFn: () => api.getRemuxBackups(),
+    enabled: open
+  });
+
+  const purgeMutation = useMutation({
+    mutationFn: () => api.purgeRemuxBackups(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["remux-backups"] });
+    }
+  });
+
   if (!open) {
     return null;
   }
+
+  const backupInfo = backupsQuery.data;
 
   return (
     <ModalLayerPortal open={open} dimBackdrop={true} onBackdropClick={onClose}>
@@ -147,6 +185,68 @@ export function SettingsModal({
           <span>Ask before moving files to Trash</span>
         </label>
 
+        <div className="my-2 border-t border-slate-200 dark:border-slate-800" />
+        <div className="px-1 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+          Video Remuxing
+        </div>
+
+        <label className="settings-row">
+          <span>Remux mode</span>
+          <select
+            className="input-base"
+            value={remuxMode}
+            onChange={(event) => onRemuxModeChange(event.target.value as RemuxMode)}
+          >
+            <option value="backup">Backup originals (Safe)</option>
+            <option value="replace">Replace in-place (No backup)</option>
+          </select>
+        </label>
+
+        <label className="settings-row">
+          <span>On import</span>
+          <select
+            className="input-base"
+            value={remuxOnImport}
+            onChange={(event) => onRemuxOnImportChange(event.target.value as RemuxOnImport)}
+          >
+            <option value="off">Off</option>
+            <option value="ask">Ask when needed</option>
+            <option value="auto">Automatically remux</option>
+          </select>
+        </label>
+
+        {onStartRemux ? (
+          <div className="settings-row flex items-center justify-between pt-1">
+            <span>Remux Library Videos</span>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              disabled={remuxPending}
+              onClick={onStartRemux}
+            >
+              {remuxPending ? "Remuxing..." : "Remux Videos"}
+            </Button>
+          </div>
+        ) : null}
+
+        {backupInfo && backupInfo.file_count > 0 ? (
+          <div className="settings-row flex items-center justify-between pt-1">
+            <span className="text-xs text-slate-500 dark:text-slate-400">
+              Backups: {formatBytes(backupInfo.total_bytes)} ({backupInfo.file_count} file{backupInfo.file_count === 1 ? "" : "s"})
+            </span>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              disabled={purgeMutation.isPending}
+              onClick={() => purgeMutation.mutate()}
+            >
+              {purgeMutation.isPending ? "Purging..." : "Purge Backups"}
+            </Button>
+          </div>
+        ) : null}
+
         {onOpenShortcutsHelp ? (
           <div className="settings-row flex items-center justify-between pt-1">
             <span>Keyboard Shortcuts</span>
@@ -176,4 +276,3 @@ export function SettingsModal({
     </ModalLayerPortal>
   );
 }
-

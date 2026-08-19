@@ -29,12 +29,16 @@ from tagstudio.api.schemas import (
     OpenEntriesResponse,
     PreviewKind,
     PreviewResponse,
+    RemuxBackupInfoResponse,
+    RemuxCheckResponse,
+    RemuxPurgeResponse,
     RevealEntryRequest,
     SearchRequest,
     SearchResponse,
     SettingsResponse,
     SettingsUpdateRequest,
     SuccessResponse,
+    SystemTagsSyncResponse,
     TagColorNamespaceResponse,
     TagColorResponse,
     TagCreateRequest,
@@ -77,9 +81,19 @@ from tagstudio.api.services.tag_service import (
     update_tag as update_tag_service,
 )
 from tagstudio.api.state import ApiState
+from tagstudio.core.constants import TS_FOLDER_NAME
 from tagstudio.core.library.alchemy.enums import BrowsingState, SortingModeEnum
 from tagstudio.core.library.alchemy.library import Library, LibraryStatus
+from tagstudio.core.library.system_tags import sync_retroactive_system_tags
+from tagstudio.core.media.remux import (
+    VIDEO_EXTENSIONS,
+    find_ffprobe,
+    get_backup_size,
+    needs_remux,
+    purge_backups,
+)
 from tagstudio.core.media.thumbnail_pipeline import ThumbnailUnsupportedError
+
 from tagstudio.core.utils.silent_subprocess import silent_popen
 
 TEXT_SUFFIXES = {"txt", "md", "json", "toml", "yaml", "yml", "csv", "log", "py", "ts", "tsx"}
@@ -278,6 +292,8 @@ def create_router(*, state: ApiState, jobs: JobManager) -> APIRouter:
             updates["thumbnails"] = request.thumbnails.model_dump(exclude_none=True)
         if request.confirmations is not None:
             updates["confirmations"] = request.confirmations.model_dump(exclude_none=True)
+        if request.remux is not None:
+            updates["remux"] = request.remux.model_dump(mode="json", exclude_none=True)
         return SettingsResponse.model_validate(state.update_web_settings(updates))
 
     @router.get("/field-types", response_model=list[FieldTypeResponse])
@@ -697,8 +713,67 @@ def create_router(*, state: ApiState, jobs: JobManager) -> APIRouter:
     @router.post("/jobs/refresh", response_model=JobCreateResponse)
     def start_refresh_job() -> JobCreateResponse:
         lib = get_library_or_error()
-        job = jobs.start_refresh(lib)
+        settings = state.get_web_settings()
+        remux_settings = settings.get("remux", {})
+        remux_mode = remux_settings.get("mode", "backup")
+        remux_on_import = remux_settings.get("on_import", "ask")
+        job = jobs.start_refresh(lib, remux_mode=remux_mode, remux_on_import=remux_on_import)
         return JobCreateResponse(job_id=job.id, status=job.status)
+
+    @router.post("/jobs/remux", response_model=JobCreateResponse)
+    def start_remux_job() -> JobCreateResponse:
+        lib = get_library_or_error()
+        settings = state.get_web_settings()
+        remux_settings = settings.get("remux", {})
+        remux_mode = remux_settings.get("mode", "backup")
+        job = jobs.start_remux(lib, mode=remux_mode)
+        return JobCreateResponse(job_id=job.id, status=job.status)
+
+    @router.post("/jobs/remux:check", response_model=RemuxCheckResponse)
+    def check_remux_candidates() -> RemuxCheckResponse:
+        lib = get_library_or_error()
+        library_dir = lib.library_dir
+        if library_dir is None:
+            raise HTTPException(status_code=409, detail="No library open.")
+        ffprobe_cmd = find_ffprobe()
+        if not ffprobe_cmd:
+            return RemuxCheckResponse(candidates_count=0, total_scanned=0)
+
+        total_scanned = 0
+        candidates_count = 0
+        for entry in lib.all_entries():
+            suffix = entry.path.suffix.lower().lstrip(".")
+            if suffix in VIDEO_EXTENSIONS:
+                total_scanned += 1
+                full_p = library_dir / entry.path
+                if full_p.is_file() and needs_remux(full_p, ffprobe_cmd):
+                    candidates_count += 1
+
+        return RemuxCheckResponse(candidates_count=candidates_count, total_scanned=total_scanned)
+
+    @router.get("/remux/backups", response_model=RemuxBackupInfoResponse)
+    def get_remux_backup_info() -> RemuxBackupInfoResponse:
+        lib = get_library_or_error()
+        if lib.library_dir is None:
+            return RemuxBackupInfoResponse(total_bytes=0, file_count=0)
+        backup_dir = lib.library_dir / TS_FOLDER_NAME / "remux_backups"
+        total_bytes, file_count = get_backup_size(backup_dir)
+        return RemuxBackupInfoResponse(total_bytes=total_bytes, file_count=file_count)
+
+    @router.post("/remux/purge-backups", response_model=RemuxPurgeResponse)
+    def purge_remux_backups_endpoint() -> RemuxPurgeResponse:
+        lib = get_library_or_error()
+        if lib.library_dir is None:
+            return RemuxPurgeResponse(files_deleted=0)
+        backup_dir = lib.library_dir / TS_FOLDER_NAME / "remux_backups"
+        deleted = purge_backups(backup_dir)
+        return RemuxPurgeResponse(files_deleted=deleted)
+
+    @router.post("/system-tags:sync", response_model=SystemTagsSyncResponse)
+    def sync_system_tags_endpoint() -> SystemTagsSyncResponse:
+        lib = get_library_or_error()
+        summary = sync_retroactive_system_tags(lib)
+        return SystemTagsSyncResponse.model_validate(summary)
 
     @router.get("/jobs/{job_id}", response_model=JobStatusResponse)
     def get_job(job_id: str) -> JobStatusResponse:
@@ -716,3 +791,4 @@ def create_router(*, state: ApiState, jobs: JobManager) -> APIRouter:
         return StreamingResponse(stream, media_type="text/event-stream")
 
     return router
+

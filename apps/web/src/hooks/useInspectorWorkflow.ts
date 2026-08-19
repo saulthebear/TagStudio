@@ -43,14 +43,17 @@ type UseInspectorWorkflowResult = {
   tagMutationPending: boolean;
   tagEditPending: boolean;
   refreshPending: boolean;
+  remuxPending: boolean;
   trashPending: boolean;
   shellActionPending: boolean;
   refreshStatus: JobEventPayload | null;
+  remuxStatus: JobEventPayload | null;
   selectEntry: (entryId: number) => void;
   clearSelection: () => void;
   saveField: (fieldKey: string, value: string) => void;
   applyField: () => void;
   refreshLibrary: () => void;
+  startRemux: () => void;
   refreshSelectedEntry: () => Promise<void>;
   trashEntries: (entryIds: number[]) => Promise<TrashEntriesResponse>;
   openEntries: (entryIds: number[]) => Promise<OpenEntriesResponse>;
@@ -81,6 +84,7 @@ export function useInspectorWorkflow({
 }: UseInspectorWorkflowArgs): UseInspectorWorkflowResult {
   const queryClient = useQueryClient();
   const eventStreamRef = useRef<EventSource | null>(null);
+  const remuxStreamRef = useRef<EventSource | null>(null);
   const prewarmedPreviewIdsRef = useRef<Set<number>>(new Set());
 
   const [selectedEntryId, setSelectedEntryId] = useState<number | null>(null);
@@ -89,6 +93,7 @@ export function useInspectorWorkflow({
   const [newFieldKey, setNewFieldKey] = useState("");
   const [newFieldValue, setNewFieldValue] = useState("");
   const [refreshStatus, setRefreshStatus] = useState<JobEventPayload | null>(null);
+  const [remuxStatus, setRemuxStatus] = useState<JobEventPayload | null>(null);
 
   const refreshSelectedEntry = useCallback(async () => {
     if (!selectedEntryId) {
@@ -105,18 +110,21 @@ export function useInspectorWorkflow({
   useEffect(
     () => () => {
       eventStreamRef.current?.close();
+      remuxStreamRef.current?.close();
     },
     []
   );
 
   useEffect(() => {
     eventStreamRef.current?.close();
+    remuxStreamRef.current?.close();
     setSelectedEntryId(null);
     setSelectedEntry(null);
     setFieldDrafts({});
     setNewFieldKey("");
     setNewFieldValue("");
     setRefreshStatus(null);
+    setRemuxStatus(null);
     prewarmedPreviewIdsRef.current = new Set();
   }, [activeLibraryPath]);
 
@@ -287,6 +295,43 @@ export function useInspectorWorkflow({
     },
     onError: (error) => {
       onError(error instanceof Error ? error.message : "Unable to start refresh.");
+    }
+  });
+
+  const startRemuxMutation = useMutation({
+    mutationFn: () => api.startRemuxJob(),
+    onSuccess: (job) => {
+      onClearError();
+      setRemuxStatus(null);
+      remuxStreamRef.current?.close();
+      const source = new EventSource(api.getJobEventsUrl(job.job_id));
+      remuxStreamRef.current = source;
+
+      const onEvent = (event: MessageEvent) => {
+        const payload = JSON.parse(event.data) as JobEventPayload;
+        setRemuxStatus(payload);
+
+        if (payload.is_terminal) {
+          source.close();
+          queryClient.invalidateQueries({ queryKey: ["library-state"] });
+          queryClient.invalidateQueries({ queryKey: ["entry"] });
+          queryClient.invalidateQueries({ queryKey: ["preview"] });
+          queryClient.invalidateQueries({ queryKey: ["remux-backups"] });
+          void executeSearch({ query: activeQuery, pageIndex: 0, append: false });
+        }
+      };
+
+      source.addEventListener("job.started", onEvent as EventListener);
+      source.addEventListener("job.progress", onEvent as EventListener);
+      source.addEventListener("job.completed", onEvent as EventListener);
+      source.addEventListener("job.failed", onEvent as EventListener);
+
+      source.onerror = () => {
+        source.close();
+      };
+    },
+    onError: (error) => {
+      onError(error instanceof Error ? error.message : "Unable to start remux job.");
     }
   });
 
@@ -476,14 +521,17 @@ export function useInspectorWorkflow({
     tagMutationPending: addTagsMutation.isPending || removeTagsMutation.isPending,
     tagEditPending: createTagMutation.isPending || updateTagMutation.isPending,
     refreshPending: refreshLibraryMutation.isPending,
+    remuxPending: startRemuxMutation.isPending,
     trashPending: trashEntriesMutation.isPending,
     shellActionPending: openEntriesMutation.isPending || revealEntryMutation.isPending,
     refreshStatus,
+    remuxStatus,
     selectEntry,
     clearSelection,
     saveField,
     applyField,
     refreshLibrary,
+    startRemux: () => startRemuxMutation.mutate(),
     trashEntries,
     openEntries,
     revealEntry,
