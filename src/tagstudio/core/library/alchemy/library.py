@@ -1260,7 +1260,7 @@ class Library:
                 result.append((tag, counts_map.get(tag.id, 0)))
             return result
 
-    def get_tag_co_occurrences(self, limit: int = 500) -> list[tuple[int, int, int]]:
+    def get_tag_co_occurrences(self, limit: int = 2000) -> list[tuple[int, int, int]]:
         """Return the most frequent pairs of tags appearing on the same entries.
 
         Returns a list of (tag_id_a, tag_id_b, shared_count).

@@ -2,11 +2,16 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as d3 from "d3";
 import { type TagCoOccurrence, type TagColorNamespaceResponse, type TagStatResponse } from "@tagstudio/api-client";
 import {
+  ChevronDown,
+  ChevronUp,
   CircleDot,
+  Eye,
+  EyeOff,
   Maximize2,
   Minus,
   Plus,
   RotateCcw,
+  Settings2,
   Sliders
 } from "lucide-react";
 
@@ -35,10 +40,17 @@ interface GraphLink extends d3.SimulationLinkDatum<GraphNode> {
   target: number | GraphNode;
   shared_count: number;
   value: number;
+  /** Normalized strength 0..1 for visual encoding */
+  normalizedStrength: number;
 }
 
 function getLinkId(node: number | GraphNode): number {
   return typeof node === "object" ? node.id : node;
+}
+
+/** Check if a tag is a system tag by name convention */
+function isSystemTag(name: string): boolean {
+  return name.startsWith("system:") || name === "System";
 }
 
 export function TagGraphView({
@@ -51,11 +63,13 @@ export function TagGraphView({
   const svgRef = useRef<SVGSVGElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
-  // Independent Controls State
+  // Controls State
   const [minSharedCount, setMinSharedCount] = useState(1);
   const [nodeScale, setNodeScale] = useState(1.0);
   const [semanticZoom, setSemanticZoom] = useState(true);
   const [hoveredTagId, setHoveredTagId] = useState<number | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [hideSystemTags, setHideSystemTags] = useState(true);
 
   const colorLookup = useMemo(() => createTagColorLookup(tagColors), [tagColors]);
   const currentTransformRef = useRef<d3.ZoomTransform>(d3.zoomIdentity);
@@ -63,24 +77,27 @@ export function TagGraphView({
   const onToggleTagRef = useRef(onToggleTag);
   onToggleTagRef.current = onToggleTag;
 
-  // Top tags for graph layout (capped at 150 for smooth physics)
+  // Top tags for graph layout, filtered and capped at 150
   const graphTags = useMemo(() => {
-    return [...tags]
+    let filtered = [...tags];
+    if (hideSystemTags) {
+      filtered = filtered.filter((t) => !isSystemTag(t.name));
+    }
+    return filtered
       .sort((a, b) => b.entry_count - a.entry_count)
       .slice(0, 150);
-  }, [tags]);
+  }, [tags, hideSystemTags]);
 
   const tagIdSet = useMemo(() => new Set(graphTags.map((t) => t.id)), [graphTags]);
 
   const { nodes, links, adjacencyMap } = useMemo(() => {
-    let minCount = Infinity;
     let maxCount = 0;
     for (const tag of graphTags) {
-      if (tag.entry_count < minCount) minCount = tag.entry_count;
       if (tag.entry_count > maxCount) maxCount = tag.entry_count;
     }
-    if (minCount === Infinity) minCount = 0;
 
+    // Use log-scale for node sizing — spreads values much more evenly
+    const logMax = Math.log(maxCount + 1);
     const nodeList: GraphNode[] = graphTags.map((tag) => {
       const colorDef = tag.color_namespace && tag.color_slug
         ? colorLookup.get(`${tag.color_namespace}/${tag.color_slug}`)
@@ -89,8 +106,10 @@ export function TagGraphView({
       const primary = colorDef?.primary ?? "#64748b";
       const accent = colorDef?.secondary ?? colorDef?.primary ?? "#3b82f6";
 
-      const countRatio = maxCount > minCount ? (tag.entry_count - minCount) / (maxCount - minCount) : 0.5;
-      const baseRadius = 14 + countRatio * 18;
+      // Log-scale ratio: spreads 1-1279 much more evenly than linear
+      const logRatio = logMax > 0 ? Math.log(tag.entry_count + 1) / logMax : 0.5;
+      // Range: 10px (smallest) to 50px (largest) — 5x ratio makes differences unmistakable
+      const baseRadius = 10 + logRatio * 40;
 
       return {
         id: tag.id,
@@ -102,7 +121,9 @@ export function TagGraphView({
       };
     });
 
-    const linkList: GraphLink[] = [];
+    // Build links and find max shared_count for normalization
+    const rawLinks: { source: number; target: number; shared_count: number }[] = [];
+    let maxShared = 0;
     const adj = new Map<number, Set<number>>();
 
     for (const co of coOccurrences) {
@@ -111,12 +132,12 @@ export function TagGraphView({
         tagIdSet.has(co.tag_id_b) &&
         co.shared_count >= minSharedCount
       ) {
-        linkList.push({
+        rawLinks.push({
           source: co.tag_id_a,
           target: co.tag_id_b,
-          shared_count: co.shared_count,
-          value: co.shared_count
+          shared_count: co.shared_count
         });
+        if (co.shared_count > maxShared) maxShared = co.shared_count;
 
         if (!adj.has(co.tag_id_a)) adj.set(co.tag_id_a, new Set());
         if (!adj.has(co.tag_id_b)) adj.set(co.tag_id_b, new Set());
@@ -124,6 +145,16 @@ export function TagGraphView({
         adj.get(co.tag_id_b)!.add(co.tag_id_a);
       }
     }
+
+    // Normalize strength for visual encoding
+    const sqrtMax = Math.sqrt(maxShared);
+    const linkList: GraphLink[] = rawLinks.map((r) => ({
+      source: r.source,
+      target: r.target,
+      shared_count: r.shared_count,
+      value: r.shared_count,
+      normalizedStrength: sqrtMax > 0 ? Math.sqrt(r.shared_count) / sqrtMax : 0
+    }));
 
     return { nodes: nodeList, links: linkList, adjacencyMap: adj };
   }, [graphTags, colorLookup, coOccurrences, tagIdSet, minSharedCount]);
@@ -185,7 +216,8 @@ export function TagGraphView({
 
     svg.selectAll<SVGLineElement, GraphLink>(".graph-link")
       .attr("stroke-width", (d) => {
-        const baseW = Math.min(5.5, Math.max(1.2, Math.log2(d.shared_count + 1)));
+        // Sqrt-scale from 0.5px to 8px — much wider range than before
+        const baseW = 0.5 + d.normalizedStrength * 7.5;
         return baseW * strokeScale;
       });
   }, []);
@@ -214,20 +246,38 @@ export function TagGraphView({
     svg.call(zoom);
     zoomBehaviorRef.current = zoom;
 
-    // Simulation with strong repulsion (-520), generous link distance, high velocity decay to settle quickly
+    // Build set of connected node IDs for radial force
+    const connectedNodeIds = new Set<number>();
+    for (const link of links) {
+      const srcId = typeof link.source === "object" ? link.source.id : link.source;
+      const tgtId = typeof link.target === "object" ? link.target.id : link.target;
+      connectedNodeIds.add(srcId);
+      connectedNodeIds.add(tgtId);
+    }
+
+    // Improved force simulation for better clustering
     const simulation = d3.forceSimulation<GraphNode>(nodes)
       .force(
         "link",
         d3.forceLink<GraphNode, GraphLink>(links)
           .id((d) => d.id)
-          .distance((d) => Math.max(100, 180 - Math.log2(d.shared_count + 1) * 15))
-          .strength((d) => Math.min(0.6, 0.12 + d.shared_count * 0.03))
+          // Strongly associated tags pulled much closer (down to 40px)
+          .distance((d) => Math.max(40, 160 - Math.sqrt(d.shared_count) * 12))
+          // Stronger pull for high co-occurrence
+          .strength((d) => Math.min(0.8, 0.15 + Math.sqrt(d.shared_count) * 0.04))
       )
-      .force("charge", d3.forceManyBody().strength(-520))
+      // Lower charge allows clusters to form (was -520)
+      .force("charge", d3.forceManyBody().strength(-350))
       .force("center", d3.forceCenter(width / 2, height / 2))
-      .force("collision", d3.forceCollide<GraphNode>().radius((d) => (d.baseRadius * nodeScale) + 16).strength(0.95))
-      .velocityDecay(0.6)
-      .alphaDecay(0.035);
+      .force("collision", d3.forceCollide<GraphNode>().radius((d) => (d.baseRadius * nodeScale) + 12).strength(0.9))
+      // Push disconnected/weakly-connected nodes to the periphery
+      .force("radial", d3.forceRadial<GraphNode>(
+        (d) => connectedNodeIds.has(d.id) ? 0 : Math.max(width, height) * 0.35,
+        width / 2,
+        height / 2
+      ).strength((d) => connectedNodeIds.has(d.id) ? 0 : 0.04))
+      .velocityDecay(0.55)
+      .alphaDecay(0.03);
 
     simulationRef.current = simulation;
 
@@ -240,7 +290,8 @@ export function TagGraphView({
       .append("line")
       .attr("class", "graph-link")
       .attr("stroke", "currentColor")
-      .attr("stroke-opacity", 0.22);
+      // Opacity proportional to strength: faint for weak, solid for strong
+      .attr("stroke-opacity", (d) => 0.08 + d.normalizedStrength * 0.45);
 
     // Drag behavior
     const drag = d3.drag<SVGGElement, GraphNode>()
@@ -313,8 +364,8 @@ export function TagGraphView({
       .attr("pointer-events", "none")
       .style("text-shadow", "0 1px 3px rgba(0,0,0,0.5)");
 
-    // Count inside circle if big enough
-    node.filter((d) => d.baseRadius >= 18)
+    // Count inside circle — show for more nodes (radius >= 14)
+    node.filter((d) => d.baseRadius >= 14)
       .append("text")
       .attr("class", "graph-node-count")
       .text((d) => d.entry_count)
@@ -403,7 +454,9 @@ export function TagGraphView({
           .transition()
           .duration(120)
           .attr("stroke", isHighlighted ? "#3b82f6" : "currentColor")
-          .attr("stroke-opacity", hasFocus ? (isHighlighted ? 0.85 : 0.03) : 0.22);
+          .attr("stroke-opacity", hasFocus
+            ? (isHighlighted ? 0.85 : 0.03)
+            : 0.08 + d.normalizedStrength * 0.45);
       });
   }, [focusTagIds, connectedNeighborIds, selectedTagIds]);
 
@@ -444,55 +497,20 @@ export function TagGraphView({
   return (
     <div ref={containerRef} className="tag-graph-container" role="region" aria-label="Tag Relationship Graph">
       <div className="tag-graph-controls">
-        {/* Co-occurrence Filter Slider */}
-        <div className="tag-graph-slider-group">
-          <Sliders size={13} className="text-slate-400" />
-          <label className="text-xs text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
-            Min links: {minSharedCount}
-            <input
-              type="range"
-              min="1"
-              max="15"
-              step="1"
-              value={minSharedCount}
-              onChange={(e) => setMinSharedCount(parseInt(e.target.value, 10))}
-              className="tag-graph-slider"
-              title="Filter minimum co-occurrence threshold"
-            />
-          </label>
-        </div>
+        {/* Settings Toggle */}
+        <button
+          type="button"
+          className={`tag-graph-btn tag-graph-settings-btn ${settingsOpen ? "tag-graph-btn-active" : ""}`}
+          onClick={() => setSettingsOpen((prev) => !prev)}
+          title="Graph settings"
+          aria-label="Toggle graph settings"
+          aria-expanded={settingsOpen}
+        >
+          <Settings2 size={14} />
+          {settingsOpen ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
+        </button>
 
-        {/* Independent Node Size Slider */}
-        <div className="tag-graph-slider-group border-l border-slate-200 dark:border-slate-700 pl-2">
-          <CircleDot size={13} className="text-slate-400" />
-          <label className="text-xs text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
-            Node size: {Math.round(nodeScale * 100)}%
-            <input
-              type="range"
-              min="0.5"
-              max="2.0"
-              step="0.1"
-              value={nodeScale}
-              onChange={(e) => setNodeScale(parseFloat(e.target.value))}
-              className="tag-graph-slider"
-              title="Independent node size adjustment"
-            />
-          </label>
-        </div>
-
-        {/* Semantic Zoom Mode Toggle */}
-        <div className="tag-graph-btn-group">
-          <button
-            type="button"
-            className={`tag-graph-btn text-xs px-1.5 w-auto ${semanticZoom ? "text-blue-500 font-semibold" : "text-slate-400"}`}
-            onClick={() => setSemanticZoom((prev) => !prev)}
-            title={semanticZoom ? "Semantic Zoom: ON (Nodes maintain fixed screen size)" : "Semantic Zoom: OFF (Nodes scale with zoom)"}
-          >
-            {semanticZoom ? "Fixed Size" : "Scale Zoom"}
-          </button>
-        </div>
-
-        {/* Zoom & Reset Controls */}
+        {/* Zoom & Reset Controls — always visible */}
         <div className="tag-graph-btn-group">
           <button
             type="button"
@@ -532,6 +550,73 @@ export function TagGraphView({
           </button>
         </div>
       </div>
+
+      {/* Collapsible Settings Panel */}
+      {settingsOpen && (
+        <div className="tag-graph-settings-panel">
+          {/* Min Links Slider */}
+          <div className="tag-graph-setting-row">
+            <Sliders size={13} className="text-slate-400 shrink-0" />
+            <label className="text-xs text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
+              Min links: {minSharedCount}
+              <input
+                type="range"
+                min="1"
+                max="15"
+                step="1"
+                value={minSharedCount}
+                onChange={(e) => setMinSharedCount(parseInt(e.target.value, 10))}
+                className="tag-graph-slider"
+                title="Filter minimum co-occurrence threshold"
+              />
+            </label>
+          </div>
+
+          {/* Node Size Slider */}
+          <div className="tag-graph-setting-row">
+            <CircleDot size={13} className="text-slate-400 shrink-0" />
+            <label className="text-xs text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
+              Node size: {Math.round(nodeScale * 100)}%
+              <input
+                type="range"
+                min="0.5"
+                max="2.0"
+                step="0.1"
+                value={nodeScale}
+                onChange={(e) => setNodeScale(parseFloat(e.target.value))}
+                className="tag-graph-slider"
+                title="Independent node size adjustment"
+              />
+            </label>
+          </div>
+
+          {/* Semantic Zoom Toggle */}
+          <div className="tag-graph-setting-row">
+            <button
+              type="button"
+              className={`tag-graph-setting-toggle ${semanticZoom ? "active" : ""}`}
+              onClick={() => setSemanticZoom((prev) => !prev)}
+              title={semanticZoom ? "Semantic Zoom: ON (Nodes maintain fixed screen size)" : "Semantic Zoom: OFF (Nodes scale with zoom)"}
+            >
+              <span className="tag-graph-setting-toggle-indicator" />
+              <span className="text-xs">{semanticZoom ? "Fixed size" : "Scale zoom"}</span>
+            </button>
+          </div>
+
+          {/* Hide System Tags Toggle */}
+          <div className="tag-graph-setting-row">
+            <button
+              type="button"
+              className={`tag-graph-setting-toggle ${hideSystemTags ? "active" : ""}`}
+              onClick={() => setHideSystemTags((prev) => !prev)}
+              title={hideSystemTags ? "System tags hidden — click to show" : "System tags visible — click to hide"}
+            >
+              {hideSystemTags ? <EyeOff size={12} className="text-slate-400" /> : <Eye size={12} className="text-slate-400" />}
+              <span className="text-xs">{hideSystemTags ? "System tags hidden" : "System tags shown"}</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       <svg ref={svgRef} className="tag-graph-svg" />
     </div>

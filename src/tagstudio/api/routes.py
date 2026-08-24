@@ -398,12 +398,12 @@ def create_router(*, state: ApiState, jobs: JobManager) -> APIRouter:
         )
 
     @router.get("/tags/stats", response_model=TagStatsResponse)
-    def get_tag_stats(co_occurrences_limit: int = 500) -> TagStatsResponse:
+    def get_tag_stats(co_occurrences_limit: int = 2000) -> TagStatsResponse:
         lib = get_library_or_error()
         start = time.perf_counter()
         tag_stats = lib.get_tag_stats()
         co_occurrences_raw = lib.get_tag_co_occurrences(
-            limit=min(max(co_occurrences_limit, 0), 2000)
+            limit=min(max(co_occurrences_limit, 0), 5000)
         )
 
         tags = [

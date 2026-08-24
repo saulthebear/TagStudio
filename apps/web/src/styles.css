@@ -2579,6 +2579,89 @@ body.modal-dragging {
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
 }
 
+.tag-graph-settings-btn {
+  width: auto !important;
+  gap: 0.15rem;
+  padding: 0 0.35rem;
+}
+
+.tag-graph-btn-active {
+  background: rgba(59, 130, 246, 0.12) !important;
+  color: #3b82f6 !important;
+  border-color: rgba(59, 130, 246, 0.3) !important;
+}
+
+.tag-graph-settings-panel {
+  position: absolute;
+  top: 2.5rem;
+  right: 0.5rem;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  background: var(--ui-control-bg);
+  padding: 0.5rem 0.6rem;
+  border-radius: var(--ui-control-radius);
+  border: 1px solid var(--color-border-soft);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  min-width: 180px;
+  animation: tag-graph-settings-in 0.12s ease-out;
+}
+
+@keyframes tag-graph-settings-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.tag-graph-setting-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.15rem 0;
+}
+
+.tag-graph-setting-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: transparent;
+  border: 1px solid var(--color-border-soft);
+  border-radius: 0.25rem;
+  padding: 0.2rem 0.5rem;
+  cursor: pointer;
+  color: var(--ui-control-text);
+  width: 100%;
+}
+
+.tag-graph-setting-toggle:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.tag-graph-setting-toggle.active {
+  background: rgba(59, 130, 246, 0.08);
+  border-color: rgba(59, 130, 246, 0.25);
+  color: #3b82f6;
+}
+
+.tag-graph-setting-toggle-indicator {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-border-soft);
+  flex-shrink: 0;
+}
+
+.tag-graph-setting-toggle.active .tag-graph-setting-toggle-indicator {
+  background: #3b82f6;
+}
+
 .tag-graph-slider-group {
   display: flex;
   align-items: center;

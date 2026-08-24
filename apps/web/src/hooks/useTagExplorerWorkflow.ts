@@ -170,7 +170,7 @@ export function useTagExplorerWorkflow({
     }
     setLoading(true);
     try {
-      const data = await api.getTagStats();
+      const data = await api.getTagStats(2000);
       setStatsData(data);
       onClearError();
     } catch (error) {
