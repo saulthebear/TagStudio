@@ -46,6 +46,9 @@ from tagstudio.api.schemas import (
     TagMutationResponse,
     TagResponse,
     TagSearchResponse,
+    TagStatResponse,
+    TagStatsResponse,
+    TagCoOccurrence,
     TagUpdateRequest,
     ThumbnailFit,
     ThumbnailKind,
@@ -61,6 +64,7 @@ from tagstudio.api.serializers import (
     serialize_entry_summary,
     serialize_tag,
     serialize_tag_color,
+    serialize_tag_stat,
 )
 from tagstudio.api.services.entry_service import (
     open_entries as open_entries_service,
@@ -392,6 +396,33 @@ def create_router(*, state: ApiState, jobs: JobManager) -> APIRouter:
             limit=effective_limit,
             has_more=has_more,
         )
+
+    @router.get("/tags/stats", response_model=TagStatsResponse)
+    def get_tag_stats(co_occurrences_limit: int = 500) -> TagStatsResponse:
+        lib = get_library_or_error()
+        start = time.perf_counter()
+        tag_stats = lib.get_tag_stats()
+        co_occurrences_raw = lib.get_tag_co_occurrences(
+            limit=min(max(co_occurrences_limit, 0), 2000)
+        )
+
+        tags = [
+            TagStatResponse.model_validate(serialize_tag_stat(tag, count))
+            for tag, count in tag_stats
+        ]
+        co_occurrences = [
+            TagCoOccurrence(tag_id_a=a, tag_id_b=b, shared_count=count)
+            for a, b, count in co_occurrences_raw
+        ]
+
+        logger.info(
+            "api.tags.stats",
+            duration_ms=round((time.perf_counter() - start) * 1000, 2),
+            tags_count=len(tags),
+            co_occurrences_count=len(co_occurrences),
+            library_path_hash=_library_path_hash(lib),
+        )
+        return TagStatsResponse(tags=tags, co_occurrences=co_occurrences)
 
     @router.post("/search", response_model=SearchResponse)
     def search_entries(request: SearchRequest) -> SearchResponse:

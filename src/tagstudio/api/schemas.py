@@ -77,6 +77,31 @@ class TagResponse(BaseModel):
     is_hidden: bool = False
 
 
+class TagStatResponse(BaseModel):
+    id: int
+    name: str
+    shorthand: str | None = None
+    aliases: list[str] = Field(default_factory=list)
+    parent_ids: list[int] = Field(default_factory=list)
+    color_namespace: str | None = None
+    color_slug: str | None = None
+    disambiguation_id: int | None = None
+    is_category: bool = False
+    is_hidden: bool = False
+    entry_count: int = 0
+
+
+class TagCoOccurrence(BaseModel):
+    tag_id_a: int
+    tag_id_b: int
+    shared_count: int
+
+
+class TagStatsResponse(BaseModel):
+    tags: list[TagStatResponse] = Field(default_factory=list)
+    co_occurrences: list[TagCoOccurrence] = Field(default_factory=list)
+
+
 class TagSearchResponse(BaseModel):
     items: list[TagResponse] = Field(default_factory=list)
     total_count: int = 0

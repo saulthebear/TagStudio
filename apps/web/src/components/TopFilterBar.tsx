@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { type SortingMode } from "@tagstudio/api-client";
-import { Button } from "@tagstudio/ui";
 import {
-  ArrowUpDown,
   FolderOpen,
+  Grid,
   Keyboard,
   RefreshCw,
   Settings,
   SlidersHorizontal,
+  Tags,
   Volume2,
   VolumeX,
   X
@@ -37,6 +37,8 @@ type TopFilterBarProps = {
   refreshPending: boolean;
   videoMuted: boolean;
   theme?: ThemeMode;
+  activePage?: "grid" | "tags";
+  onNavigatePage?: (page: "grid" | "tags") => void;
   onSearchInputChange: (value: string) => void;
   onSearch: () => void;
   onSortingModeChange: (value: SortingMode) => void;
@@ -70,6 +72,8 @@ export function TopFilterBar({
   refreshPending,
   videoMuted,
   theme,
+  activePage = "grid",
+  onNavigatePage,
   onSearchInputChange,
   onSearch,
   onSortingModeChange,
@@ -282,6 +286,29 @@ export function TopFilterBar({
         </DropdownMenuContent>
       </DropdownMenu>
 
+      <div className="flex items-center gap-1 flex-shrink-0">
+        <button
+          type="button"
+          className={`tag-nav-btn ${activePage === "grid" ? "tag-nav-btn-active" : ""}`}
+          onClick={() => onNavigatePage?.("grid")}
+          title="File Grid View"
+          aria-label="File Grid View"
+        >
+          <Grid size={16} />
+          <span className="hidden sm:inline">Grid</span>
+        </button>
+        <button
+          type="button"
+          className={`tag-nav-btn ${activePage === "tags" ? "tag-nav-btn-active" : ""}`}
+          onClick={() => onNavigatePage?.("tags")}
+          title="Tag Explorer View"
+          aria-label="Tag Explorer View"
+        >
+          <Tags size={16} />
+          <span className="hidden sm:inline">Tags</span>
+        </button>
+      </div>
+
       <button
         type="button"
         className="filter-icon-btn"
@@ -302,6 +329,18 @@ export function TopFilterBar({
       >
         {videoMuted ? <VolumeX size={18} /> : <Volume2 size={18} />}
       </button>
+
+      {onOpenShortcutsHelp ? (
+        <button
+          type="button"
+          className="filter-icon-btn"
+          onClick={onOpenShortcutsHelp}
+          title="Keyboard Shortcuts"
+          aria-label="Keyboard Shortcuts"
+        >
+          <Keyboard size={18} />
+        </button>
+      ) : null}
 
       <button
         type="button"

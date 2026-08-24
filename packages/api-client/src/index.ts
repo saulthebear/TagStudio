@@ -18,6 +18,31 @@ export type TagResponse = {
   is_hidden: boolean;
 };
 
+export type TagStatResponse = {
+  id: number;
+  name: string;
+  shorthand: string | null;
+  aliases: string[];
+  parent_ids: number[];
+  color_namespace: string | null;
+  color_slug: string | null;
+  disambiguation_id: number | null;
+  is_category: boolean;
+  is_hidden: boolean;
+  entry_count: number;
+};
+
+export type TagCoOccurrence = {
+  tag_id_a: number;
+  tag_id_b: number;
+  shared_count: number;
+};
+
+export type TagStatsResponse = {
+  tags: TagStatResponse[];
+  co_occurrences: TagCoOccurrence[];
+};
+
 export type TagSearchResponse = {
   items: TagResponse[];
   total_count: number;
@@ -444,6 +469,15 @@ export class TagStudioApiClient {
         has_more: offset + items.length < legacyTags.length
       };
     }
+  }
+
+  async getTagStats(coOccurrencesLimit?: number): Promise<TagStatsResponse> {
+    const params = new URLSearchParams();
+    if (typeof coOccurrencesLimit === "number") {
+      params.set("co_occurrences_limit", String(coOccurrencesLimit));
+    }
+    const suffix = params.size > 0 ? `?${params}` : "";
+    return this.request(`/api/v1/tags/stats${suffix}`);
   }
 
   async search(payload: SearchRequest): Promise<SearchResponse> {

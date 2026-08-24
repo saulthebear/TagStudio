@@ -4,7 +4,6 @@ import {
   useCallback,
   useEffect,
   useMemo,
-  useRef,
   useState
 } from "react";
 
@@ -20,6 +19,7 @@ import { ModalLayerPortal } from "@/components/ModalLayerPortal";
 import { RefreshStatusPanel } from "@/components/RefreshStatusPanel";
 import { SettingsModal } from "@/components/SettingsModal";
 import { SplitPane } from "@/components/SplitPane";
+import { TagExplorerPage } from "@/components/TagExplorerPage";
 import { ThumbnailGridPane } from "@/components/ThumbnailGridPane";
 import { TopFilterBar } from "@/components/TopFilterBar";
 import { useAppInteractions } from "@/hooks/useAppInteractions";
@@ -29,6 +29,7 @@ import { useLibraryWorkflow } from "@/hooks/useLibraryWorkflow";
 import { ModalStackProvider } from "@/hooks/useModalStackDepth";
 import { useSearchWorkflow } from "@/hooks/useSearchWorkflow";
 import { useSettingsWorkflow } from "@/hooks/useSettingsWorkflow";
+import { useTagExplorerWorkflow } from "@/hooks/useTagExplorerWorkflow";
 import {
   formatAppliedFilterSummary,
   getActiveFilterCount,
@@ -66,9 +67,25 @@ export function App() {
   const [videoPreviewStartsMuted, setVideoPreviewStartsMuted] = useState(true);
   const [fullScreenModalOpen, setFullScreenModalOpen] = useState(false);
   const [shortcutsHelpOpen, setShortcutsHelpOpen] = useState(false);
+  const [activePage, setActivePage] = useState<"grid" | "tags">(() => {
+    return typeof window !== "undefined" && window.location.hash === "#/tags" ? "tags" : "grid";
+  });
 
   const handleToggleShortcutsHelp = useCallback(() => {
     setShortcutsHelpOpen((prev) => !prev);
+  }, []);
+
+  const handleNavigatePage = useCallback((page: "grid" | "tags") => {
+    setActivePage(page);
+    window.location.hash = page === "tags" ? "#/tags" : "#/";
+  }, []);
+
+  useEffect(() => {
+    const onHashChange = () => {
+      setActivePage(window.location.hash === "#/tags" ? "tags" : "grid");
+    };
+    window.addEventListener("hashchange", onHashChange);
+    return () => window.removeEventListener("hashchange", onHashChange);
   }, []);
 
   const onClearError = useCallback(() => {
@@ -214,6 +231,15 @@ export function App() {
     activeQuery,
     executeSearch,
     onSearchResultsStale: handleSearchResultsStale,
+    onError,
+    onClearError
+  });
+
+  const tagExplorerWorkflow = useTagExplorerWorkflow({
+    activeLibraryPath,
+    isLibraryOpen,
+    executeSearch,
+    setSearchInput,
     onError,
     onClearError
   });
@@ -569,6 +595,8 @@ export function App() {
               searchPending={searchPending}
               refreshPending={refreshPending}
               videoMuted={videoPreviewStartsMuted}
+              activePage={activePage}
+              onNavigatePage={handleNavigatePage}
               onSearchInputChange={setSearchInput}
               onSearch={handleSearch}
               onSortingModeChange={handleSortingModeChange}
@@ -593,54 +621,64 @@ export function App() {
               />
             ) : null}
 
-            {isMobile ? (
-              <section className="mobile-pane-tabs panel">
-                <button
-                  type="button"
-                  className={`mobile-pane-tab ${mobileActivePane === "grid" ? "mobile-pane-tab-active" : ""}`}
-                  onClick={() => setMobileActivePane("grid")}
-                >
-                  Grid
-                </button>
-                <button
-                  type="button"
-                  className={`mobile-pane-tab ${mobileActivePane === "preview" ? "mobile-pane-tab-active" : ""}`}
-                  onClick={() => setMobileActivePane("preview")}
-                >
-                  Preview
-                </button>
-                <button
-                  type="button"
-                  className={`mobile-pane-tab ${mobileActivePane === "metadata" ? "mobile-pane-tab-active" : ""}`}
-                  onClick={() => setMobileActivePane("metadata")}
-                >
-                  Metadata
-                </button>
-              </section>
-            ) : null}
+            {activePage === "tags" ? (
+              <TagExplorerPage
+                workflow={tagExplorerWorkflow}
+                gridPane={gridPane}
+                isMobile={isMobile}
+              />
+            ) : (
+              <>
+                {isMobile ? (
+                  <section className="mobile-pane-tabs panel">
+                    <button
+                      type="button"
+                      className={`mobile-pane-tab ${mobileActivePane === "grid" ? "mobile-pane-tab-active" : ""}`}
+                      onClick={() => setMobileActivePane("grid")}
+                    >
+                      Grid
+                    </button>
+                    <button
+                      type="button"
+                      className={`mobile-pane-tab ${mobileActivePane === "preview" ? "mobile-pane-tab-active" : ""}`}
+                      onClick={() => setMobileActivePane("preview")}
+                    >
+                      Preview
+                    </button>
+                    <button
+                      type="button"
+                      className={`mobile-pane-tab ${mobileActivePane === "metadata" ? "mobile-pane-tab-active" : ""}`}
+                      onClick={() => setMobileActivePane("metadata")}
+                    >
+                      Metadata
+                    </button>
+                  </section>
+                ) : null}
 
-            <section className="content-shell">
-              {isMobile ? (
-                <div className="content-mobile-pane">{mobileActivePane === "grid" ? gridPane : inspectorPane}</div>
-              ) : (
-                <SplitPane
-                  orientation="horizontal"
-                  state={mainSplitState}
-                  onStateChange={setMainSplitState}
-                  primary={gridPane}
-                  secondary={inspectorPane}
-                  primaryLabel="File grid"
-                  secondaryLabel="Inspector"
-                  minPrimarySize={320}
-                  minSecondarySize={300}
-                  collapseThreshold={120}
-                  resetRatio={0.78}
-                  railSize={12}
-                  handleSize={12}
-                  className="main-split"
-                />
-              )}
-            </section>
+                <section className="content-shell">
+                  {isMobile ? (
+                    <div className="content-mobile-pane">{mobileActivePane === "grid" ? gridPane : inspectorPane}</div>
+                  ) : (
+                    <SplitPane
+                      orientation="horizontal"
+                      state={mainSplitState}
+                      onStateChange={setMainSplitState}
+                      primary={gridPane}
+                      secondary={inspectorPane}
+                      primaryLabel="File grid"
+                      secondaryLabel="Inspector"
+                      minPrimarySize={320}
+                      minSecondarySize={300}
+                      collapseThreshold={120}
+                      resetRatio={0.78}
+                      railSize={12}
+                      handleSize={12}
+                      className="main-split"
+                    />
+                  )}
+                </section>
+              </>
+            )}
           </>
         )}
 

@@ -978,3 +978,40 @@ def test_remux_settings_and_endpoints() -> None:
                 status_res = client.get(f"/api/v1/jobs/{job_id}")
                 assert status_res.status_code == 200
                 assert status_res.json()["operation"] == "remux"
+
+
+def test_tags_stats_endpoint() -> None:
+    with TemporaryDirectory() as tmp:
+        library_path = Path(tmp)
+        seed_library(library_path)
+
+        app = create_app(require_token=False)
+        with TestClient(app) as client:
+            open_res = client.post("/api/v1/libraries/open", json={"path": str(library_path)})
+            assert open_res.status_code == 200
+
+            # Add another tag and assign to entries to test counts & co-occurrence
+            tag_b_res = client.post("/api/v1/tags", json={"name": "bar"})
+            assert tag_b_res.status_code == 200
+            tag_b_id = tag_b_res.json()["id"]
+
+            entry_ids = list(get_entry_ids_by_filename(client).values())
+            # Tag the first entry with tag_b as well (foo and bar co-occur)
+            client.post("/api/v1/entries/tags:add", json={"entry_ids": [entry_ids[0]], "tag_ids": [tag_b_id]})
+
+            stats_res = client.get("/api/v1/tags/stats")
+            assert stats_res.status_code == 200
+            data = stats_res.json()
+            assert "tags" in data
+            assert "co_occurrences" in data
+
+            tags_by_name = {t["name"]: t for t in data["tags"]}
+            assert "foo" in tags_by_name
+            assert tags_by_name["foo"]["entry_count"] >= 1
+            assert "bar" in tags_by_name
+            assert tags_by_name["bar"]["entry_count"] >= 1
+
+            # Check co-occurrence
+            assert len(data["co_occurrences"]) >= 1
+            co_pair = data["co_occurrences"][0]
+            assert co_pair["shared_count"] >= 1

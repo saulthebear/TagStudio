@@ -47,6 +47,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import (
     InstanceState,
     Session,
+    aliased,
     contains_eager,
     joinedload,
     make_transient,
@@ -1234,6 +1235,52 @@ class Library:
             for tag in tags:
                 session.expunge(tag)
             return tags, total_count
+
+    def get_tag_stats(self) -> list[tuple[Tag, int]]:
+        """Return all tags paired with the count of entries assigned to each tag."""
+        with Session(self.engine) as session:
+            counts_query = (
+                select(TagEntry.tag_id, func.count(TagEntry.entry_id).label("entry_count"))
+                .group_by(TagEntry.tag_id)
+            )
+            counts_map = dict(session.execute(counts_query).all())
+
+            tags_query = (
+                select(Tag)
+                .options(
+                    selectinload(Tag.parent_tags),
+                    selectinload(Tag.aliases),
+                )
+                .order_by(func.lower(Tag.name), Tag.id)
+            )
+            tags = list(session.scalars(tags_query).unique())
+            result: list[tuple[Tag, int]] = []
+            for tag in tags:
+                session.expunge(tag)
+                result.append((tag, counts_map.get(tag.id, 0)))
+            return result
+
+    def get_tag_co_occurrences(self, limit: int = 500) -> list[tuple[int, int, int]]:
+        """Return the most frequent pairs of tags appearing on the same entries.
+
+        Returns a list of (tag_id_a, tag_id_b, shared_count).
+        """
+        with Session(self.engine) as session:
+            te_a = aliased(TagEntry)
+            te_b = aliased(TagEntry)
+            query = (
+                select(
+                    te_a.tag_id.label("tag_id_a"),
+                    te_b.tag_id.label("tag_id_b"),
+                    func.count(te_a.entry_id).label("shared_count"),
+                )
+                .join(te_b, and_(te_a.entry_id == te_b.entry_id, te_a.tag_id < te_b.tag_id))
+                .group_by(te_a.tag_id, te_b.tag_id)
+                .order_by(desc("shared_count"), te_a.tag_id, te_b.tag_id)
+                .limit(limit)
+            )
+            rows = session.execute(query).all()
+            return [(int(row[0]), int(row[1]), int(row[2])) for row in rows]
 
     def update_entry_path(self, entry_id: int | Entry, path: Path) -> bool:
         """Set the path field of an entry.

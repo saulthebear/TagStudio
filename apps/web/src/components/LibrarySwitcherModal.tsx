@@ -52,7 +52,7 @@ export function LibrarySwitcherModal({
       return;
     }
     panelRef.current?.focus();
-  }, [open]);
+  }, [open, panelRef]);
 
   if (!open) {
     return null;

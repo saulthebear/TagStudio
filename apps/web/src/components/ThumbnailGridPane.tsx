@@ -141,7 +141,6 @@ export function ThumbnailGridPane({
   searchResultsStale,
   onSearch,
   selectedEntryIds,
-  activeQuery,
   searchPending,
   loadingMore,
   hasMore,
@@ -345,12 +344,6 @@ export function ThumbnailGridPane({
     });
   }, [entries]);
 
-  const subtitle = useMemo(() => {
-    if (!activeQuery) {
-      return `${totalCount} entries`;
-    }
-    return `${totalCount} entries for ${activeQuery}`;
-  }, [activeQuery, totalCount]);
   const selectedEntryIdSet = useMemo(() => new Set(selectedEntryIds), [selectedEntryIds]);
 
   return (

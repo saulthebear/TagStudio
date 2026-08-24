@@ -143,6 +143,12 @@ export function useSearchWorkflow({
     }
   }, []);
 
+  const searchPendingRef = useRef(false);
+  searchPendingRef.current = searchPending;
+
+  const loadingMoreRef = useRef(false);
+  loadingMoreRef.current = loadingMore;
+
   const executeSearch = useCallback<ExecuteSearchFn>(
     async ({
       query,
@@ -157,7 +163,7 @@ export function useSearchWorkflow({
         return;
       }
 
-      if (append && (loadingMore || searchPending)) {
+      if (append && (loadingMoreRef.current || searchPendingRef.current)) {
         return;
       }
 
@@ -218,12 +224,10 @@ export function useSearchWorkflow({
     [
       ascending,
       isLibraryOpen,
-      loadingMore,
       onClearError,
       onError,
       pageSize,
       prewarmEntries,
-      searchPending,
       showHiddenEntries,
       sortingMode
     ]

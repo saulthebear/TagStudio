@@ -29,6 +29,22 @@ def serialize_tag(tag: Tag) -> dict[str, Any]:
     }
 
 
+def serialize_tag_stat(tag: Tag, entry_count: int) -> dict[str, Any]:
+    return {
+        "id": tag.id,
+        "name": tag.name,
+        "shorthand": tag.shorthand,
+        "aliases": sorted(tag.alias_strings),
+        "parent_ids": sorted(tag.parent_ids),
+        "color_namespace": tag.color_namespace,
+        "color_slug": tag.color_slug,
+        "disambiguation_id": tag.disambiguation_id,
+        "is_category": tag.is_category,
+        "is_hidden": tag.is_hidden,
+        "entry_count": entry_count,
+    }
+
+
 def serialize_tag_color(namespace_name: str, color: TagColorGroup) -> dict[str, Any]:
     return {
         "namespace": color.namespace,
