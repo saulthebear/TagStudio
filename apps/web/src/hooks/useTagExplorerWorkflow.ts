@@ -202,13 +202,16 @@ export function useTagExplorerWorkflow({
     return map;
   }, [statsData.co_occurrences]);
 
-  // Set of tag IDs that co-occur with any currently selected tag
+  // Set of tag IDs that co-occur or have parent/child relationships with any currently selected tag
   const coOccurringTagIds = useMemo(() => {
     if (selectedTagIds.size === 0) {
       return new Set<number>();
     }
     const result = new Set<number>();
+    const tagMap = new Map(statsData.tags.map((t) => [t.id, t]));
+
     for (const selectedId of selectedTagIds) {
+      // Co-occurrence connections
       const neighbors = coOccurrenceMap.get(selectedId);
       if (neighbors) {
         for (const neighborId of neighbors.keys()) {
@@ -217,9 +220,29 @@ export function useTagExplorerWorkflow({
           }
         }
       }
+
+      // Parent connections of selected tag
+      const selectedTag = tagMap.get(selectedId);
+      if (selectedTag) {
+        for (const parentId of selectedTag.parent_ids) {
+          if (!selectedTagIds.has(parentId)) {
+            result.add(parentId);
+          }
+        }
+      }
     }
+
+    // Child connections of selected tags
+    for (const tag of statsData.tags) {
+      for (const parentId of tag.parent_ids) {
+        if (selectedTagIds.has(parentId) && !selectedTagIds.has(tag.id)) {
+          result.add(tag.id);
+        }
+      }
+    }
+
     return result;
-  }, [coOccurrenceMap, selectedTagIds]);
+  }, [coOccurrenceMap, selectedTagIds, statsData.tags]);
 
   // List of selected tag objects
   const selectedTagsList = useMemo(() => {

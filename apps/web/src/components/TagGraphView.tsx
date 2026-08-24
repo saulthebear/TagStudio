@@ -45,6 +45,7 @@ interface GraphLink extends d3.SimulationLinkDatum<GraphNode> {
   value: number;
   /** Normalized strength 0..1 for visual encoding */
   normalizedStrength: number;
+  isParentChild?: boolean;
 }
 
 function getLinkId(node: number | GraphNode): number {
@@ -109,7 +110,7 @@ export function TagGraphView({
     return map;
   }, [coOccurrences]);
 
-  // Build full co-occurrence adjacency for focus mode calculation
+  // Build full adjacency map (co-occurrences + parent/child hierarchy) for focus mode & neighbor queries
   const fullAdjacencyMap = useMemo(() => {
     const adj = new Map<number, Set<number>>();
     for (const co of coOccurrences) {
@@ -120,8 +121,20 @@ export function TagGraphView({
         adj.get(co.tag_id_b)!.add(co.tag_id_a);
       }
     }
+
+    // Include direct parent-child relationships
+    for (const tag of graphTags) {
+      for (const parentId of tag.parent_ids) {
+        if (tagIdSet.has(parentId)) {
+          if (!adj.has(tag.id)) adj.set(tag.id, new Set());
+          if (!adj.has(parentId)) adj.set(parentId, new Set());
+          adj.get(tag.id)!.add(parentId);
+          adj.get(parentId)!.add(tag.id);
+        }
+      }
+    }
     return adj;
-  }, [coOccurrences, tagIdSet]);
+  }, [coOccurrences, tagIdSet, graphTags]);
 
   // When focus mode is on and tags are selected, compute the subset of tag IDs to show
   const focusSubsetIds = useMemo(() => {
@@ -153,15 +166,34 @@ export function TagGraphView({
   const renderedTagIdSet = useMemo(() => new Set(renderedTags.map((t) => t.id)), [renderedTags]);
 
   const { nodes, links, adjacencyMap } = useMemo(() => {
+    const tagMap = new Map(renderedTags.map((t) => [t.id, t]));
+
     // Helper to calculate context-aware display count for each tag
     const getContextCount = (tag: TagStatResponse): number => {
       if (focusMode && focusSubsetIds && !selectedTagIds.has(tag.id)) {
+        let isDirectHierarchy = false;
+        for (const selId of selectedTagIds) {
+          if (tag.parent_ids.includes(selId)) {
+            isDirectHierarchy = true;
+            break;
+          }
+          const selTag = tagMap.get(selId);
+          if (selTag?.parent_ids.includes(tag.id)) {
+            isDirectHierarchy = true;
+            break;
+          }
+        }
+
         let sharedWithSelection = 0;
         for (const selId of selectedTagIds) {
           const count = coOccurrencePairMap.get(tag.id)?.get(selId) ?? 0;
           sharedWithSelection += count;
         }
-        return Math.min(tag.entry_count, sharedWithSelection);
+
+        if (isDirectHierarchy && sharedWithSelection === 0) {
+          return tag.entry_count;
+        }
+        return Math.min(tag.entry_count, Math.max(sharedWithSelection, isDirectHierarchy ? tag.entry_count : 0));
       }
       return tag.entry_count;
     };
@@ -201,9 +233,10 @@ export function TagGraphView({
     });
 
     // Build links and find max shared_count for normalization
-    const rawLinks: { source: number; target: number; shared_count: number }[] = [];
+    const rawLinks: { source: number; target: number; shared_count: number; isParentChild: boolean }[] = [];
     let maxShared = 0;
     const adj = new Map<number, Set<number>>();
+    const existingPairs = new Set<string>();
 
     for (const co of coOccurrences) {
       if (
@@ -211,10 +244,14 @@ export function TagGraphView({
         renderedTagIdSet.has(co.tag_id_b) &&
         co.shared_count >= minSharedCount
       ) {
+        const pairKey = co.tag_id_a < co.tag_id_b ? `${co.tag_id_a}-${co.tag_id_b}` : `${co.tag_id_b}-${co.tag_id_a}`;
+        existingPairs.add(pairKey);
+
         rawLinks.push({
           source: co.tag_id_a,
           target: co.tag_id_b,
-          shared_count: co.shared_count
+          shared_count: co.shared_count,
+          isParentChild: false
         });
         if (co.shared_count > maxShared) maxShared = co.shared_count;
 
@@ -225,6 +262,31 @@ export function TagGraphView({
       }
     }
 
+    // Add direct parent-child structural links
+    for (const tag of renderedTags) {
+      for (const parentId of tag.parent_ids) {
+        if (renderedTagIdSet.has(parentId)) {
+          const pairKey = tag.id < parentId ? `${tag.id}-${parentId}` : `${parentId}-${tag.id}`;
+          if (!existingPairs.has(pairKey)) {
+            existingPairs.add(pairKey);
+            const pcCount = Math.max(1, tag.entry_count);
+            rawLinks.push({
+              source: parentId,
+              target: tag.id,
+              shared_count: pcCount,
+              isParentChild: true
+            });
+            if (pcCount > maxShared) maxShared = pcCount;
+          }
+
+          if (!adj.has(tag.id)) adj.set(tag.id, new Set());
+          if (!adj.has(parentId)) adj.set(parentId, new Set());
+          adj.get(tag.id)!.add(parentId);
+          adj.get(parentId)!.add(tag.id);
+        }
+      }
+    }
+
     // Normalize strength for visual encoding
     const sqrtMax = Math.sqrt(maxShared);
     const linkList: GraphLink[] = rawLinks.map((r) => ({
@@ -232,7 +294,8 @@ export function TagGraphView({
       target: r.target,
       shared_count: r.shared_count,
       value: r.shared_count,
-      normalizedStrength: sqrtMax > 0 ? Math.sqrt(r.shared_count) / sqrtMax : 0
+      normalizedStrength: sqrtMax > 0 ? Math.sqrt(r.shared_count) / sqrtMax : 0,
+      isParentChild: r.isParentChild
     }));
 
     return { nodes: nodeList, links: linkList, adjacencyMap: adj };
@@ -386,10 +449,11 @@ export function TagGraphView({
       .data(links)
       .enter()
       .append("line")
-      .attr("class", "graph-link")
+      .attr("class", (d) => `graph-link${d.isParentChild ? " graph-link-hierarchy" : ""}`)
       .attr("stroke", "currentColor")
-      // Opacity proportional to strength: faint for weak, solid for strong
-      .attr("stroke-opacity", (d) => 0.06 + d.normalizedStrength * 0.35);
+      .attr("stroke-dasharray", (d) => (d.isParentChild ? "4 3" : null))
+      // Opacity proportional to strength
+      .attr("stroke-opacity", (d) => (d.isParentChild ? 0.25 : 0.06 + d.normalizedStrength * 0.35));
 
     // Drag behavior
     const drag = d3.drag<SVGGElement, GraphNode>()
@@ -553,13 +617,14 @@ export function TagGraphView({
           ((focusTagIds.has(srcId) && (connectedNeighborIds.has(tgtId) || focusTagIds.has(tgtId))) ||
            (focusTagIds.has(tgtId) && (connectedNeighborIds.has(srcId) || focusTagIds.has(srcId))));
 
+        const defaultOpacity = d.isParentChild ? 0.25 : 0.06 + d.normalizedStrength * 0.35;
         d3.select(this)
           .transition()
           .duration(120)
           .attr("stroke", isHighlighted ? "#3b82f6" : "currentColor")
           .attr("stroke-opacity", hasFocus && !focusMode
             ? (isHighlighted ? 0.85 : 0.03)
-            : 0.06 + d.normalizedStrength * 0.35);
+            : defaultOpacity);
       });
   }, [focusTagIds, connectedNeighborIds, selectedTagIds, focusMode]);
 
