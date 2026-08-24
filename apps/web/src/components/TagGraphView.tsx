@@ -13,7 +13,8 @@ import {
   Plus,
   RotateCcw,
   Settings2,
-  Sliders
+  Sliders,
+  Sparkles
 } from "lucide-react";
 
 import { createTagColorLookup } from "@/lib/tag-styles";
@@ -31,6 +32,7 @@ interface GraphNode extends d3.SimulationNodeDatum {
   id: number;
   name: string;
   entry_count: number;
+  total_entry_count: number;
   color_primary: string;
   color_accent: string;
   baseRadius: number;
@@ -67,6 +69,7 @@ export function TagGraphView({
   // Controls State
   const [minSharedCount, setMinSharedCount] = useState(1);
   const [nodeScale, setNodeScale] = useState(1.0);
+  const [repulsion, setRepulsion] = useState(350);
   const [semanticZoom, setSemanticZoom] = useState(false);
   const [hoveredTagId, setHoveredTagId] = useState<number | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -81,7 +84,6 @@ export function TagGraphView({
   onToggleTagRef.current = onToggleTag;
   const zoomBehaviorRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
 
-
   // Top tags for graph layout, filtered and capped at 150
   const graphTags = useMemo(() => {
     let filtered = [...tags];
@@ -94,6 +96,18 @@ export function TagGraphView({
   }, [tags, hideSystemTags]);
 
   const tagIdSet = useMemo(() => new Set(graphTags.map((t) => t.id)), [graphTags]);
+
+  // Build pairwise co-occurrence lookup map: tagId -> Map<otherTagId, sharedCount>
+  const coOccurrencePairMap = useMemo(() => {
+    const map = new Map<number, Map<number, number>>();
+    for (const co of coOccurrences) {
+      if (!map.has(co.tag_id_a)) map.set(co.tag_id_a, new Map());
+      if (!map.has(co.tag_id_b)) map.set(co.tag_id_b, new Map());
+      map.get(co.tag_id_a)!.set(co.tag_id_b, co.shared_count);
+      map.get(co.tag_id_b)!.set(co.tag_id_a, co.shared_count);
+    }
+    return map;
+  }, [coOccurrences]);
 
   // Build full co-occurrence adjacency for focus mode calculation
   const fullAdjacencyMap = useMemo(() => {
@@ -139,9 +153,23 @@ export function TagGraphView({
   const renderedTagIdSet = useMemo(() => new Set(renderedTags.map((t) => t.id)), [renderedTags]);
 
   const { nodes, links, adjacencyMap } = useMemo(() => {
+    // Helper to calculate context-aware display count for each tag
+    const getContextCount = (tag: TagStatResponse): number => {
+      if (focusMode && focusSubsetIds && !selectedTagIds.has(tag.id)) {
+        let sharedWithSelection = 0;
+        for (const selId of selectedTagIds) {
+          const count = coOccurrencePairMap.get(tag.id)?.get(selId) ?? 0;
+          sharedWithSelection += count;
+        }
+        return Math.min(tag.entry_count, sharedWithSelection);
+      }
+      return tag.entry_count;
+    };
+
     let maxCount = 0;
     for (const tag of renderedTags) {
-      if (tag.entry_count > maxCount) maxCount = tag.entry_count;
+      const count = getContextCount(tag);
+      if (count > maxCount) maxCount = count;
     }
 
     // Use log-scale for node sizing — spreads values much more evenly
@@ -154,15 +182,18 @@ export function TagGraphView({
       const primary = colorDef?.primary ?? "#64748b";
       const accent = colorDef?.secondary ?? colorDef?.primary ?? "#3b82f6";
 
-      // Log-scale ratio: spreads 1-1279 much more evenly than linear
-      const logRatio = logMax > 0 ? Math.log(tag.entry_count + 1) / logMax : 0.5;
+      const displayCount = getContextCount(tag);
+
+      // Log-scale ratio: spreads values evenly across the dynamic range
+      const logRatio = logMax > 0 ? Math.log(displayCount + 1) / logMax : 0.5;
       // Base range: 5px (smallest) to 25px (largest)
       const baseRadius = 5 + logRatio * 20;
 
       return {
         id: tag.id,
         name: tag.name,
-        entry_count: tag.entry_count,
+        entry_count: displayCount,
+        total_entry_count: tag.entry_count,
         color_primary: primary,
         color_accent: accent,
         baseRadius
@@ -205,7 +236,17 @@ export function TagGraphView({
     }));
 
     return { nodes: nodeList, links: linkList, adjacencyMap: adj };
-  }, [renderedTags, colorLookup, coOccurrences, renderedTagIdSet, minSharedCount]);
+  }, [
+    renderedTags,
+    colorLookup,
+    coOccurrences,
+    renderedTagIdSet,
+    minSharedCount,
+    focusMode,
+    focusSubsetIds,
+    selectedTagIds,
+    coOccurrencePairMap
+  ]);
 
   // Compute active focus nodes (selected tag IDs, or hovered tag ID if nothing is selected)
   const { focusTagIds, connectedNeighborIds } = useMemo(() => {
@@ -323,8 +364,8 @@ export function TagGraphView({
           // Stronger pull for high co-occurrence
           .strength((d) => Math.min(0.8, 0.15 + Math.sqrt(d.shared_count) * 0.04))
       )
-      // Lower charge allows clusters to form
-      .force("charge", d3.forceManyBody().strength(-350))
+      // Dynamic charge repulsion
+      .force("charge", d3.forceManyBody().strength(-repulsion))
       .force("center", d3.forceCenter(width / 2, height / 2))
       .force("collision", d3.forceCollide<GraphNode>().radius((d) => (d.baseRadius * nodeScale) + 8).strength(0.9))
       // Push disconnected/weakly-connected nodes to the periphery
@@ -433,7 +474,12 @@ export function TagGraphView({
 
     // Tooltip
     node.append("title")
-      .text((d) => `${d.name} (${d.entry_count} entries)`);
+      .text((d) => {
+        if (focusMode && focusSubsetIds && !selectedTagIds.has(d.id)) {
+          return `${d.name} (${d.entry_count} shared with selection / ${d.total_entry_count} total)`;
+        }
+        return `${d.name} (${d.entry_count} entries)`;
+      });
 
     simulation.on("tick", () => {
       link
@@ -450,7 +496,7 @@ export function TagGraphView({
     return () => {
       simulation.stop();
     };
-  }, [nodes, links, applyScaling, nodeScale, semanticZoom]);
+  }, [nodes, links, applyScaling, nodeScale, semanticZoom, repulsion, focusMode, focusSubsetIds, selectedTagIds]);
 
   // Effect 2: Update Highlighting / Selection / Opacity smoothly in-place WITHOUT restarting simulation
   useEffect(() => {
@@ -521,6 +567,14 @@ export function TagGraphView({
   useEffect(() => {
     applyScaling(currentTransformRef.current.k, nodeScale, semanticZoom);
   }, [nodeScale, semanticZoom, applyScaling]);
+
+  // Effect 4: React to Repulsion changes dynamically in force simulation
+  useEffect(() => {
+    if (simulationRef.current) {
+      simulationRef.current.force("charge", d3.forceManyBody().strength(-repulsion));
+      simulationRef.current.alpha(0.2).restart();
+    }
+  }, [repulsion]);
 
   const handleZoomIn = () => {
     if (!svgRef.current || !zoomBehaviorRef.current) return;
@@ -665,6 +719,24 @@ export function TagGraphView({
                 onChange={(e) => setNodeScale(parseFloat(e.target.value))}
                 className="tag-graph-slider"
                 title="Independent node size adjustment"
+              />
+            </label>
+          </div>
+
+          {/* Repulsion Force Slider */}
+          <div className="tag-graph-setting-row">
+            <Sparkles size={13} className="text-slate-400 shrink-0" />
+            <label className="text-xs text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
+              Repulsion: {repulsion}
+              <input
+                type="range"
+                min="50"
+                max="1000"
+                step="25"
+                value={repulsion}
+                onChange={(e) => setRepulsion(parseInt(e.target.value, 10))}
+                className="tag-graph-slider"
+                title="Adjust node repulsion distance"
               />
             </label>
           </div>
