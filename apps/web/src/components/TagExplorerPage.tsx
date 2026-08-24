@@ -258,6 +258,7 @@ export function TagExplorerPage({ workflow, gridPane, isMobile }: TagExplorerPag
             tags={filteredTags}
             coOccurrences={coOccurrences}
             selectedTagIds={selectedTagIds}
+            selectionMode={selectionMode}
             coOccurringTagIds={coOccurringTagIds}
             tagColors={tagColorsQuery.data}
             onToggleTag={toggleTag}

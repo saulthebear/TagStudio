@@ -202,7 +202,7 @@ export function useTagExplorerWorkflow({
     return map;
   }, [statsData.co_occurrences]);
 
-  // Set of tag IDs that co-occur or have parent/child relationships with any currently selected tag
+  // Set of tag IDs that co-occur or have parent/child relationships with currently selected tags
   const coOccurringTagIds = useMemo(() => {
     if (selectedTagIds.size === 0) {
       return new Set<number>();
@@ -210,39 +210,45 @@ export function useTagExplorerWorkflow({
     const result = new Set<number>();
     const tagMap = new Map(statsData.tags.map((t) => [t.id, t]));
 
-    for (const selectedId of selectedTagIds) {
-      // Co-occurrence connections
-      const neighbors = coOccurrenceMap.get(selectedId);
-      if (neighbors) {
-        for (const neighborId of neighbors.keys()) {
-          if (!selectedTagIds.has(neighborId)) {
-            result.add(neighborId);
-          }
-        }
-      }
+    const isConnected = (candidateId: number, targetId: number): boolean => {
+      if (coOccurrenceMap.get(targetId)?.has(candidateId)) return true;
+      const candidate = tagMap.get(candidateId);
+      if (candidate?.parent_ids.includes(targetId)) return true;
+      const target = tagMap.get(targetId);
+      if (target?.parent_ids.includes(candidateId)) return true;
+      return false;
+    };
 
-      // Parent connections of selected tag
-      const selectedTag = tagMap.get(selectedId);
-      if (selectedTag) {
-        for (const parentId of selectedTag.parent_ids) {
-          if (!selectedTagIds.has(parentId)) {
-            result.add(parentId);
-          }
-        }
-      }
-    }
-
-    // Child connections of selected tags
     for (const tag of statsData.tags) {
-      for (const parentId of tag.parent_ids) {
-        if (selectedTagIds.has(parentId) && !selectedTagIds.has(tag.id)) {
+      if (selectedTagIds.has(tag.id)) continue;
+
+      if (selectionMode === "AND") {
+        let connectedToAll = true;
+        for (const selectedId of selectedTagIds) {
+          if (!isConnected(tag.id, selectedId)) {
+            connectedToAll = false;
+            break;
+          }
+        }
+        if (connectedToAll) {
+          result.add(tag.id);
+        }
+      } else {
+        let connectedToAny = false;
+        for (const selectedId of selectedTagIds) {
+          if (isConnected(tag.id, selectedId)) {
+            connectedToAny = true;
+            break;
+          }
+        }
+        if (connectedToAny) {
           result.add(tag.id);
         }
       }
     }
 
     return result;
-  }, [coOccurrenceMap, selectedTagIds, statsData.tags]);
+  }, [coOccurrenceMap, selectedTagIds, statsData.tags, selectionMode]);
 
   // List of selected tag objects
   const selectedTagsList = useMemo(() => {

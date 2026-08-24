@@ -23,6 +23,7 @@ type TagGraphViewProps = {
   tags: TagStatResponse[];
   coOccurrences: TagCoOccurrence[];
   selectedTagIds: Set<number>;
+  selectionMode?: "AND" | "OR";
   coOccurringTagIds: Set<number>;
   tagColors: TagColorNamespaceResponse[] | undefined;
   onToggleTag: (tagId: number) => void;
@@ -61,6 +62,7 @@ export function TagGraphView({
   tags,
   coOccurrences,
   selectedTagIds,
+  selectionMode = "AND",
   tagColors,
   onToggleTag
 }: TagGraphViewProps) {
@@ -141,19 +143,44 @@ export function TagGraphView({
     if (!focusMode || selectedTagIds.size === 0) return null;
 
     const subset = new Set<number>();
+    // Always include selected tags themselves
     for (const id of selectedTagIds) {
       if (tagIdSet.has(id)) {
         subset.add(id);
-        const neighbors = fullAdjacencyMap.get(id);
-        if (neighbors) {
-          for (const nId of neighbors) {
-            subset.add(nId);
+      }
+    }
+
+    // For all other tags in graphTags, check connectivity based on selectionMode
+    for (const tag of graphTags) {
+      if (selectedTagIds.has(tag.id)) continue;
+
+      if (selectionMode === "AND") {
+        let connectedToAll = true;
+        for (const selId of selectedTagIds) {
+          if (!fullAdjacencyMap.get(selId)?.has(tag.id)) {
+            connectedToAll = false;
+            break;
           }
+        }
+        if (connectedToAll) {
+          subset.add(tag.id);
+        }
+      } else {
+        let connectedToAny = false;
+        for (const selId of selectedTagIds) {
+          if (fullAdjacencyMap.get(selId)?.has(tag.id)) {
+            connectedToAny = true;
+            break;
+          }
+        }
+        if (connectedToAny) {
+          subset.add(tag.id);
         }
       }
     }
+
     return subset;
-  }, [focusMode, selectedTagIds, tagIdSet, fullAdjacencyMap]);
+  }, [focusMode, selectedTagIds, tagIdSet, fullAdjacencyMap, graphTags, selectionMode]);
 
   // The actual tags to render in the graph (either full set or focus subset)
   const renderedTags = useMemo(() => {
@@ -171,29 +198,22 @@ export function TagGraphView({
     // Helper to calculate context-aware display count for each tag
     const getContextCount = (tag: TagStatResponse): number => {
       if (focusMode && focusSubsetIds && !selectedTagIds.has(tag.id)) {
-        let isDirectHierarchy = false;
+        const sharedCounts: number[] = [];
         for (const selId of selectedTagIds) {
-          if (tag.parent_ids.includes(selId)) {
-            isDirectHierarchy = true;
-            break;
+          let count = coOccurrencePairMap.get(tag.id)?.get(selId) ?? 0;
+          if (count === 0 && (tag.parent_ids.includes(selId) || tagMap.get(selId)?.parent_ids.includes(tag.id))) {
+            count = tag.entry_count;
           }
-          const selTag = tagMap.get(selId);
-          if (selTag?.parent_ids.includes(tag.id)) {
-            isDirectHierarchy = true;
-            break;
-          }
+          sharedCounts.push(count);
         }
 
-        let sharedWithSelection = 0;
-        for (const selId of selectedTagIds) {
-          const count = coOccurrencePairMap.get(tag.id)?.get(selId) ?? 0;
-          sharedWithSelection += count;
+        if (selectionMode === "AND") {
+          const minShared = sharedCounts.length > 0 ? Math.min(...sharedCounts) : 0;
+          return Math.min(tag.entry_count, minShared);
+        } else {
+          const totalShared = sharedCounts.reduce((acc, c) => acc + c, 0);
+          return Math.min(tag.entry_count, Math.max(1, totalShared));
         }
-
-        if (isDirectHierarchy && sharedWithSelection === 0) {
-          return tag.entry_count;
-        }
-        return Math.min(tag.entry_count, Math.max(sharedWithSelection, isDirectHierarchy ? tag.entry_count : 0));
       }
       return tag.entry_count;
     };
@@ -308,7 +328,8 @@ export function TagGraphView({
     focusMode,
     focusSubsetIds,
     selectedTagIds,
-    coOccurrencePairMap
+    coOccurrencePairMap,
+    selectionMode
   ]);
 
   // Compute active focus nodes (selected tag IDs, or hovered tag ID if nothing is selected)
@@ -323,11 +344,40 @@ export function TagGraphView({
     }
 
     const connected = new Set<number>();
-    for (const id of focus) {
-      const neighbors = adjacencyMap.get(id);
+
+    if (selectedTagIds.size > 0) {
+      for (const tag of renderedTags) {
+        if (selectedTagIds.has(tag.id)) continue;
+
+        if (selectionMode === "AND") {
+          let connectedToAll = true;
+          for (const selId of selectedTagIds) {
+            if (!adjacencyMap.get(selId)?.has(tag.id)) {
+              connectedToAll = false;
+              break;
+            }
+          }
+          if (connectedToAll) {
+            connected.add(tag.id);
+          }
+        } else {
+          let connectedToAny = false;
+          for (const selId of selectedTagIds) {
+            if (adjacencyMap.get(selId)?.has(tag.id)) {
+              connectedToAny = true;
+              break;
+            }
+          }
+          if (connectedToAny) {
+            connected.add(tag.id);
+          }
+        }
+      }
+    } else if (hoveredTagId !== null) {
+      const neighbors = adjacencyMap.get(hoveredTagId);
       if (neighbors) {
         for (const neighborId of neighbors) {
-          if (!focus.has(neighborId)) {
+          if (neighborId !== hoveredTagId) {
             connected.add(neighborId);
           }
         }
@@ -335,7 +385,7 @@ export function TagGraphView({
     }
 
     return { focusTagIds: focus, connectedNeighborIds: connected };
-  }, [selectedTagIds, hoveredTagId, renderedTagIdSet, adjacencyMap]);
+  }, [selectedTagIds, hoveredTagId, renderedTagIdSet, renderedTags, adjacencyMap, selectionMode]);
 
   // Apply semantic constant-size scaling to nodes/links based on current zoom scale k and nodeScale
   const applyScaling = useCallback((k: number, scale: number, isSemantic: boolean) => {
