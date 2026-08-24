@@ -2705,6 +2705,47 @@ body.modal-dragging {
   display: block;
 }
 
+.tag-graph-focus-btn {
+  width: auto !important;
+  padding: 0 0.35rem;
+}
+
+.tag-graph-focus-indicator {
+  position: absolute;
+  top: 0.5rem;
+  left: 0.5rem;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: rgba(59, 130, 246, 0.12);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  color: #3b82f6;
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--ui-control-radius);
+  animation: tag-graph-settings-in 0.12s ease-out;
+}
+
+.tag-graph-focus-exit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(59, 130, 246, 0.2);
+  color: #3b82f6;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0;
+}
+
+.tag-graph-focus-exit:hover {
+  background: rgba(59, 130, 246, 0.35);
+}
+
 .tag-nav-btn {
   display: inline-flex;
   align-items: center;

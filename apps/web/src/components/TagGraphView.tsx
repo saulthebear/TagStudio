@@ -7,6 +7,7 @@ import {
   CircleDot,
   Eye,
   EyeOff,
+  Focus,
   Maximize2,
   Minus,
   Plus,
@@ -65,17 +66,23 @@ export function TagGraphView({
 
   // Controls State
   const [minSharedCount, setMinSharedCount] = useState(1);
+  // nodeScale 1.0 = the "good" default (previously 0.5 of old scale)
   const [nodeScale, setNodeScale] = useState(1.0);
-  const [semanticZoom, setSemanticZoom] = useState(true);
+  // Default to scale zoom (false) — fixed size was too zoomed-in looking
+  const [semanticZoom, setSemanticZoom] = useState(false);
   const [hoveredTagId, setHoveredTagId] = useState<number | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [hideSystemTags, setHideSystemTags] = useState(true);
+  // Focus mode: recalculate graph to only show selected nodes + their neighbors
+  const [focusMode, setFocusMode] = useState(false);
 
   const colorLookup = useMemo(() => createTagColorLookup(tagColors), [tagColors]);
   const currentTransformRef = useRef<d3.ZoomTransform>(d3.zoomIdentity);
   const simulationRef = useRef<d3.Simulation<GraphNode, GraphLink> | null>(null);
   const onToggleTagRef = useRef(onToggleTag);
   onToggleTagRef.current = onToggleTag;
+  const zoomBehaviorRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
+
 
   // Top tags for graph layout, filtered and capped at 150
   const graphTags = useMemo(() => {
@@ -90,15 +97,58 @@ export function TagGraphView({
 
   const tagIdSet = useMemo(() => new Set(graphTags.map((t) => t.id)), [graphTags]);
 
+  // Build full co-occurrence adjacency for focus mode calculation
+  const fullAdjacencyMap = useMemo(() => {
+    const adj = new Map<number, Set<number>>();
+    for (const co of coOccurrences) {
+      if (tagIdSet.has(co.tag_id_a) && tagIdSet.has(co.tag_id_b)) {
+        if (!adj.has(co.tag_id_a)) adj.set(co.tag_id_a, new Set());
+        if (!adj.has(co.tag_id_b)) adj.set(co.tag_id_b, new Set());
+        adj.get(co.tag_id_a)!.add(co.tag_id_b);
+        adj.get(co.tag_id_b)!.add(co.tag_id_a);
+      }
+    }
+    return adj;
+  }, [coOccurrences, tagIdSet]);
+
+  // When focus mode is on and tags are selected, compute the subset of tag IDs to show
+  const focusSubsetIds = useMemo(() => {
+    if (!focusMode || selectedTagIds.size === 0) return null;
+
+    const subset = new Set<number>();
+    for (const id of selectedTagIds) {
+      if (tagIdSet.has(id)) {
+        subset.add(id);
+        const neighbors = fullAdjacencyMap.get(id);
+        if (neighbors) {
+          for (const nId of neighbors) {
+            subset.add(nId);
+          }
+        }
+      }
+    }
+    return subset;
+  }, [focusMode, selectedTagIds, tagIdSet, fullAdjacencyMap]);
+
+  // The actual tags to render in the graph (either full set or focus subset)
+  const renderedTags = useMemo(() => {
+    if (focusSubsetIds) {
+      return graphTags.filter((t) => focusSubsetIds.has(t.id));
+    }
+    return graphTags;
+  }, [graphTags, focusSubsetIds]);
+
+  const renderedTagIdSet = useMemo(() => new Set(renderedTags.map((t) => t.id)), [renderedTags]);
+
   const { nodes, links, adjacencyMap } = useMemo(() => {
     let maxCount = 0;
-    for (const tag of graphTags) {
+    for (const tag of renderedTags) {
       if (tag.entry_count > maxCount) maxCount = tag.entry_count;
     }
 
     // Use log-scale for node sizing — spreads values much more evenly
     const logMax = Math.log(maxCount + 1);
-    const nodeList: GraphNode[] = graphTags.map((tag) => {
+    const nodeList: GraphNode[] = renderedTags.map((tag) => {
       const colorDef = tag.color_namespace && tag.color_slug
         ? colorLookup.get(`${tag.color_namespace}/${tag.color_slug}`)
         : undefined;
@@ -108,8 +158,8 @@ export function TagGraphView({
 
       // Log-scale ratio: spreads 1-1279 much more evenly than linear
       const logRatio = logMax > 0 ? Math.log(tag.entry_count + 1) / logMax : 0.5;
-      // Range: 10px (smallest) to 50px (largest) — 5x ratio makes differences unmistakable
-      const baseRadius = 10 + logRatio * 40;
+      // Base range: 5px to 25px (halved from before — old 50% is new 100%)
+      const baseRadius = 5 + logRatio * 20;
 
       return {
         id: tag.id,
@@ -128,8 +178,8 @@ export function TagGraphView({
 
     for (const co of coOccurrences) {
       if (
-        tagIdSet.has(co.tag_id_a) &&
-        tagIdSet.has(co.tag_id_b) &&
+        renderedTagIdSet.has(co.tag_id_a) &&
+        renderedTagIdSet.has(co.tag_id_b) &&
         co.shared_count >= minSharedCount
       ) {
         rawLinks.push({
@@ -157,16 +207,16 @@ export function TagGraphView({
     }));
 
     return { nodes: nodeList, links: linkList, adjacencyMap: adj };
-  }, [graphTags, colorLookup, coOccurrences, tagIdSet, minSharedCount]);
+  }, [renderedTags, colorLookup, coOccurrences, renderedTagIdSet, minSharedCount]);
 
   // Compute active focus nodes (selected tag IDs, or hovered tag ID if nothing is selected)
   const { focusTagIds, connectedNeighborIds } = useMemo(() => {
     const focus = new Set<number>();
     if (selectedTagIds.size > 0) {
       for (const id of selectedTagIds) {
-        if (tagIdSet.has(id)) focus.add(id);
+        if (renderedTagIdSet.has(id)) focus.add(id);
       }
-    } else if (hoveredTagId !== null && tagIdSet.has(hoveredTagId)) {
+    } else if (hoveredTagId !== null && renderedTagIdSet.has(hoveredTagId)) {
       focus.add(hoveredTagId);
     }
 
@@ -183,9 +233,7 @@ export function TagGraphView({
     }
 
     return { focusTagIds: focus, connectedNeighborIds: connected };
-  }, [selectedTagIds, hoveredTagId, tagIdSet, adjacencyMap]);
-
-  const zoomBehaviorRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
+  }, [selectedTagIds, hoveredTagId, renderedTagIdSet, adjacencyMap]);
 
   // Apply semantic constant-size scaling to nodes/links based on current zoom scale k and nodeScale
   const applyScaling = useCallback((k: number, scale: number, isSemantic: boolean) => {
@@ -211,13 +259,13 @@ export function TagGraphView({
       .attr("font-size", `${Math.max(9, 11 * strokeScale)}px`);
 
     svg.selectAll<SVGTextElement, GraphNode>(".graph-node-count")
-      .attr("font-size", `${Math.max(8, 10 * strokeScale)}px`)
-      .attr("dy", `${4 * strokeScale}px`);
+      .attr("font-size", `${Math.max(7, 9 * strokeScale)}px`)
+      .attr("dy", `${3 * strokeScale}px`);
 
     svg.selectAll<SVGLineElement, GraphLink>(".graph-link")
       .attr("stroke-width", (d) => {
-        // Sqrt-scale from 0.5px to 8px — much wider range than before
-        const baseW = 0.5 + d.normalizedStrength * 7.5;
+        // Sqrt-scale from 0.5px to 6px
+        const baseW = 0.5 + d.normalizedStrength * 5.5;
         return baseW * strokeScale;
       });
   }, []);
@@ -236,7 +284,7 @@ export function TagGraphView({
 
     // Setup Zoom
     const zoom = d3.zoom<SVGSVGElement, unknown>()
-      .scaleExtent([0.1, 8])
+      .scaleExtent([0.05, 10])
       .on("zoom", (event) => {
         currentTransformRef.current = event.transform;
         g.attr("transform", event.transform);
@@ -245,6 +293,17 @@ export function TagGraphView({
 
     svg.call(zoom);
     zoomBehaviorRef.current = zoom;
+
+    // Apply a default zoomed-out initial transform so the graph isn't filling the viewport
+    // For focus mode with fewer nodes, zoom in more; for full graph zoom out
+    const nodeCount = nodes.length;
+    const initialScale = nodeCount < 30 ? 0.9 : nodeCount < 80 ? 0.65 : 0.5;
+    const initialTransform = d3.zoomIdentity
+      .translate(width * (1 - initialScale) / 2, height * (1 - initialScale) / 2)
+      .scale(initialScale);
+
+    svg.call(zoom.transform, initialTransform);
+    currentTransformRef.current = initialTransform;
 
     // Build set of connected node IDs for radial force
     const connectedNodeIds = new Set<number>();
@@ -266,10 +325,10 @@ export function TagGraphView({
           // Stronger pull for high co-occurrence
           .strength((d) => Math.min(0.8, 0.15 + Math.sqrt(d.shared_count) * 0.04))
       )
-      // Lower charge allows clusters to form (was -520)
+      // Lower charge allows clusters to form
       .force("charge", d3.forceManyBody().strength(-350))
       .force("center", d3.forceCenter(width / 2, height / 2))
-      .force("collision", d3.forceCollide<GraphNode>().radius((d) => (d.baseRadius * nodeScale) + 12).strength(0.9))
+      .force("collision", d3.forceCollide<GraphNode>().radius((d) => (d.baseRadius * nodeScale) + 8).strength(0.9))
       // Push disconnected/weakly-connected nodes to the periphery
       .force("radial", d3.forceRadial<GraphNode>(
         (d) => connectedNodeIds.has(d.id) ? 0 : Math.max(width, height) * 0.35,
@@ -291,7 +350,7 @@ export function TagGraphView({
       .attr("class", "graph-link")
       .attr("stroke", "currentColor")
       // Opacity proportional to strength: faint for weak, solid for strong
-      .attr("stroke-opacity", (d) => 0.08 + d.normalizedStrength * 0.45);
+      .attr("stroke-opacity", (d) => 0.06 + d.normalizedStrength * 0.35);
 
     // Drag behavior
     const drag = d3.drag<SVGGElement, GraphNode>()
@@ -364,8 +423,8 @@ export function TagGraphView({
       .attr("pointer-events", "none")
       .style("text-shadow", "0 1px 3px rgba(0,0,0,0.5)");
 
-    // Count inside circle — show for more nodes (radius >= 14)
-    node.filter((d) => d.baseRadius >= 14)
+    // Count inside circle — show for nodes with radius >= 8
+    node.filter((d) => d.baseRadius >= 8)
       .append("text")
       .attr("class", "graph-node-count")
       .text((d) => d.entry_count)
@@ -411,9 +470,9 @@ export function TagGraphView({
 
         const group = d3.select(this);
 
-        // Opacity
+        // Opacity — only dim when NOT in focus mode (in focus mode the graph is already subset)
         let targetOpacity = 1.0;
-        if (hasFocus && !isFocused && !isConnected) {
+        if (hasFocus && !focusMode && !isFocused && !isConnected) {
           targetOpacity = 0.12;
         }
         group.transition().duration(120).style("opacity", targetOpacity);
@@ -454,11 +513,11 @@ export function TagGraphView({
           .transition()
           .duration(120)
           .attr("stroke", isHighlighted ? "#3b82f6" : "currentColor")
-          .attr("stroke-opacity", hasFocus
+          .attr("stroke-opacity", hasFocus && !focusMode
             ? (isHighlighted ? 0.85 : 0.03)
-            : 0.08 + d.normalizedStrength * 0.45);
+            : 0.06 + d.normalizedStrength * 0.35);
       });
-  }, [focusTagIds, connectedNeighborIds, selectedTagIds]);
+  }, [focusTagIds, connectedNeighborIds, selectedTagIds, focusMode]);
 
   // Effect 3: React to Node Scale and Semantic Zoom changes in-place
   useEffect(() => {
@@ -475,9 +534,16 @@ export function TagGraphView({
     d3.select(svgRef.current).transition().duration(250).call(zoomBehaviorRef.current.scaleBy, 0.75);
   };
 
-  const handleResetZoom = () => {
-    if (!svgRef.current || !zoomBehaviorRef.current) return;
-    d3.select(svgRef.current).transition().duration(350).call(zoomBehaviorRef.current.transform, d3.zoomIdentity);
+  const handleFitToScreen = () => {
+    if (!svgRef.current || !zoomBehaviorRef.current || !containerRef.current) return;
+    const width = containerRef.current.clientWidth || 600;
+    const height = containerRef.current.clientHeight || 500;
+    const nodeCount = nodes.length;
+    const fitScale = nodeCount < 30 ? 0.9 : nodeCount < 80 ? 0.65 : 0.5;
+    const fitTransform = d3.zoomIdentity
+      .translate(width * (1 - fitScale) / 2, height * (1 - fitScale) / 2)
+      .scale(fitScale);
+    d3.select(svgRef.current).transition().duration(350).call(zoomBehaviorRef.current.transform, fitTransform);
   };
 
   const handleReheatPhysics = () => {
@@ -485,6 +551,8 @@ export function TagGraphView({
       simulationRef.current.alpha(0.3).restart();
     }
   };
+
+  const canFocus = selectedTagIds.size > 0;
 
   if (tags.length === 0) {
     return (
@@ -510,6 +578,19 @@ export function TagGraphView({
           {settingsOpen ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
         </button>
 
+        {/* Focus Selection Button — only visible when tags are selected */}
+        {canFocus && (
+          <button
+            type="button"
+            className={`tag-graph-btn tag-graph-focus-btn ${focusMode ? "tag-graph-btn-active" : ""}`}
+            onClick={() => setFocusMode((prev) => !prev)}
+            title={focusMode ? "Show full graph" : "Focus on selected tags and their neighbors"}
+            aria-label={focusMode ? "Show full graph" : "Focus on selection"}
+          >
+            <Focus size={14} />
+          </button>
+        )}
+
         {/* Zoom & Reset Controls — always visible */}
         <div className="tag-graph-btn-group">
           <button
@@ -533,9 +614,9 @@ export function TagGraphView({
           <button
             type="button"
             className="tag-graph-btn"
-            onClick={handleResetZoom}
-            title="Reset zoom view"
-            aria-label="Reset zoom view"
+            onClick={handleFitToScreen}
+            title="Fit to screen"
+            aria-label="Fit to screen"
           >
             <Maximize2 size={13} />
           </button>
@@ -572,16 +653,16 @@ export function TagGraphView({
             </label>
           </div>
 
-          {/* Node Size Slider */}
+          {/* Node Size Slider — range 25% to 400% */}
           <div className="tag-graph-setting-row">
             <CircleDot size={13} className="text-slate-400 shrink-0" />
             <label className="text-xs text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
               Node size: {Math.round(nodeScale * 100)}%
               <input
                 type="range"
-                min="0.5"
-                max="2.0"
-                step="0.1"
+                min="0.25"
+                max="4.0"
+                step="0.25"
                 value={nodeScale}
                 onChange={(e) => setNodeScale(parseFloat(e.target.value))}
                 className="tag-graph-slider"
@@ -596,7 +677,7 @@ export function TagGraphView({
               type="button"
               className={`tag-graph-setting-toggle ${semanticZoom ? "active" : ""}`}
               onClick={() => setSemanticZoom((prev) => !prev)}
-              title={semanticZoom ? "Semantic Zoom: ON (Nodes maintain fixed screen size)" : "Semantic Zoom: OFF (Nodes scale with zoom)"}
+              title={semanticZoom ? "Fixed Size: Nodes maintain fixed screen size" : "Scale Zoom: Nodes scale with zoom level"}
             >
               <span className="tag-graph-setting-toggle-indicator" />
               <span className="text-xs">{semanticZoom ? "Fixed size" : "Scale zoom"}</span>
@@ -615,6 +696,24 @@ export function TagGraphView({
               <span className="text-xs">{hideSystemTags ? "System tags hidden" : "System tags shown"}</span>
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Focus mode indicator */}
+      {focusMode && selectedTagIds.size > 0 && (
+        <div className="tag-graph-focus-indicator">
+          <Focus size={12} />
+          <span className="text-xs">
+            Focused: {renderedTags.length} tags
+          </span>
+          <button
+            type="button"
+            className="tag-graph-focus-exit"
+            onClick={() => setFocusMode(false)}
+            title="Exit focus mode"
+          >
+            ×
+          </button>
         </div>
       )}
 
