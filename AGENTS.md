@@ -129,8 +129,14 @@ For "address PR comments" tasks, follow this sequence:
 7. Resolve addressed threads.
 8. Confirm targeted threads are resolved via GraphQL query.
 
+## Code Comment Hygiene
+
+- Write durable code comments that describe current intent, architecture, and behavior, NOT change history or previous states.
+- Do NOT write diff-oriented comments referencing prior implementations, numbers, or scales (e.g. "was X", "halved from before", "previously Y", "old 50% is new 100%"). Git tracks history and rationale across commits, not comments in code.
+
 ## Assumptions for This Guidance
 
 - `gh` authentication is already configured.
 - Playwright browser binaries are already installed.
 - Sandbox behavior remains similar to current observed environment constraints.
+

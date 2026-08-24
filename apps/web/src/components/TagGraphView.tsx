@@ -66,9 +66,7 @@ export function TagGraphView({
 
   // Controls State
   const [minSharedCount, setMinSharedCount] = useState(1);
-  // nodeScale 1.0 = the "good" default (previously 0.5 of old scale)
   const [nodeScale, setNodeScale] = useState(1.0);
-  // Default to scale zoom (false) — fixed size was too zoomed-in looking
   const [semanticZoom, setSemanticZoom] = useState(false);
   const [hoveredTagId, setHoveredTagId] = useState<number | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -158,7 +156,7 @@ export function TagGraphView({
 
       // Log-scale ratio: spreads 1-1279 much more evenly than linear
       const logRatio = logMax > 0 ? Math.log(tag.entry_count + 1) / logMax : 0.5;
-      // Base range: 5px to 25px (halved from before — old 50% is new 100%)
+      // Base range: 5px (smallest) to 25px (largest)
       const baseRadius = 5 + logRatio * 20;
 
       return {
