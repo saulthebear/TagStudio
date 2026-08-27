@@ -226,7 +226,22 @@ test("collapsible inspector sections and default visibility states", async ({ pa
   const suggestedTagsToggle = page.getByRole("button", { name: /^Suggested tags/ });
   await expect(suggestedTagsToggle).toBeVisible();
   await expect(suggestedTagsToggle).toHaveAttribute("aria-expanded", "true");
-  await expect(page.locator(".metadata-tag-chip", { hasText: "Cute" })).toBeVisible();
+  const cuteChip = page.locator(".metadata-tag-chip", { hasText: "Cute" });
+  await expect(cuteChip).toBeVisible();
+
+  // Verify tag chips do not change width on hover (preventing layout oscillation)
+  const corgiChip = page.locator(".metadata-tag-chip", { hasText: "Corgi" });
+  const corgiBoxBefore = await corgiChip.boundingBox();
+  await corgiChip.hover();
+  const corgiBoxAfter = await corgiChip.boundingBox();
+  expect(corgiBoxAfter?.width).toBeCloseTo(corgiBoxBefore?.width ?? 0, 1);
+  await expect(corgiChip.locator(".metadata-tag-chip-remove")).toBeVisible();
+
+  const cuteBoxBefore = await cuteChip.boundingBox();
+  await cuteChip.hover();
+  const cuteBoxAfter = await cuteChip.boundingBox();
+  expect(cuteBoxAfter?.width).toBeCloseTo(cuteBoxBefore?.width ?? 0, 1);
+  await expect(cuteChip.locator(".metadata-tag-chip-add")).toBeVisible();
 
   // 4. Fields section is visible but collapsed by default
   const fieldsToggle = page.getByRole("button", { name: /^Fields/ });
