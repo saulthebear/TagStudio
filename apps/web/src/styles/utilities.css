@@ -1,0 +1,30 @@
+@utility app-shell {
+  @apply mx-auto max-w-[1600px] px-3 py-3 lg:px-4;
+}
+
+@utility panel {
+  border-radius: 1rem;
+  border: 1px solid var(--color-border-soft);
+  padding: 0.75rem;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+  backdrop-filter: blur(4px);
+  background-color: color-mix(in oklab, var(--color-surface) 92%, white 8%);
+}
+
+@utility panel-title {
+  @apply mb-2 text-sm font-semibold tracking-tight text-slate-900 dark:text-slate-100;
+}
+
+@utility input-base {
+  @apply rounded-[var(--ui-control-radius)] border border-[var(--ui-control-border)] bg-[var(--ui-control-bg)] px-3 py-2 text-sm text-[var(--ui-control-text)] shadow-[var(--ui-control-shadow)] outline-none transition-colors duration-150 focus:border-[var(--ui-focus-border)] focus:ring-2 focus:ring-[var(--ui-focus-ring)];
+}
+
+select.input-base,
+select {
+  padding-right: 2.25rem;
+  cursor: pointer;
+}
+
+@utility toggle-base {
+  @apply size-4 rounded border border-[var(--color-border-strong)] text-[var(--color-brand)] focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-900;
+}
