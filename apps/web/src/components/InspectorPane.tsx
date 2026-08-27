@@ -385,6 +385,7 @@ export function MetadataContent({
   const [hoveredTagId, setHoveredTagId] = useState<number | null>(null);
   const [tagsOpen, setTagsOpen] = useState(true);
   const [inheritedTagsOpen, setInheritedTagsOpen] = useState(true);
+  const [suggestedTagsOpen, setSuggestedTagsOpen] = useState(true);
   const [fieldsOpen, setFieldsOpen] = useState(false);
   const [showAddField, setShowAddField] = useState(false);
   const previousOpenAddTagsRequestNonce = useRef(openAddTagsRequestNonce);
@@ -742,55 +743,66 @@ export function MetadataContent({
       </div>
 
       {suggestedTags.length > 0 ? (
-        <div className="metadata-suggested-tags-section">
-          <div className="metadata-suggested-tags-header">
-            <span className="metadata-suggested-tags-title">Suggested Tags</span>
-            <span className="metadata-suggested-tags-count">({suggestedTags.length})</span>
+        <div className="metadata-collapsible-section">
+          <div className="metadata-section-header">
+            <button
+              type="button"
+              className="metadata-section-toggle"
+              onClick={() => setSuggestedTagsOpen((prev) => !prev)}
+              aria-expanded={suggestedTagsOpen}
+            >
+              {suggestedTagsOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+              <strong>Suggested tags</strong>
+              <span className="metadata-section-count">({suggestedTags.length})</span>
+            </button>
           </div>
-          <div className="metadata-tag-list">
-            {suggestedTags.map((suggestion) => {
-              const isHighlighted = highlightedTagIds.has(suggestion.tag.id);
-              const label = getTagDisplayLabel(suggestion.tag, tagDisplayContext);
-              const title = formatSuggestedTagTooltip(label, suggestion.confidence);
 
-              return (
-                <div
-                  key={suggestion.tag.id}
-                  className={`metadata-tag-chip metadata-tag-chip-suggested ${isHighlighted ? "metadata-tag-chip-highlighted" : ""}`}
-                  style={resolveTagChipStyle(suggestion.tag, tagColorLookup)}
-                  onMouseEnter={() => setHoveredTagId(suggestion.tag.id)}
-                  onMouseLeave={() => setHoveredTagId(null)}
-                >
-                  <button
-                    type="button"
-                    className="metadata-tag-chip-main"
-                    onClick={() => void addSuggestedTag(suggestion.tag.id)}
-                    onFocus={() => setHoveredTagId(suggestion.tag.id)}
-                    onBlur={() => setHoveredTagId(null)}
-                    disabled={tagMutationPending}
-                    title={title}
+          {suggestedTagsOpen ? (
+            <div className="metadata-tag-list">
+              {suggestedTags.map((suggestion) => {
+                const isHighlighted = highlightedTagIds.has(suggestion.tag.id);
+                const label = getTagDisplayLabel(suggestion.tag, tagDisplayContext);
+                const title = formatSuggestedTagTooltip(label, suggestion.confidence);
+
+                return (
+                  <div
+                    key={suggestion.tag.id}
+                    className={`metadata-tag-chip metadata-tag-chip-suggested ${isHighlighted ? "metadata-tag-chip-highlighted" : ""}`}
+                    style={resolveTagChipStyle(suggestion.tag, tagColorLookup)}
+                    onMouseEnter={() => setHoveredTagId(suggestion.tag.id)}
+                    onMouseLeave={() => setHoveredTagId(null)}
                   >
-                    <span className="metadata-tag-chip-label">{label}</span>
-                  </button>
-                  <div className="metadata-tag-chip-add-slot">
                     <button
                       type="button"
-                      className="metadata-tag-chip-add"
-                      aria-label={`Add tag ${label}`}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        void addSuggestedTag(suggestion.tag.id);
-                      }}
+                      className="metadata-tag-chip-main"
+                      onClick={() => void addSuggestedTag(suggestion.tag.id)}
+                      onFocus={() => setHoveredTagId(suggestion.tag.id)}
+                      onBlur={() => setHoveredTagId(null)}
                       disabled={tagMutationPending}
                       title={title}
                     >
-                      +
+                      <span className="metadata-tag-chip-label">{label}</span>
                     </button>
+                    <div className="metadata-tag-chip-add-slot">
+                      <button
+                        type="button"
+                        className="metadata-tag-chip-add"
+                        aria-label={`Add tag ${label}`}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void addSuggestedTag(suggestion.tag.id);
+                        }}
+                        disabled={tagMutationPending}
+                        title={title}
+                      >
+                        +
+                      </button>
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          ) : null}
         </div>
       ) : null}
 

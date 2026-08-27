@@ -49,6 +49,18 @@ test("collapsible inspector sections and default visibility states", async ({ pa
       disambiguation_id: null,
       is_category: false,
       is_hidden: false
+    },
+    {
+      id: 4,
+      name: "Cute",
+      shorthand: null,
+      aliases: [],
+      parent_ids: [],
+      color_namespace: null,
+      color_slug: null,
+      disambiguation_id: null,
+      is_category: false,
+      is_hidden: false
     }
   ];
 
@@ -131,6 +143,15 @@ test("collapsible inspector sections and default visibility states", async ({ pa
       return;
     }
 
+    if (pathname === "/api/v1/tags/suggested" && method === "POST") {
+      await fulfillJson(route, {
+        suggestions: [
+          { tag: allTags[3], confidence: 0.85, reason: "Frequently co-occurs with Corgi" }
+        ]
+      });
+      return;
+    }
+
     if (pathname === "/api/v1/field-types") {
       await fulfillJson(route, fieldTypes);
       return;
@@ -191,7 +212,7 @@ test("collapsible inspector sections and default visibility states", async ({ pa
   const tagsToggle = page.getByRole("button", { name: /^Tags/ });
   await expect(tagsToggle).toBeVisible();
   await expect(tagsToggle).toHaveAttribute("aria-expanded", "true");
-  await expect(page.getByRole("button", { name: "Add Tag" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Add Tag", exact: true })).toBeVisible();
   await expect(page.locator(".metadata-tag-chip", { hasText: "Corgi" })).toBeVisible();
 
   // 2. Inherited tags section is visible and expanded by default, showing Dog and Animal
@@ -201,7 +222,13 @@ test("collapsible inspector sections and default visibility states", async ({ pa
   await expect(page.locator(".metadata-tag-chip", { hasText: "Dog" })).toBeVisible();
   await expect(page.locator(".metadata-tag-chip", { hasText: "Animal" })).toBeVisible();
 
-  // 3. Fields section is visible but collapsed by default
+  // 3. Suggested tags section is visible and expanded by default
+  const suggestedTagsToggle = page.getByRole("button", { name: /^Suggested tags/ });
+  await expect(suggestedTagsToggle).toBeVisible();
+  await expect(suggestedTagsToggle).toHaveAttribute("aria-expanded", "true");
+  await expect(page.locator(".metadata-tag-chip", { hasText: "Cute" })).toBeVisible();
+
+  // 4. Fields section is visible but collapsed by default
   const fieldsToggle = page.getByRole("button", { name: /^Fields/ });
   await expect(fieldsToggle).toBeVisible();
   await expect(fieldsToggle).toHaveAttribute("aria-expanded", "false");
@@ -209,7 +236,7 @@ test("collapsible inspector sections and default visibility states", async ({ pa
   await expect(page.locator("input[value='Jane Doe']")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Apply" })).toHaveCount(0);
 
-  // 4. Expand Fields section
+  // 5. Expand Fields section
   await fieldsToggle.click();
   await expect(fieldsToggle).toHaveAttribute("aria-expanded", "true");
   // Existing field is now visible
@@ -217,7 +244,7 @@ test("collapsible inspector sections and default visibility states", async ({ pa
   // Add/Update Field form is still hidden by default
   await expect(page.getByRole("button", { name: "Apply" })).toHaveCount(0);
 
-  // 5. Click "Add Field" to show the Add/Update Field form
+  // 6. Click "Add Field" to show the Add/Update Field form
   const addFieldBtn = page.getByRole("button", { name: "Add Field" });
   await expect(addFieldBtn).toBeVisible();
   await addFieldBtn.click();
@@ -228,17 +255,22 @@ test("collapsible inspector sections and default visibility states", async ({ pa
   const cancelBtn = page.getByRole("button", { name: "Cancel" });
   await expect(cancelBtn).toBeVisible();
 
-  // 6. Click "Cancel" to hide the Add/Update Field form again
+  // 7. Click "Cancel" to hide the Add/Update Field form again
   await cancelBtn.click();
   await expect(page.getByRole("button", { name: "Apply" })).toHaveCount(0);
 
-  // 7. Collapse Tags section
+  // 8. Collapse Tags section
   await tagsToggle.click();
   await expect(tagsToggle).toHaveAttribute("aria-expanded", "false");
   await expect(page.locator(".metadata-tag-chip", { hasText: "Corgi" })).toHaveCount(0);
 
-  // 8. Collapse Inherited tags section
+  // 9. Collapse Inherited tags section
   await inheritedTagsToggle.click();
   await expect(inheritedTagsToggle).toHaveAttribute("aria-expanded", "false");
   await expect(page.locator(".metadata-tag-chip", { hasText: "Dog" })).toHaveCount(0);
+
+  // 10. Collapse Suggested tags section
+  await suggestedTagsToggle.click();
+  await expect(suggestedTagsToggle).toHaveAttribute("aria-expanded", "false");
+  await expect(page.locator(".metadata-tag-chip", { hasText: "Cute" })).toHaveCount(0);
 });
