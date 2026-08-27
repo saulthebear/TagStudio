@@ -530,11 +530,16 @@ export function MetadataContent({
       .map((tag) => tag.id);
   }, [allTags]);
 
+  const directContentTagIds = useMemo(() => {
+    const nonContentSet = new Set(nonContentTagIds);
+    return directTagIds.filter((id) => !nonContentSet.has(id));
+  }, [directTagIds, nonContentTagIds]);
+
   const suggestedTagsQuery = useSuggestedTags({
-    tagIds: directTagIds,
+    tagIds: directContentTagIds,
     excludeTagIds: [...directTagIds, ...inheritedTagIds, ...nonContentTagIds],
     limit: 12,
-    enabled: selectedCount > 0 && directTagIds.length > 0
+    enabled: selectedCount > 0 && directContentTagIds.length > 0
   });
 
   const suggestedTags = useMemo(() => {

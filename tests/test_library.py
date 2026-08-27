@@ -583,4 +583,14 @@ def test_get_suggested_tags(library: Library, generate_tag: Callable[..., Tag]):
     assert hidden_tag.id not in clean_tag_ids
     assert meta_tag.id not in clean_tag_ids
 
+    # Verify system tags and non-content tags cannot be used as seed tags
+    assert library.get_suggested_tags([sys_tag.id]) == []
+    assert library.get_suggested_tags([meta_tag.id]) == []
+    assert library.get_suggested_tags([sys_tag.id, meta_tag.id]) == []
+
+    # Verify supplying system tags alongside content tags ignores the system tags
+    with_sys = library.get_suggested_tags([tag_a.id, tag_b.id, sys_tag.id])
+    assert [t.id for t, _, _, _ in with_sys] == [t.id for t, _, _, _ in clean_suggestions]
+
+
 

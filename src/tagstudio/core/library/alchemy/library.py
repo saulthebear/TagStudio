@@ -1475,9 +1475,14 @@ class Library:
             system_meta_ids = set(session.scalars(excluded_system_meta_stmt).all())
             excluded.update(system_meta_ids)
 
+            # Filter input seeds to content tags only
+            content_input_ids = input_ids - system_meta_ids
+            if not content_input_ids:
+                return []
+
             matching_entry_ids_stmt = (
                 select(TagEntry.entry_id)
-                .where(TagEntry.tag_id.in_(input_ids))
+                .where(TagEntry.tag_id.in_(content_input_ids))
                 .distinct()
             )
             matching_entry_ids = set(session.scalars(matching_entry_ids_stmt).all())
@@ -1492,6 +1497,8 @@ class Library:
 
             entries_to_tags: dict[int, set[int]] = {}
             for entry_id, tag_id in entry_tags_rows:
+                if tag_id in system_meta_ids:
+                    continue
                 if entry_id not in entries_to_tags:
                     entries_to_tags[entry_id] = set()
                 entries_to_tags[entry_id].add(tag_id)
@@ -1504,10 +1511,10 @@ class Library:
             shared_counts: dict[int, int] = {}
 
             for entry_tags in entries_to_tags.values():
-                overlap = len(entry_tags & input_ids)
+                overlap = len(entry_tags & content_input_ids)
                 if overlap == 0:
                     continue
-                union_size = len(entry_tags | input_ids)
+                union_size = len(entry_tags | content_input_ids)
                 weight = overlap / union_size if union_size > 0 else 0.0
 
                 for candidate_id in entry_tags:
