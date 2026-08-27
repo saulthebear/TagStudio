@@ -48,6 +48,9 @@ from tagstudio.api.schemas import (
     TagSearchResponse,
     TagStatResponse,
     TagStatsResponse,
+    TagSuggestionsRequest,
+    TagSuggestionItem,
+    TagSuggestionsResponse,
     TagCoOccurrence,
     TagUpdateRequest,
     ThumbnailFit,
@@ -423,6 +426,33 @@ def create_router(*, state: ApiState, jobs: JobManager) -> APIRouter:
             library_path_hash=_library_path_hash(lib),
         )
         return TagStatsResponse(tags=tags, co_occurrences=co_occurrences)
+
+    @router.post("/tags/suggested", response_model=TagSuggestionsResponse)
+    def get_suggested_tags(request: TagSuggestionsRequest) -> TagSuggestionsResponse:
+        lib = get_library_or_error()
+        start = time.perf_counter()
+        results = lib.get_suggested_tags(
+            tag_ids=request.tag_ids,
+            exclude_tag_ids=request.exclude_tag_ids,
+            limit=request.limit,
+        )
+        suggestions = [
+            TagSuggestionItem(
+                tag=TagResponse.model_validate(serialize_tag(tag)),
+                score=round(score, 4),
+                confidence=round(confidence, 4),
+                shared_entries_count=shared_count,
+            )
+            for tag, score, confidence, shared_count in results
+        ]
+        logger.info(
+            "api.tags.suggested",
+            duration_ms=round((time.perf_counter() - start) * 1000, 2),
+            input_tags_count=len(request.tag_ids),
+            suggestions_count=len(suggestions),
+            library_path_hash=_library_path_hash(lib),
+        )
+        return TagSuggestionsResponse(suggestions=suggestions)
 
     @router.post("/search", response_model=SearchResponse)
     def search_entries(request: SearchRequest) -> SearchResponse:

@@ -1240,13 +1240,64 @@ body.modal-dragging {
   padding: 0.18rem 0.28rem 0.18rem 0.5rem;
   transition:
     grid-template-columns 200ms ease,
-    padding-right 200ms ease;
+    padding-right 200ms ease,
+    box-shadow 150ms ease,
+    border-color 150ms ease,
+    transform 150ms ease;
 }
 
 .metadata-tag-chip:hover,
 .metadata-tag-chip:focus-within {
   grid-template-columns: minmax(0, max-content) 1.45rem;
   padding-right: 0.28rem;
+}
+
+.metadata-tag-chip-inherited {
+  border-style: dashed !important;
+  grid-template-columns: minmax(0, max-content);
+  padding-right: 0.5rem;
+}
+
+.metadata-tag-chip-inherited:hover,
+.metadata-tag-chip-inherited:focus-within {
+  grid-template-columns: minmax(0, max-content);
+  padding-right: 0.5rem;
+}
+
+.metadata-tag-chip-suggested {
+  border-style: dotted !important;
+}
+
+.metadata-tag-chip-highlighted {
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.45), 0 2px 8px rgba(59, 130, 246, 0.2);
+  transform: translateY(-1px);
+  z-index: 1;
+}
+
+.metadata-inherited-tags-section,
+.metadata-suggested-tags-section {
+  margin-top: 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.metadata-inherited-tags-header,
+.metadata-suggested-tags-header {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.metadata-inherited-tags-count,
+.metadata-suggested-tags-count {
+  font-size: 0.75rem;
+  font-weight: 500;
+  opacity: 0.8;
 }
 
 .metadata-tag-chip-main {
@@ -1314,6 +1365,51 @@ body.modal-dragging {
 }
 
 .metadata-tag-chip-remove:disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.metadata-tag-chip-add-slot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.metadata-tag-chip-add {
+  border: 0;
+  background: transparent;
+  color: #10b981;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  line-height: 1;
+  padding: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(4px);
+  transition:
+    opacity 120ms ease,
+    transform 180ms ease;
+}
+
+.metadata-tag-chip:hover .metadata-tag-chip-add,
+.metadata-tag-chip:focus-within .metadata-tag-chip-add {
+  opacity: 1;
+  transform: translateX(0);
+  pointer-events: auto;
+}
+
+.metadata-tag-chip-add:hover {
+  background: color-mix(in oklab, #10b981 16%, white 84%);
+  color: #047857;
+}
+
+.metadata-tag-chip-add:disabled {
   opacity: 0.5;
   pointer-events: none;
 }
@@ -1755,9 +1851,28 @@ body.modal-dragging {
   color: #fca5a5;
 }
 
+.dark .metadata-tag-chip-add {
+  color: #34d399;
+}
+
+.dark .metadata-tag-chip-add:hover {
+  background: color-mix(in oklab, #34d399 22%, #1e293b 78%);
+  color: #a7f3d0;
+}
+
 .dark .metadata-tag-partial {
   background: color-mix(in oklab, #f59e0b 25%, #1e293b 75%);
   color: #fcd34d;
+}
+
+.dark .metadata-tag-chip-highlighted {
+  border-color: #60a5fa !important;
+  box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.55), 0 2px 10px rgba(96, 165, 250, 0.3);
+}
+
+.dark .metadata-inherited-tags-header,
+.dark .metadata-suggested-tags-header {
+  color: #94a3b8;
 }
 
 .dark .add-tags-row-label-chip {

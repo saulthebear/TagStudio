@@ -333,3 +333,151 @@ export function computeDesktopSelection({
     anchorId: clickedId
   };
 }
+
+export type TagWithParents = {
+  id: number;
+  parent_ids: number[];
+};
+
+export function buildTagAncestryMap(tags: TagWithParents[]): {
+  ancestorMap: Map<number, Set<number>>;
+  descendantMap: Map<number, Set<number>>;
+} {
+  const parentMap = new Map<number, number[]>();
+  for (const tag of tags) {
+    parentMap.set(tag.id, tag.parent_ids);
+  }
+
+  const ancestorMap = new Map<number, Set<number>>();
+  const descendantMap = new Map<number, Set<number>>();
+
+  for (const tag of tags) {
+    ancestorMap.set(tag.id, new Set());
+    if (!descendantMap.has(tag.id)) {
+      descendantMap.set(tag.id, new Set());
+    }
+  }
+
+  for (const tag of tags) {
+    const visited = new Set<number>();
+    const queue = [...tag.parent_ids];
+    while (queue.length > 0) {
+      const parentId = queue.shift()!;
+      if (visited.has(parentId)) continue;
+      visited.add(parentId);
+      ancestorMap.get(tag.id)?.add(parentId);
+      if (!descendantMap.has(parentId)) {
+        descendantMap.set(parentId, new Set());
+      }
+      descendantMap.get(parentId)?.add(tag.id);
+
+      const grandparents = parentMap.get(parentId);
+      if (grandparents) {
+        for (const gp of grandparents) {
+          if (!visited.has(gp)) queue.push(gp);
+        }
+      }
+    }
+  }
+
+  return { ancestorMap, descendantMap };
+}
+
+export type InheritedTagRow = {
+  tagId: number;
+  count: number;
+  state: "all" | "partial";
+  tag: TagResponse | null;
+  descendantTagIds: number[];
+};
+
+export type SelectedEntryTagsSummary = {
+  id: number;
+  tag_ids: number[];
+};
+
+export function computeInheritedTagRows({
+  selectedEntries,
+  tagById,
+  ancestorMap,
+  tagDisplayContext = EMPTY_TAG_DISPLAY_CONTEXT,
+  selectedCount
+}: {
+  selectedEntries: SelectedEntryTagsSummary[];
+  tagById: ReadonlyMap<number, TagResponse>;
+  ancestorMap: ReadonlyMap<number, Set<number>>;
+  tagDisplayContext?: TagDisplayContext;
+  selectedCount: number;
+}): InheritedTagRow[] {
+  if (selectedCount <= 0 || selectedEntries.length === 0) {
+    return [];
+  }
+
+  const directTagIds = new Set<number>();
+  for (const entry of selectedEntries) {
+    for (const tagId of entry.tag_ids) {
+      directTagIds.add(tagId);
+    }
+  }
+
+  const inheritedEntryCounts = new Map<number, number>();
+  for (const entry of selectedEntries) {
+    const entryDirect = new Set(entry.tag_ids);
+    const entryInherited = new Set<number>();
+    for (const tagId of entryDirect) {
+      const ancestors = ancestorMap.get(tagId);
+      if (ancestors) {
+        for (const ancestorId of ancestors) {
+          if (!entryDirect.has(ancestorId)) {
+            entryInherited.add(ancestorId);
+          }
+        }
+      }
+    }
+    for (const inheritedId of entryInherited) {
+      if (!directTagIds.has(inheritedId)) {
+        inheritedEntryCounts.set(inheritedId, (inheritedEntryCounts.get(inheritedId) ?? 0) + 1);
+      }
+    }
+  }
+
+  const rows: InheritedTagRow[] = [];
+  for (const [inheritedId, count] of inheritedEntryCounts.entries()) {
+    const descendantTagIds: number[] = [];
+    for (const directId of directTagIds) {
+      if (ancestorMap.get(directId)?.has(inheritedId)) {
+        descendantTagIds.push(directId);
+      }
+    }
+    descendantTagIds.sort((a, b) => {
+      const aTag = tagById.get(a);
+      const bTag = tagById.get(b);
+      const aName = aTag ? getTagDisplayLabel(aTag, tagDisplayContext) : String(a);
+      const bName = bTag ? getTagDisplayLabel(bTag, tagDisplayContext) : String(b);
+      return aName.localeCompare(bName);
+    });
+
+    rows.push({
+      tagId: inheritedId,
+      count,
+      state: count === selectedCount ? "all" : "partial",
+      tag: tagById.get(inheritedId) ?? null,
+      descendantTagIds
+    });
+  }
+
+  rows.sort((a, b) => {
+    const aName = a.tag ? getTagDisplayLabel(a.tag, tagDisplayContext) : String(a.tagId);
+    const bName = b.tag ? getTagDisplayLabel(b.tag, tagDisplayContext) : String(b.tagId);
+    return aName.localeCompare(bName);
+  });
+
+  return rows;
+}
+
+export function formatSuggestedTagTooltip(label: string, confidence: number): string {
+  const percentage = Math.round(confidence * 100);
+  return `Add tag "${label}" (${percentage}% match)`;
+}
+
+

@@ -1,7 +1,11 @@
 import { describe, expect, it } from "bun:test";
 import { type TagStatResponse } from "@tagstudio/api-client";
 
-import { buildSearchQueryFromTags, buildTagTree } from "@/hooks/useTagExplorerWorkflow";
+import {
+  buildSearchQueryFromTags,
+  buildTagAncestryMap,
+  buildTagTree
+} from "@/hooks/useTagExplorerWorkflow";
 
 describe("tag-explorer", () => {
   const sampleTags: TagStatResponse[] = [
@@ -121,6 +125,30 @@ describe("tag-explorer", () => {
       expect(filtered.length).toBe(1);
       expect(filtered[0].tag.name).toBe("Nature");
       expect(filtered[0].children[0].tag.name).toBe("Animals");
+    });
+  });
+
+  describe("buildTagAncestryMap", () => {
+    it("computes recursive ancestor and descendant maps across multi-level hierarchies", () => {
+      const { ancestorMap, descendantMap } = buildTagAncestryMap(sampleTags);
+
+      // Nature (1) has no ancestors, descendants are Animals (2) and Cats (3)
+      expect(ancestorMap.get(1)?.size).toBe(0);
+      expect(descendantMap.get(1)?.has(2)).toBe(true);
+      expect(descendantMap.get(1)?.has(3)).toBe(true);
+
+      // Animals (2) has ancestor Nature (1), descendant Cats (3)
+      expect(ancestorMap.get(2)?.has(1)).toBe(true);
+      expect(descendantMap.get(2)?.has(3)).toBe(true);
+
+      // Cats (3) has ancestors Animals (2) and Nature (1), no descendants
+      expect(ancestorMap.get(3)?.has(2)).toBe(true);
+      expect(ancestorMap.get(3)?.has(1)).toBe(true);
+      expect(descendantMap.get(3)?.size).toBe(0);
+
+      // Urban (4) is isolated
+      expect(ancestorMap.get(4)?.size).toBe(0);
+      expect(descendantMap.get(4)?.size).toBe(0);
     });
   });
 });

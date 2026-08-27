@@ -410,6 +410,84 @@
         }
       }
     },
+    "/api/v1/tags/stats": {
+      "get": {
+        "summary": "Get Tag Stats",
+        "operationId": "get_tag_stats_api_v1_tags_stats_get",
+        "parameters": [
+          {
+            "name": "co_occurrences_limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 2000,
+              "title": "Co Occurrences Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TagStatsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tags/suggested": {
+      "post": {
+        "summary": "Get Suggested Tags",
+        "operationId": "get_suggested_tags_api_v1_tags_suggested_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TagSuggestionsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TagSuggestionsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/search": {
       "post": {
         "summary": "Search Entries",
@@ -2356,6 +2434,29 @@
         ],
         "title": "SystemTagsSyncResponse"
       },
+      "TagCoOccurrence": {
+        "properties": {
+          "tag_id_a": {
+            "type": "integer",
+            "title": "Tag Id A"
+          },
+          "tag_id_b": {
+            "type": "integer",
+            "title": "Tag Id B"
+          },
+          "shared_count": {
+            "type": "integer",
+            "title": "Shared Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "tag_id_a",
+          "tag_id_b",
+          "shared_count"
+        ],
+        "title": "TagCoOccurrence"
+      },
       "TagColorNamespaceResponse": {
         "properties": {
           "namespace": {
@@ -2667,6 +2768,184 @@
         },
         "type": "object",
         "title": "TagSearchResponse"
+      },
+      "TagStatResponse": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "shorthand": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shorthand"
+          },
+          "aliases": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Aliases"
+          },
+          "parent_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Parent Ids"
+          },
+          "color_namespace": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Color Namespace"
+          },
+          "color_slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Color Slug"
+          },
+          "disambiguation_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Disambiguation Id"
+          },
+          "is_category": {
+            "type": "boolean",
+            "title": "Is Category",
+            "default": false
+          },
+          "is_hidden": {
+            "type": "boolean",
+            "title": "Is Hidden",
+            "default": false
+          },
+          "entry_count": {
+            "type": "integer",
+            "title": "Entry Count",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "TagStatResponse"
+      },
+      "TagStatsResponse": {
+        "properties": {
+          "tags": {
+            "items": {
+              "$ref": "#/components/schemas/TagStatResponse"
+            },
+            "type": "array",
+            "title": "Tags"
+          },
+          "co_occurrences": {
+            "items": {
+              "$ref": "#/components/schemas/TagCoOccurrence"
+            },
+            "type": "array",
+            "title": "Co Occurrences"
+          }
+        },
+        "type": "object",
+        "title": "TagStatsResponse"
+      },
+      "TagSuggestionItem": {
+        "properties": {
+          "tag": {
+            "$ref": "#/components/schemas/TagResponse"
+          },
+          "score": {
+            "type": "number",
+            "title": "Score"
+          },
+          "confidence": {
+            "type": "number",
+            "title": "Confidence"
+          },
+          "shared_entries_count": {
+            "type": "integer",
+            "title": "Shared Entries Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "tag",
+          "score",
+          "confidence",
+          "shared_entries_count"
+        ],
+        "title": "TagSuggestionItem"
+      },
+      "TagSuggestionsRequest": {
+        "properties": {
+          "tag_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Tag Ids"
+          },
+          "exclude_tag_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Exclude Tag Ids"
+          },
+          "limit": {
+            "type": "integer",
+            "maximum": 50.0,
+            "minimum": 1.0,
+            "title": "Limit",
+            "default": 10
+          }
+        },
+        "type": "object",
+        "title": "TagSuggestionsRequest"
+      },
+      "TagSuggestionsResponse": {
+        "properties": {
+          "suggestions": {
+            "items": {
+              "$ref": "#/components/schemas/TagSuggestionItem"
+            },
+            "type": "array",
+            "title": "Suggestions"
+          }
+        },
+        "type": "object",
+        "title": "TagSuggestionsResponse"
       },
       "TagUpdateRequest": {
         "properties": {

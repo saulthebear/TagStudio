@@ -65,6 +65,9 @@ export function buildSearchQueryFromTags(
   return tagIds.map((id) => `tag_id:${id}`).join(" OR ");
 }
 
+import { buildTagAncestryMap } from "@/lib/tag-workflows";
+export { buildTagAncestryMap };
+
 export function buildTagTree(
   tags: TagStatResponse[],
   searchFilter: string = ""
@@ -202,20 +205,22 @@ export function useTagExplorerWorkflow({
     return map;
   }, [statsData.co_occurrences]);
 
-  // Set of tag IDs that co-occur or have parent/child relationships with currently selected tags
+  // Precompute ancestor and descendant maps for all tags
+  const { ancestorMap, descendantMap } = useMemo(() => {
+    return buildTagAncestryMap(statsData.tags);
+  }, [statsData.tags]);
+
+  // Set of tag IDs that co-occur or have ancestor/descendant relationships with currently selected tags
   const coOccurringTagIds = useMemo(() => {
     if (selectedTagIds.size === 0) {
       return new Set<number>();
     }
     const result = new Set<number>();
-    const tagMap = new Map(statsData.tags.map((t) => [t.id, t]));
 
     const isConnected = (candidateId: number, targetId: number): boolean => {
       if (coOccurrenceMap.get(targetId)?.has(candidateId)) return true;
-      const candidate = tagMap.get(candidateId);
-      if (candidate?.parent_ids.includes(targetId)) return true;
-      const target = tagMap.get(targetId);
-      if (target?.parent_ids.includes(candidateId)) return true;
+      if (ancestorMap.get(candidateId)?.has(targetId)) return true;
+      if (descendantMap.get(candidateId)?.has(targetId)) return true;
       return false;
     };
 
@@ -248,7 +253,7 @@ export function useTagExplorerWorkflow({
     }
 
     return result;
-  }, [coOccurrenceMap, selectedTagIds, statsData.tags, selectionMode]);
+  }, [coOccurrenceMap, selectedTagIds, statsData.tags, selectionMode, ancestorMap, descendantMap]);
 
   // List of selected tag objects
   const selectedTagsList = useMemo(() => {
