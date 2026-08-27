@@ -1059,3 +1059,22 @@ def test_tags_suggested_endpoint() -> None:
             assert tag_b_id not in excl_ids
             assert tag_c_id in excl_ids
 
+            # Test system tags are excluded and cannot be seed tags
+            sys_tag_res = client.post("/api/v1/tags", json={"name": "system:remuxed", "tag_type": "system"})
+            assert sys_tag_res.status_code == 200
+            sys_tag_id = sys_tag_res.json()["id"]
+
+            client.post("/api/v1/entries/tags:add", json={"entry_ids": [entry_ids[0]], "tag_ids": [sys_tag_id]})
+
+            sys_seed_res = client.post("/api/v1/tags/suggested", json={"tag_ids": [sys_tag_id]})
+            assert sys_seed_res.status_code == 200
+            assert sys_seed_res.json()["suggestions"] == []
+
+            with_sys_res = client.post("/api/v1/tags/suggested", json={"tag_ids": [foo_id, sys_tag_id]})
+            assert with_sys_res.status_code == 200
+            with_sys_ids = [s["tag"]["id"] for s in with_sys_res.json()["suggestions"]]
+            assert sys_tag_id not in with_sys_ids
+            assert tag_b_id in with_sys_ids
+            assert tag_c_id in with_sys_ids
+
+
