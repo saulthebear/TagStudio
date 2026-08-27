@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 
 import { createTagColorLookup } from "@/lib/tag-styles";
+import { buildTagAncestryMap } from "@/hooks/useTagExplorerWorkflow";
 
 type TagGraphViewProps = {
   tags: TagStatResponse[];
@@ -112,6 +113,10 @@ export function TagGraphView({
     return map;
   }, [coOccurrences]);
 
+  const { ancestorMap: graphAncestorMap } = useMemo(() => {
+    return buildTagAncestryMap(graphTags);
+  }, [graphTags]);
+
   // Build full adjacency map (co-occurrences + parent/child hierarchy) for focus mode & neighbor queries
   const fullAdjacencyMap = useMemo(() => {
     const adj = new Map<number, Set<number>>();
@@ -124,19 +129,22 @@ export function TagGraphView({
       }
     }
 
-    // Include direct parent-child relationships
+    // Include full ancestor-descendant relationships
     for (const tag of graphTags) {
-      for (const parentId of tag.parent_ids) {
-        if (tagIdSet.has(parentId)) {
-          if (!adj.has(tag.id)) adj.set(tag.id, new Set());
-          if (!adj.has(parentId)) adj.set(parentId, new Set());
-          adj.get(tag.id)!.add(parentId);
-          adj.get(parentId)!.add(tag.id);
+      const ancestors = graphAncestorMap.get(tag.id);
+      if (ancestors) {
+        for (const ancestorId of ancestors) {
+          if (tagIdSet.has(ancestorId)) {
+            if (!adj.has(tag.id)) adj.set(tag.id, new Set());
+            if (!adj.has(ancestorId)) adj.set(ancestorId, new Set());
+            adj.get(tag.id)!.add(ancestorId);
+            adj.get(ancestorId)!.add(tag.id);
+          }
         }
       }
     }
     return adj;
-  }, [coOccurrences, tagIdSet, graphTags]);
+  }, [coOccurrences, tagIdSet, graphTags, graphAncestorMap]);
 
   // When focus mode is on and tags are selected, compute the subset of tag IDs to show
   const focusSubsetIds = useMemo(() => {
@@ -192,16 +200,22 @@ export function TagGraphView({
 
   const renderedTagIdSet = useMemo(() => new Set(renderedTags.map((t) => t.id)), [renderedTags]);
 
-  const { nodes, links, adjacencyMap } = useMemo(() => {
-    const tagMap = new Map(renderedTags.map((t) => [t.id, t]));
+  const { ancestorMap: renderedAncestorMap, descendantMap: renderedDescendantMap } = useMemo(() => {
+    return buildTagAncestryMap(renderedTags);
+  }, [renderedTags]);
 
+  const { nodes, links, adjacencyMap } = useMemo(() => {
     // Helper to calculate context-aware display count for each tag
     const getContextCount = (tag: TagStatResponse): number => {
       if (focusMode && focusSubsetIds && !selectedTagIds.has(tag.id)) {
         const sharedCounts: number[] = [];
         for (const selId of selectedTagIds) {
           let count = coOccurrencePairMap.get(tag.id)?.get(selId) ?? 0;
-          if (count === 0 && (tag.parent_ids.includes(selId) || tagMap.get(selId)?.parent_ids.includes(tag.id))) {
+          if (
+            count === 0 &&
+            (renderedAncestorMap.get(tag.id)?.has(selId) ||
+              renderedDescendantMap.get(tag.id)?.has(selId))
+          ) {
             count = tag.entry_count;
           }
           sharedCounts.push(count);

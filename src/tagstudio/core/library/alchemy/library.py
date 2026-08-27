@@ -80,6 +80,7 @@ from tagstudio.core.library.alchemy.constants import (
     DB_VERSION_LEGACY_KEY,
     JSON_FILENAME,
     SQL_FILENAME,
+    TAG_CHILDREN_ID_QUERY,
     TAG_CHILDREN_QUERY,
 )
 from tagstudio.core.library.alchemy.db import make_tables
@@ -1249,14 +1250,24 @@ class Library:
             return tags, total_count
 
     def get_tag_stats(self) -> list[tuple[Tag, int]]:
-        """Return all tags paired with the count of entries assigned to each tag."""
+        """Return all tags paired with the count of entries assigned to each tag (including descendant tags)."""
         start_time = time.perf_counter()
         with Session(self.engine) as session:
-            counts_query = (
-                select(TagEntry.tag_id, func.count(TagEntry.entry_id).label("entry_count"))
-                .group_by(TagEntry.tag_id)
-            )
-            counts_map = dict(session.execute(counts_query).all())
+            descendant_counts_query = text("""
+                WITH RECURSIVE TagDescendants AS (
+                    SELECT id AS ancestor_id, id AS descendant_id
+                    FROM tags
+                    UNION
+                    SELECT td.ancestor_id, tp.child_id AS descendant_id
+                    FROM tag_parents tp
+                    INNER JOIN TagDescendants td ON tp.parent_id = td.descendant_id
+                )
+                SELECT td.ancestor_id AS tag_id, COUNT(DISTINCT te.entry_id) AS entry_count
+                FROM TagDescendants td
+                INNER JOIN tag_entries te ON te.tag_id = td.descendant_id
+                GROUP BY td.ancestor_id;
+            """)
+            counts_map = dict(session.execute(descendant_counts_query).all())
 
             tags_query = (
                 select(Tag)
@@ -1291,20 +1302,31 @@ class Library:
         """
         start_time = time.perf_counter()
         with Session(self.engine) as session:
-            te_a = aliased(TagEntry)
-            te_b = aliased(TagEntry)
-            query = (
-                select(
-                    te_a.tag_id.label("tag_id_a"),
-                    te_b.tag_id.label("tag_id_b"),
-                    func.count(te_a.entry_id).label("shared_count"),
+            co_query = text("""
+                WITH RECURSIVE TagDescendants AS (
+                    SELECT id AS ancestor_id, id AS descendant_id
+                    FROM tags
+                    UNION
+                    SELECT td.ancestor_id, tp.child_id AS descendant_id
+                    FROM tag_parents tp
+                    INNER JOIN TagDescendants td ON tp.parent_id = td.descendant_id
+                ),
+                EntryAncestorTags AS (
+                    SELECT DISTINCT te.entry_id, td.ancestor_id AS tag_id
+                    FROM tag_entries te
+                    INNER JOIN TagDescendants td ON te.tag_id = td.descendant_id
                 )
-                .join(te_b, and_(te_a.entry_id == te_b.entry_id, te_a.tag_id < te_b.tag_id))
-                .group_by(te_a.tag_id, te_b.tag_id)
-                .order_by(desc("shared_count"), te_a.tag_id, te_b.tag_id)
-                .limit(limit)
-            )
-            rows = session.execute(query).all()
+                SELECT
+                    ea.tag_id AS tag_id_a,
+                    eb.tag_id AS tag_id_b,
+                    COUNT(ea.entry_id) AS shared_count
+                FROM EntryAncestorTags ea
+                INNER JOIN EntryAncestorTags eb ON ea.entry_id = eb.entry_id AND ea.tag_id < eb.tag_id
+                GROUP BY ea.tag_id, eb.tag_id
+                ORDER BY shared_count DESC, ea.tag_id, eb.tag_id
+                LIMIT :limit;
+            """)
+            rows = session.execute(co_query, {"limit": limit}).all()
             res = [(int(row[0]), int(row[1]), int(row[2])) for row in rows]
 
             if self.library_dir:
@@ -1318,6 +1340,124 @@ class Library:
                 )
 
             return res
+
+    def get_suggested_tags(
+        self,
+        tag_ids: Iterable[int],
+        exclude_tag_ids: Iterable[int] | None = None,
+        limit: int = 10,
+    ) -> list[tuple[Tag, float, float, int]]:
+        """Return suggested tags based on co-occurrence and Jaccard association with the given tag_ids.
+
+        Returns a list of tuples: (tag, score, confidence, shared_entries_count).
+        """
+        input_ids = {int(tid) for tid in tag_ids}
+        if not input_ids or self.engine is None:
+            return []
+
+        excluded = set(input_ids)
+        if exclude_tag_ids is not None:
+            excluded.update(int(tid) for tid in exclude_tag_ids)
+
+        effective_limit = max(1, min(limit, 100))
+
+        with Session(self.engine) as session:
+            # Exclude system tags, meta tags, category tags, hidden tags, and reserved tags
+            excluded_system_meta_stmt = (
+                select(Tag.id).where(
+                    or_(
+                        Tag.is_category == True,
+                        Tag.is_hidden == True,
+                        Tag.name.ilike("system:%"),
+                        Tag.name.ilike("meta:%"),
+                        Tag.name.ilike("system"),
+                        Tag.name.ilike("meta"),
+                        Tag.name.ilike("meta tags"),
+                        Tag.name.ilike("system tags"),
+                        Tag.id.in_([0, 1]),
+                    )
+                )
+            )
+            system_meta_ids = set(session.scalars(excluded_system_meta_stmt).all())
+            excluded.update(system_meta_ids)
+
+            # Also exclude any descendant tags of System or Meta category tags
+            for root_name in ("System", "Meta Tags", "Meta", "System Tags"):
+                root_tags = session.scalars(select(Tag.id).where(Tag.name.ilike(root_name))).all()
+                for root_tag_id in root_tags:
+                    descendants = set(session.scalars(TAG_CHILDREN_ID_QUERY, {"tag_id": root_tag_id}))
+                    excluded.update(descendants)
+
+            matching_entry_ids_stmt = (
+                select(TagEntry.entry_id)
+                .where(TagEntry.tag_id.in_(input_ids))
+                .distinct()
+            )
+            matching_entry_ids = set(session.scalars(matching_entry_ids_stmt).all())
+            if not matching_entry_ids:
+                return []
+
+            all_entry_tags_stmt = (
+                select(TagEntry.entry_id, TagEntry.tag_id)
+                .where(TagEntry.entry_id.in_(matching_entry_ids))
+            )
+            entry_tags_rows = session.execute(all_entry_tags_stmt).all()
+
+            entries_to_tags: dict[int, set[int]] = {}
+            for entry_id, tag_id in entry_tags_rows:
+                if entry_id not in entries_to_tags:
+                    entries_to_tags[entry_id] = set()
+                entries_to_tags[entry_id].add(tag_id)
+
+            total_matching_entries = len(entries_to_tags)
+            if total_matching_entries == 0:
+                return []
+
+            scores: dict[int, float] = {}
+            shared_counts: dict[int, int] = {}
+
+            for entry_tags in entries_to_tags.values():
+                overlap = len(entry_tags & input_ids)
+                if overlap == 0:
+                    continue
+                union_size = len(entry_tags | input_ids)
+                weight = overlap / union_size if union_size > 0 else 0.0
+
+                for candidate_id in entry_tags:
+                    if candidate_id in excluded:
+                        continue
+                    scores[candidate_id] = scores.get(candidate_id, 0.0) + weight
+                    shared_counts[candidate_id] = shared_counts.get(candidate_id, 0) + 1
+
+            if not scores:
+                return []
+
+            ranked_candidates = sorted(
+                scores.keys(),
+                key=lambda cid: (-scores[cid], -shared_counts[cid], cid),
+            )[:effective_limit]
+
+            tags_query = (
+                select(Tag)
+                .options(
+                    selectinload(Tag.parent_tags),
+                    selectinload(Tag.aliases),
+                )
+                .where(Tag.id.in_(ranked_candidates))
+            )
+            tags_by_id = {tag.id: tag for tag in session.scalars(tags_query).unique()}
+
+            result: list[tuple[Tag, float, float, int]] = []
+            for cid in ranked_candidates:
+                tag = tags_by_id.get(cid)
+                if tag is not None:
+                    session.expunge(tag)
+                    score = scores[cid]
+                    shared_count = shared_counts[cid]
+                    confidence = shared_count / total_matching_entries
+                    result.append((tag, score, confidence, shared_count))
+
+            return result
 
     def update_entry_path(self, entry_id: int | Entry, path: Path) -> bool:
         """Set the path field of an entry.

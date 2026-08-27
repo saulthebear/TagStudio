@@ -8,15 +8,23 @@ import {
   type TagUpdatePayload
 } from "@tagstudio/api-client";
 import { Button } from "@tagstudio/ui";
-import { Maximize2, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Maximize2, Trash2 } from "lucide-react";
 import { type SyntheticEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { AddTagsModal } from "@/components/AddTagsModal";
 import { SplitPane, type SplitPaneState } from "@/components/SplitPane";
 import { TagEditorModal } from "@/components/TagEditorModal";
+import { useSuggestedTags } from "@/hooks/useSuggestedTags";
 import { useTagColors } from "@/hooks/useTagColors";
 import { createTagColorLookup, resolveTagChipStyle } from "@/lib/tag-styles";
-import { createTagDisplayContext, getTagDisplayLabel } from "@/lib/tag-workflows";
+import {
+  buildTagAncestryMap,
+  computeInheritedTagRows,
+  createTagDisplayContext,
+  formatSuggestedTagTooltip,
+  getTagDisplayLabel,
+  type InheritedTagRow
+} from "@/lib/tag-workflows";
 
 type InspectorPaneProps = {
   selectedEntry: EntryResponse | null;
@@ -374,6 +382,12 @@ export function MetadataContent({
 }: MetadataContentProps) {
   const [addTagsOpen, setAddTagsOpen] = useState(false);
   const [editTag, setEditTag] = useState<TagResponse | null>(null);
+  const [hoveredTagId, setHoveredTagId] = useState<number | null>(null);
+  const [tagsOpen, setTagsOpen] = useState(true);
+  const [inheritedTagsOpen, setInheritedTagsOpen] = useState(true);
+  const [suggestedTagsOpen, setSuggestedTagsOpen] = useState(true);
+  const [fieldsOpen, setFieldsOpen] = useState(false);
+  const [showAddField, setShowAddField] = useState(false);
   const previousOpenAddTagsRequestNonce = useRef(openAddTagsRequestNonce);
 
   const selectedCount = selectedEntryIds.length;
@@ -398,6 +412,8 @@ export function MetadataContent({
     }
     return map;
   }, [allTags, selectedEntry]);
+
+  const { ancestorMap } = useMemo(() => buildTagAncestryMap(allTags), [allTags]);
 
   const selectedEntriesForMetadata = useMemo(() => {
     if (!selectedEntry) {
@@ -460,12 +476,104 @@ export function MetadataContent({
 
     return rows;
   }, [selectedCount, selectedEntriesForMetadata, tagById, tagDisplayContext]);
+
+  const inheritedTagRows = useMemo<InheritedTagRow[]>(() => {
+    return computeInheritedTagRows({
+      selectedEntries: selectedEntriesForMetadata,
+      tagById,
+      ancestorMap,
+      tagDisplayContext,
+      selectedCount
+    });
+  }, [ancestorMap, selectedCount, selectedEntriesForMetadata, tagById, tagDisplayContext]);
+
+  const highlightedTagIds = useMemo(() => {
+    if (hoveredTagId === null) {
+      return new Set<number>();
+    }
+    const set = new Set<number>();
+    const inheritedRow = inheritedTagRows.find((r) => r.tagId === hoveredTagId);
+    if (inheritedRow) {
+      for (const descId of inheritedRow.descendantTagIds) {
+        set.add(descId);
+      }
+      return set;
+    }
+    const ancestors = ancestorMap.get(hoveredTagId);
+    if (ancestors) {
+      for (const ancId of ancestors) {
+        set.add(ancId);
+      }
+    }
+    return set;
+  }, [ancestorMap, hoveredTagId, inheritedTagRows]);
+
   const tagColorLookup = useMemo(() => createTagColorLookup(tagColorsQuery.data), [tagColorsQuery.data]);
+
+  const directTagIds = useMemo(() => {
+    const set = new Set<number>();
+    for (const entry of selectedEntriesForMetadata) {
+      for (const tagId of entry.tag_ids) {
+        set.add(tagId);
+      }
+    }
+    return Array.from(set);
+  }, [selectedEntriesForMetadata]);
+
+  const inheritedTagIds = useMemo(() => {
+    return inheritedTagRows.map((r) => r.tagId);
+  }, [inheritedTagRows]);
+
+  const systemAndMetaTagIds = useMemo(() => {
+    const ids: number[] = [];
+    for (const tag of allTags) {
+      const lowerName = tag.name.trim().toLowerCase();
+      if (
+        tag.id === 0 ||
+        tag.id === 1 ||
+        tag.is_category ||
+        tag.is_hidden ||
+        lowerName.startsWith("system:") ||
+        lowerName.startsWith("meta:") ||
+        lowerName === "system" ||
+        lowerName === "meta" ||
+        lowerName === "meta tags" ||
+        lowerName === "system tags"
+      ) {
+        ids.push(tag.id);
+      }
+    }
+    return ids;
+  }, [allTags]);
+
+  const suggestedTagsQuery = useSuggestedTags({
+    tagIds: directTagIds,
+    excludeTagIds: [...directTagIds, ...inheritedTagIds, ...systemAndMetaTagIds],
+    limit: 12,
+    enabled: selectedCount > 0 && directTagIds.length > 0
+  });
+
+  const suggestedTags = useMemo(() => {
+    const raw = suggestedTagsQuery.data ?? [];
+    if (systemAndMetaTagIds.length === 0) {
+      return raw;
+    }
+    const metaSet = new Set(systemAndMetaTagIds);
+    return raw.filter((item) => !metaSet.has(item.tag.id));
+  }, [suggestedTagsQuery.data, systemAndMetaTagIds]);
 
   const removeTag = useCallback(async (tagId: number) => {
     await onRemoveTagFromEntries(selectedEntryIds, tagId);
     await onRefreshSelection();
   }, [onRefreshSelection, onRemoveTagFromEntries, selectedEntryIds]);
+
+  const addSuggestedTag = useCallback(
+    async (tagId: number) => {
+      await onAddTagToEntries(selectedEntryIds, tagId);
+      await onRefreshSelection();
+    },
+    [onAddTagToEntries, onRefreshSelection, selectedEntryIds]
+  );
 
   if (selectedCount === 0) {
     return <p className="text-sm text-slate-500 dark:text-slate-400">Select one or more entries to inspect metadata.</p>;
@@ -482,9 +590,20 @@ export function MetadataContent({
           : `${selectedCount} entries selected`}
       </div>
 
-      <div className="metadata-tag-actions">
-        <div className="metadata-tag-actions-header">
-          <strong>Tags</strong>
+      <div className="metadata-collapsible-section">
+        <div className="metadata-section-header">
+          <button
+            type="button"
+            className="metadata-section-toggle"
+            onClick={() => setTagsOpen((prev) => !prev)}
+            aria-expanded={tagsOpen}
+          >
+            {tagsOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+            <strong>Tags</strong>
+            {aggregateTagRows.length > 0 ? (
+              <span className="metadata-section-count">({aggregateTagRows.length})</span>
+            ) : null}
+          </button>
           <div className="metadata-tag-actions-buttons">
             {canPasteTags ? (
               <Button
@@ -502,107 +621,281 @@ export function MetadataContent({
           </div>
         </div>
 
-        <div className="metadata-tag-list">
-          {aggregateTagRows.length === 0 ? (
-            <p className="tag-editor-empty">No tags applied.</p>
-          ) : (
-            aggregateTagRows.map((row) => (
-              <div
-                key={row.tagId}
-                className="metadata-tag-chip"
-                style={row.tag ? resolveTagChipStyle(row.tag, tagColorLookup) : undefined}
-              >
-                <button
-                  type="button"
-                  className="metadata-tag-chip-main"
-                  onClick={() => {
-                    if (row.tag) {
-                      setEditTag(row.tag);
-                    }
-                  }}
-                  disabled={!row.tag || tagEditPending}
-                >
-                  <span className="metadata-tag-chip-label">
-                    {row.tag ? getTagDisplayLabel(row.tag, tagDisplayContext) : `Tag #${row.tagId}`}
-                  </span>
-                  {row.state === "partial" ? <span className="metadata-tag-partial">Partial</span> : null}
-                </button>
-                <div className="metadata-tag-chip-remove-slot">
-                  <button
-                    type="button"
-                    className="metadata-tag-chip-remove"
-                    aria-label={`Remove ${row.tag ? getTagDisplayLabel(row.tag, tagDisplayContext) : `Tag #${row.tagId}`}`}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      void removeTag(row.tagId);
-                    }}
-                    disabled={tagMutationPending}
+        {tagsOpen ? (
+          <div className="metadata-tag-list">
+            {aggregateTagRows.length === 0 ? (
+              <p className="tag-editor-empty">No tags applied.</p>
+            ) : (
+              aggregateTagRows.map((row) => {
+                const isHighlighted = highlightedTagIds.has(row.tagId);
+                return (
+                  <div
+                    key={row.tagId}
+                    className={`metadata-tag-chip ${isHighlighted ? "metadata-tag-chip-highlighted" : ""}`}
+                    style={row.tag ? resolveTagChipStyle(row.tag, tagColorLookup) : undefined}
+                    onMouseEnter={() => setHoveredTagId(row.tagId)}
+                    onMouseLeave={() => setHoveredTagId(null)}
                   >
-                    ×
-                  </button>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
+                    <button
+                      type="button"
+                      className="metadata-tag-chip-main"
+                      onClick={() => {
+                        if (row.tag) {
+                          setEditTag(row.tag);
+                        }
+                      }}
+                      onFocus={() => setHoveredTagId(row.tagId)}
+                      onBlur={() => setHoveredTagId(null)}
+                      disabled={!row.tag || tagEditPending}
+                    >
+                      <span className="metadata-tag-chip-label">
+                        {row.tag ? getTagDisplayLabel(row.tag, tagDisplayContext) : `Tag #${row.tagId}`}
+                      </span>
+                      {row.state === "partial" ? <span className="metadata-tag-partial">Partial</span> : null}
+                    </button>
+                    <div className="metadata-tag-chip-remove-slot">
+                      <button
+                        type="button"
+                        className="metadata-tag-chip-remove"
+                        aria-label={`Remove ${row.tag ? getTagDisplayLabel(row.tag, tagDisplayContext) : `Tag #${row.tagId}`}`}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void removeTag(row.tagId);
+                        }}
+                        disabled={tagMutationPending}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        ) : null}
       </div>
 
-      {singleSelection && selectedEntry ? (
-        <>
-          <div>
+      <div className="metadata-collapsible-section">
+        <div className="metadata-section-header">
+          <button
+            type="button"
+            className="metadata-section-toggle"
+            onClick={() => setInheritedTagsOpen((prev) => !prev)}
+            aria-expanded={inheritedTagsOpen}
+          >
+            {inheritedTagsOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+            <strong>Inherited tags</strong>
+            {inheritedTagRows.length > 0 ? (
+              <span className="metadata-section-count">({inheritedTagRows.length})</span>
+            ) : null}
+          </button>
+        </div>
+
+        {inheritedTagsOpen ? (
+          inheritedTagRows.length === 0 ? (
+            <p className="tag-editor-empty">No inherited tags.</p>
+          ) : (
+            <div className="metadata-tag-list">
+              {inheritedTagRows.map((row) => {
+                const isHighlighted = highlightedTagIds.has(row.tagId);
+                const descendantNames = row.descendantTagIds
+                  .map((id) => {
+                    const tag = tagById.get(id);
+                    return tag ? getTagDisplayLabel(tag, tagDisplayContext) : `#${id}`;
+                  })
+                  .join(", ");
+                const inheritedTitle = descendantNames
+                  ? `Inherited from: ${descendantNames}`
+                  : "Inherited tag";
+
+                return (
+                  <div
+                    key={row.tagId}
+                    className={`metadata-tag-chip metadata-tag-chip-inherited ${isHighlighted ? "metadata-tag-chip-highlighted" : ""}`}
+                    style={row.tag ? resolveTagChipStyle(row.tag, tagColorLookup) : undefined}
+                    onMouseEnter={() => setHoveredTagId(row.tagId)}
+                    onMouseLeave={() => setHoveredTagId(null)}
+                  >
+                    <button
+                      type="button"
+                      className="metadata-tag-chip-main"
+                      onClick={() => {
+                        if (row.tag) {
+                          setEditTag(row.tag);
+                        }
+                      }}
+                      onFocus={() => setHoveredTagId(row.tagId)}
+                      onBlur={() => setHoveredTagId(null)}
+                      disabled={!row.tag || tagEditPending}
+                      title={inheritedTitle}
+                    >
+                      <span className="metadata-tag-chip-label">
+                        {row.tag ? getTagDisplayLabel(row.tag, tagDisplayContext) : `Tag #${row.tagId}`}
+                      </span>
+                      {row.state === "partial" ? <span className="metadata-tag-partial">Partial</span> : null}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )
+        ) : null}
+      </div>
+
+      {suggestedTags.length > 0 ? (
+        <div className="metadata-collapsible-section">
+          <div className="metadata-section-header">
+            <button
+              type="button"
+              className="metadata-section-toggle"
+              onClick={() => setSuggestedTagsOpen((prev) => !prev)}
+              aria-expanded={suggestedTagsOpen}
+            >
+              {suggestedTagsOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+              <strong>Suggested tags</strong>
+              <span className="metadata-section-count">({suggestedTags.length})</span>
+            </button>
+          </div>
+
+          {suggestedTagsOpen ? (
+            <div className="metadata-tag-list">
+              {suggestedTags.map((suggestion) => {
+                const isHighlighted = highlightedTagIds.has(suggestion.tag.id);
+                const label = getTagDisplayLabel(suggestion.tag, tagDisplayContext);
+                const title = formatSuggestedTagTooltip(label, suggestion.confidence);
+
+                return (
+                  <div
+                    key={suggestion.tag.id}
+                    className={`metadata-tag-chip metadata-tag-chip-suggested ${isHighlighted ? "metadata-tag-chip-highlighted" : ""}`}
+                    style={resolveTagChipStyle(suggestion.tag, tagColorLookup)}
+                    onMouseEnter={() => setHoveredTagId(suggestion.tag.id)}
+                    onMouseLeave={() => setHoveredTagId(null)}
+                  >
+                    <button
+                      type="button"
+                      className="metadata-tag-chip-main"
+                      onClick={() => void addSuggestedTag(suggestion.tag.id)}
+                      onFocus={() => setHoveredTagId(suggestion.tag.id)}
+                      onBlur={() => setHoveredTagId(null)}
+                      disabled={tagMutationPending}
+                      title={title}
+                    >
+                      <span className="metadata-tag-chip-label">{label}</span>
+                    </button>
+                    <div className="metadata-tag-chip-add-slot">
+                      <button
+                        type="button"
+                        className="metadata-tag-chip-add"
+                        aria-label={`Add tag ${label}`}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void addSuggestedTag(suggestion.tag.id);
+                        }}
+                        disabled={tagMutationPending}
+                        title={title}
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      <div className="metadata-collapsible-section">
+        <div className="metadata-section-header">
+          <button
+            type="button"
+            className="metadata-section-toggle"
+            onClick={() => setFieldsOpen((prev) => !prev)}
+            aria-expanded={fieldsOpen}
+          >
+            {fieldsOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
             <strong>Fields</strong>
-            <ul className="m-0 mt-1 list-none space-y-2 p-0">
-              {selectedEntry.fields.map((field) => (
-                <li key={field.id}>
-                  <div className="mb-1 font-medium">{field.type_name}</div>
+            {singleSelection && selectedEntry && selectedEntry.fields.length > 0 ? (
+              <span className="metadata-section-count">({selectedEntry.fields.length})</span>
+            ) : null}
+          </button>
+          {singleSelection && selectedEntry && fieldsOpen ? (
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => setShowAddField((prev) => !prev)}
+            >
+              {showAddField ? "Cancel" : "Add Field"}
+            </Button>
+          ) : null}
+        </div>
+
+        {fieldsOpen ? (
+          singleSelection && selectedEntry ? (
+            <div className="space-y-3">
+              {selectedEntry.fields.length === 0 && !showAddField ? (
+                <p className="tag-editor-empty">No fields applied.</p>
+              ) : selectedEntry.fields.length > 0 ? (
+                <ul className="m-0 list-none space-y-2 p-0">
+                  {selectedEntry.fields.map((field) => (
+                    <li key={field.id}>
+                      <div className="mb-1 font-medium">{field.type_name}</div>
+                      <div className="flex gap-2">
+                        <input
+                          className="min-w-0 flex-1 rounded-xl border border-[var(--color-border-soft)] bg-white/95 px-2 py-1 text-sm dark:bg-slate-800/95 dark:text-slate-100"
+                          value={fieldDrafts[field.type_key] ?? ""}
+                          onChange={(event) => onFieldDraftChange(field.type_key, event.target.value)}
+                        />
+                        <Button
+                          variant="secondary"
+                          disabled={updateFieldPending}
+                          onClick={() => onSaveField(field.type_key, fieldDrafts[field.type_key] ?? "")}
+                        >
+                          Save
+                        </Button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+
+              {showAddField ? (
+                <div className="space-y-1 rounded-xl border border-[var(--color-border-soft)] p-2.5 bg-slate-50/50 dark:bg-slate-900/40">
+                  <strong className="text-xs font-semibold text-slate-600 dark:text-slate-300">Add/Update Field</strong>
                   <div className="flex gap-2">
+                    <select
+                      className="rounded-xl border border-[var(--color-border-soft)] bg-white/95 px-2 py-1 text-sm dark:bg-slate-800/95 dark:text-slate-100"
+                      value={newFieldKey}
+                      onChange={(event) => onNewFieldKeyChange(event.target.value)}
+                    >
+                      <option value="">Select field type</option>
+                      {fieldTypes.map((fieldType) => (
+                        <option key={fieldType.key} value={fieldType.key}>
+                          {fieldType.name}
+                        </option>
+                      ))}
+                    </select>
                     <input
                       className="min-w-0 flex-1 rounded-xl border border-[var(--color-border-soft)] bg-white/95 px-2 py-1 text-sm dark:bg-slate-800/95 dark:text-slate-100"
-                      value={fieldDrafts[field.type_key] ?? ""}
-                      onChange={(event) => onFieldDraftChange(field.type_key, event.target.value)}
+                      value={newFieldValue}
+                      onChange={(event) => onNewFieldValueChange(event.target.value)}
+                      placeholder="Field value"
                     />
-                    <Button
-                      variant="secondary"
-                      disabled={updateFieldPending}
-                      onClick={() => onSaveField(field.type_key, fieldDrafts[field.type_key] ?? "")}
-                    >
-                      Save
+                    <Button variant="secondary" disabled={!newFieldKey || updateFieldPending} onClick={onApplyField}>
+                      Apply
                     </Button>
                   </div>
-                </li>
-              ))}
-            </ul>
-          </div>
-          <div className="space-y-1">
-            <strong>Add/Update Field</strong>
-            <div className="flex gap-2">
-              <select
-                className="rounded-xl border border-[var(--color-border-soft)] bg-white/95 px-2 py-1 text-sm dark:bg-slate-800/95 dark:text-slate-100"
-                value={newFieldKey}
-                onChange={(event) => onNewFieldKeyChange(event.target.value)}
-              >
-                <option value="">Select field type</option>
-                {fieldTypes.map((fieldType) => (
-                  <option key={fieldType.key} value={fieldType.key}>
-                    {fieldType.name}
-                  </option>
-                ))}
-              </select>
-              <input
-                className="min-w-0 flex-1 rounded-xl border border-[var(--color-border-soft)] bg-white/95 px-2 py-1 text-sm dark:bg-slate-800/95 dark:text-slate-100"
-                value={newFieldValue}
-                onChange={(event) => onNewFieldValueChange(event.target.value)}
-                placeholder="Field value"
-              />
-              <Button variant="secondary" disabled={!newFieldKey || updateFieldPending} onClick={onApplyField}>
-                Apply
-              </Button>
+                </div>
+              ) : null}
             </div>
-          </div>
-        </>
-      ) : (
-        <p className="text-sm text-slate-500 dark:text-slate-400">Field editing is available when a single entry is selected.</p>
-      )}
+          ) : (
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              Field editing is available when a single entry is selected.
+            </p>
+          )
+        ) : null}
+      </div>
 
       <AddTagsModal
         open={addTagsOpen}

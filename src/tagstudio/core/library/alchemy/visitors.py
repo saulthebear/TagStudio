@@ -69,7 +69,15 @@ class SQLBoolExpressionBuilder(BaseVisitor[ColumnElement[bool]]):
         if node.type == ConstraintType.Tag:
             return self.__entry_has_any_tags(self.__get_tag_ids(node.value))
         elif node.type == ConstraintType.TagID:
-            return self.__entry_has_any_tags([int(node.value)])
+            try:
+                tag_id = int(node.value)
+                return self.__entry_has_any_tags(self.__get_tag_ids_by_id(tag_id))
+            except ValueError:
+                logger.error(
+                    "[SQLBoolExpressionBuilder] Could not cast value to an int Tag ID",
+                    value=node.value,
+                )
+                return self.__entry_has_any_tags([])
         elif node.type == ConstraintType.Path:
             ilike = False
             glob = False
@@ -125,6 +133,13 @@ class SQLBoolExpressionBuilder(BaseVisitor[ColumnElement[bool]]):
     def visit_not(self, node: Not) -> ColumnElement[bool]:  # type: ignore
         return ~self.visit(node.child)
 
+    def __get_tag_ids_by_id(self, tag_id: int, include_children: bool = True) -> list[int]:
+        """Given a tag ID find all descendant tag IDs (including itself)."""
+        if not include_children:
+            return [tag_id]
+        with Session(self.lib.engine) as session:
+            return list(session.scalars(TAG_CHILDREN_ID_QUERY, {"tag_id": tag_id}))
+
     def __get_tag_ids(self, tag_name: str, include_children: bool = True) -> list[int]:
         """Given a tag name find the ids of all tags that this name could refer to."""
         with Session(self.lib.engine) as session:
@@ -159,13 +174,20 @@ class SQLBoolExpressionBuilder(BaseVisitor[ColumnElement[bool]]):
                 match term.type:
                     case ConstraintType.TagID:
                         try:
-                            tag_ids.add(int(term.value))
+                            tag_id = int(term.value)
+                            ids = self.__get_tag_ids_by_id(tag_id)
+                            if not only_single:
+                                tag_ids.update(ids)
+                                continue
+                            elif len(ids) == 1:
+                                tag_ids.add(ids[0])
+                                continue
                         except ValueError:
                             logger.error(
                                 "[SQLBoolExpressionBuilder] Could not cast value to an int Tag ID",
                                 value=term.value,
                             )
-                        continue
+                            continue
                     case ConstraintType.Tag:
                         ids = self.__get_tag_ids(term.value)
                         if not only_single:

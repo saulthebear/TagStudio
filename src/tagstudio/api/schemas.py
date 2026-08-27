@@ -110,6 +110,23 @@ class TagSearchResponse(BaseModel):
     has_more: bool = False
 
 
+class TagSuggestionsRequest(BaseModel):
+    tag_ids: list[int] = Field(default_factory=list)
+    exclude_tag_ids: list[int] = Field(default_factory=list)
+    limit: int = Field(default=10, ge=1, le=50)
+
+
+class TagSuggestionItem(BaseModel):
+    tag: TagResponse
+    score: float
+    confidence: float
+    shared_entries_count: int
+
+
+class TagSuggestionsResponse(BaseModel):
+    suggestions: list[TagSuggestionItem] = Field(default_factory=list)
+
+
 class TagColorResponse(BaseModel):
     namespace: str
     namespace_name: str

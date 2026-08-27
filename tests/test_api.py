@@ -1015,3 +1015,47 @@ def test_tags_stats_endpoint() -> None:
             assert len(data["co_occurrences"]) >= 1
             co_pair = data["co_occurrences"][0]
             assert co_pair["shared_count"] >= 1
+
+
+def test_tags_suggested_endpoint() -> None:
+    with TemporaryDirectory() as tmp:
+        library_path = Path(tmp)
+        seed_library(library_path)
+
+        app = create_app(require_token=False)
+        with TestClient(app) as client:
+            open_res = client.post("/api/v1/libraries/open", json={"path": str(library_path)})
+            assert open_res.status_code == 200
+
+            # Create tag_b and tag_c
+            tag_b_res = client.post("/api/v1/tags", json={"name": "bar"})
+            assert tag_b_res.status_code == 200
+            tag_c_res = client.post("/api/v1/tags", json={"name": "baz"})
+            assert tag_c_res.status_code == 200
+            tag_b_id = tag_b_res.json()["id"]
+            tag_c_id = tag_c_res.json()["id"]
+
+            tags_res = client.get("/api/v1/tags")
+            foo_id = [t["id"] for t in tags_res.json() if t["name"] == "foo"][0]
+
+            entry_ids = list(get_entry_ids_by_filename(client).values())
+            # Tag entry 0 with foo, bar, baz
+            client.post("/api/v1/entries/tags:add", json={"entry_ids": [entry_ids[0]], "tag_ids": [tag_b_id, tag_c_id]})
+
+            # Get suggestions for [foo]
+            sug_res = client.post("/api/v1/tags/suggested", json={"tag_ids": [foo_id]})
+            assert sug_res.status_code == 200
+            suggestions = sug_res.json()["suggestions"]
+            assert len(suggestions) >= 2
+            suggested_tag_ids = [s["tag"]["id"] for s in suggestions]
+            assert tag_b_id in suggested_tag_ids
+            assert tag_c_id in suggested_tag_ids
+            assert foo_id not in suggested_tag_ids
+
+            # Test exclude_tag_ids
+            excl_res = client.post("/api/v1/tags/suggested", json={"tag_ids": [foo_id], "exclude_tag_ids": [tag_b_id]})
+            assert excl_res.status_code == 200
+            excl_ids = [s["tag"]["id"] for s in excl_res.json()["suggestions"]]
+            assert tag_b_id not in excl_ids
+            assert tag_c_id in excl_ids
+

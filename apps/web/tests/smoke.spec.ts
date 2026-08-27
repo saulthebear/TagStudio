@@ -2121,3 +2121,446 @@ test("toggles dark mode theme via settings modal and persists to html element", 
   expect(storedTheme).toBe("dark");
 });
 
+test("displays inherited tags and highlights descendant tags on hover", async ({ page }) => {
+  const tags: TagResponse[] = [
+    {
+      id: 1,
+      name: "Medium",
+      shorthand: null,
+      aliases: [],
+      parent_ids: [],
+      color_namespace: null,
+      color_slug: null,
+      disambiguation_id: null,
+      is_category: true,
+      is_hidden: false
+    },
+    {
+      id: 2,
+      name: "Digital",
+      shorthand: null,
+      aliases: [],
+      parent_ids: [1],
+      color_namespace: null,
+      color_slug: null,
+      disambiguation_id: null,
+      is_category: false,
+      is_hidden: false
+    },
+    {
+      id: 3,
+      name: "Pixel Art",
+      shorthand: null,
+      aliases: [],
+      parent_ids: [2],
+      color_namespace: null,
+      color_slug: null,
+      disambiguation_id: null,
+      is_category: false,
+      is_hidden: false
+    },
+    {
+      id: 4,
+      name: "Landscape",
+      shorthand: null,
+      aliases: [],
+      parent_ids: [],
+      color_namespace: null,
+      color_slug: null,
+      disambiguation_id: null,
+      is_category: false,
+      is_hidden: false
+    }
+  ];
+
+  await page.route(`${API_BASE_URL}/api/v1/**`, async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const pathname = url.pathname;
+
+    if (pathname === "/api/v1/libraries/state") {
+      await fulfillJson(route, {
+        is_open: true,
+        library_path: "/mock/library",
+        entries_count: 1,
+        tags_count: tags.length
+      });
+      return;
+    }
+
+    if (pathname === "/api/v1/tags") {
+      await fulfillJson(route, tags);
+      return;
+    }
+
+    if (pathname === "/api/v1/field-types") {
+      await fulfillJson(route, []);
+      return;
+    }
+
+    if (pathname === "/api/v1/tag-colors") {
+      await fulfillJson(route, []);
+      return;
+    }
+
+    if (pathname === "/api/v1/settings") {
+      await fulfillJson(route, {
+        page_size: 200,
+        layout: {
+          main_split_ratio: 0.75,
+          main_left_collapsed: false,
+          main_right_collapsed: false,
+          main_last_open_ratio: 0.75,
+          inspector_split_ratio: 0.52,
+          preview_collapsed: false,
+          metadata_collapsed: false,
+          inspector_last_open_ratio: 0.52,
+          mobile_active_pane: "grid"
+        }
+      });
+      return;
+    }
+
+    if (pathname === "/api/v1/search" && request.method() === "POST") {
+      await fulfillJson(route, {
+        total_count: 1,
+        ids: [501],
+        entries: [
+          {
+            id: 501,
+            path: "art/pixel_scenery.png",
+            filename: "pixel_scenery.png",
+            suffix: "png",
+            tag_ids: [3, 4]
+          }
+        ]
+      });
+      return;
+    }
+
+    if (pathname === "/api/v1/entries/501" && request.method() === "GET") {
+      await fulfillJson(route, {
+        id: 501,
+        path: "art/pixel_scenery.png",
+        full_path: "/mock/library/art/pixel_scenery.png",
+        filename: "pixel_scenery.png",
+        suffix: "png",
+        date_created: null,
+        date_modified: null,
+        date_added: "2026-08-25T00:00:00Z",
+        tags: [
+          tags.find((t) => t.id === 3)!,
+          tags.find((t) => t.id === 4)!
+        ],
+        fields: [],
+        is_favorite: false,
+        is_archived: false
+      });
+      return;
+    }
+
+    if (pathname === "/api/v1/entries/501/preview") {
+      await fulfillJson(route, {
+        entry_id: 501,
+        preview_kind: "binary",
+        media_type: null,
+        media_url: null,
+        thumbnail_url: null,
+        poster_url: null,
+        text_excerpt: null,
+        supports_media_controls: false
+      });
+      return;
+    }
+
+    if (pathname === "/api/v1/thumbnails/prewarm" && request.method() === "POST") {
+      await fulfillJson(route, { status: "ok" });
+      return;
+    }
+
+    await fulfillJson(route, { detail: `Unmocked endpoint: ${pathname}` }, 404);
+  });
+
+  await page.goto("/");
+
+  // Select the entry in the thumbnail grid
+  const thumbnail = page.locator(".thumb-card").first();
+  await expect(thumbnail).toBeVisible();
+  await thumbnail.click();
+
+  // Direct tags: "Landscape" and "Pixel Art" should be in the direct tags list
+  const directTagChips = page.locator(".metadata-tag-actions > .metadata-tag-list .metadata-tag-chip");
+  await expect(directTagChips).toHaveCount(2);
+
+  const pixelArtChip = directTagChips.filter({ hasText: "Pixel Art" }).first();
+  const landscapeChip = directTagChips.filter({ hasText: "Landscape" }).first();
+  await expect(pixelArtChip).toBeVisible();
+  await expect(landscapeChip).toBeVisible();
+  await expect(pixelArtChip).not.toHaveClass(/metadata-tag-chip-inherited/);
+  await expect(pixelArtChip.locator(".metadata-tag-chip-remove")).toBeVisible();
+
+  // Inherited tags: "Digital" and "Medium" should appear in the Inherited Tags section
+  const inheritedSection = page.locator(".metadata-inherited-tags-section");
+  await expect(inheritedSection).toBeVisible();
+  await expect(inheritedSection.locator(".metadata-inherited-tags-title")).toHaveText("Inherited Tags");
+  await expect(inheritedSection.locator(".metadata-inherited-tags-count")).toHaveText("(2)");
+
+  const inheritedChips = inheritedSection.locator(".metadata-tag-chip-inherited");
+  await expect(inheritedChips).toHaveCount(2);
+
+  const digitalChip = inheritedChips.filter({ hasText: "Digital" }).first();
+  const mediumChip = inheritedChips.filter({ hasText: "Medium" }).first();
+  await expect(digitalChip).toBeVisible();
+  await expect(mediumChip).toBeVisible();
+  await expect(digitalChip.locator(".metadata-tag-chip-remove")).toHaveCount(0);
+  await expect(digitalChip.locator("button.metadata-tag-chip-main")).toHaveAttribute(
+    "title",
+    "Inherited from: Pixel Art"
+  );
+
+  // Hovering on inherited tag "Digital" should highlight direct descendant tag "Pixel Art"
+  await digitalChip.hover();
+  await expect(pixelArtChip).toHaveClass(/metadata-tag-chip-highlighted/);
+  await expect(landscapeChip).not.toHaveClass(/metadata-tag-chip-highlighted/);
+
+  // Hovering on inherited tag "Medium" should also highlight direct descendant tag "Pixel Art"
+  await mediumChip.hover();
+  await expect(pixelArtChip).toHaveClass(/metadata-tag-chip-highlighted/);
+  await expect(landscapeChip).not.toHaveClass(/metadata-tag-chip-highlighted/);
+
+  // Moving mouse away clears highlight
+  await page.mouse.move(0, 0);
+  await expect(pixelArtChip).not.toHaveClass(/metadata-tag-chip-highlighted/);
+
+  // Hovering on direct tag "Pixel Art" should highlight inherited ancestor tags "Digital" and "Medium"
+  await pixelArtChip.hover();
+  await expect(digitalChip).toHaveClass(/metadata-tag-chip-highlighted/);
+  await expect(mediumChip).toHaveClass(/metadata-tag-chip-highlighted/);
+
+  // Hovering on direct tag "Landscape" (has no parents) should not highlight inherited tags
+  await landscapeChip.hover();
+  await expect(digitalChip).not.toHaveClass(/metadata-tag-chip-highlighted/);
+  await expect(mediumChip).not.toHaveClass(/metadata-tag-chip-highlighted/);
+
+  // Clicking an inherited tag opens the Tag Editor modal
+  await digitalChip.locator(".metadata-tag-chip-main").click();
+  const editDialog = page.getByRole("dialog", { name: "Edit tag" });
+  await expect(editDialog).toBeVisible();
+  await expect(editDialog.getByRole("textbox", { name: "Name" })).toHaveValue("Digital");
+  await editDialog.getByRole("button", { name: "Cancel" }).click();
+  await expect(editDialog).toHaveCount(0);
+});
+
+test("renders suggested tags section and adds suggested tag with one click", async ({ page }) => {
+  const tags = [
+    {
+      id: 1,
+      name: "Dog",
+      shorthand: null,
+      aliases: [],
+      parent_ids: [],
+      color_namespace: null,
+      color_slug: null,
+      disambiguation_id: null,
+      is_category: false,
+      is_hidden: false
+    },
+    {
+      id: 2,
+      name: "Beach",
+      shorthand: null,
+      aliases: [],
+      parent_ids: [],
+      color_namespace: null,
+      color_slug: null,
+      disambiguation_id: null,
+      is_category: false,
+      is_hidden: false
+    },
+    {
+      id: 3,
+      name: "Ocean",
+      shorthand: null,
+      aliases: [],
+      parent_ids: [],
+      color_namespace: null,
+      color_slug: null,
+      disambiguation_id: null,
+      is_category: false,
+      is_hidden: false
+    }
+  ];
+
+  let addedTagId: number | null = null;
+  let entryTags = [tags[0], tags[1]];
+
+  await page.route("**/api/v1/**", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const pathname = url.pathname;
+
+    if (pathname === "/api/v1/libraries/state") {
+      await fulfillJson(route, {
+        is_open: true,
+        library_path: "/mock/library",
+        entries_count: 1,
+        tags_count: tags.length
+      });
+      return;
+    }
+
+    if (pathname === "/api/v1/tags") {
+      await fulfillJson(route, tags);
+      return;
+    }
+
+    if (pathname === "/api/v1/tags/search") {
+      await fulfillJson(route, {
+        items: tags,
+        total_count: tags.length,
+        offset: 0,
+        limit: 500,
+        has_more: false
+      });
+      return;
+    }
+
+    if (pathname === "/api/v1/tag-colors") {
+      await fulfillJson(route, []);
+      return;
+    }
+
+    if (pathname === "/api/v1/field-types") {
+      await fulfillJson(route, []);
+      return;
+    }
+
+    if (pathname === "/api/v1/settings") {
+      await fulfillJson(route, createSettingsPayload());
+      return;
+    }
+
+    if (pathname === "/api/v1/search" && request.method() === "POST") {
+      await fulfillJson(route, {
+        total_count: 1,
+        ids: [501],
+        entries: [
+          {
+            id: 501,
+            path: "dog_beach.png",
+            filename: "dog_beach.png",
+            suffix: "png",
+            tag_ids: entryTags.map((t) => t.id)
+          }
+        ]
+      });
+      return;
+    }
+
+    if (pathname === "/api/v1/entries/501" && request.method() === "GET") {
+      await fulfillJson(route, {
+        id: 501,
+        path: "dog_beach.png",
+        full_path: "/mock/library/dog_beach.png",
+        filename: "dog_beach.png",
+        suffix: "png",
+        date_created: null,
+        date_modified: null,
+        date_added: "2026-08-25T00:00:00Z",
+        tags: entryTags,
+        fields: [],
+        is_favorite: false,
+        is_archived: false
+      });
+      return;
+    }
+
+    if (pathname === "/api/v1/entries/501/preview") {
+      await fulfillJson(route, {
+        entry_id: 501,
+        preview_kind: "binary",
+        media_type: null,
+        media_url: null,
+        thumbnail_url: null,
+        poster_url: null,
+        text_excerpt: null,
+        supports_media_controls: false
+      });
+      return;
+    }
+
+    if (pathname === "/api/v1/thumbnails/prewarm") {
+      await fulfillJson(route, { status: "ok" });
+      return;
+    }
+
+    if (pathname === "/api/v1/tags/suggested" && request.method() === "POST") {
+      // If tag 3 has not been added yet, suggest it
+      const suggestions = entryTags.some((t) => t.id === 3)
+        ? []
+        : [
+            {
+              tag: tags[2],
+              score: 0.85,
+              confidence: 0.8,
+              shared_entries_count: 4
+            }
+          ];
+      await fulfillJson(route, { suggestions });
+      return;
+    }
+
+    if (pathname === "/api/v1/entries/tags:add" && request.method() === "POST") {
+      const body = JSON.parse(request.postData() ?? "{}");
+      addedTagId = body.tag_ids?.[0] ?? null;
+      if (addedTagId === 3) {
+        entryTags = [...entryTags, tags[2]];
+      }
+      await fulfillJson(route, {
+        success: true,
+        mutation_id: "mut-1",
+        applied_count: 1,
+        requested_count: 1,
+        failures: []
+      });
+      return;
+    }
+
+    await fulfillJson(route, { detail: `Unmocked endpoint: ${pathname}` }, 404);
+  });
+
+  await page.goto("/");
+
+  // Select entry in thumbnail grid
+  const thumbnail = page.locator(".thumb-card").first();
+  await expect(thumbnail).toBeVisible();
+  await thumbnail.click();
+
+  // Verify Suggested Tags section is visible with "Ocean" chip
+  const suggestedSection = page.locator(".metadata-suggested-tags-section");
+  await expect(suggestedSection).toBeVisible();
+  await expect(suggestedSection.locator(".metadata-suggested-tags-title")).toHaveText("Suggested Tags");
+  await expect(suggestedSection.locator(".metadata-suggested-tags-count")).toHaveText("(1)");
+
+  const suggestedChip = suggestedSection.locator(".metadata-tag-chip-suggested").first();
+  await expect(suggestedChip).toBeVisible();
+  await expect(suggestedChip.locator(".metadata-tag-chip-label")).toHaveText("Ocean");
+
+  // Hover over suggested tag to reveal the + button
+  await suggestedChip.hover();
+  const addBtn = suggestedChip.locator(".metadata-tag-chip-add");
+  await expect(addBtn).toBeVisible();
+
+  // Click the + button to add suggested tag
+  await addBtn.click();
+
+  // Verify add request was sent
+  expect(addedTagId).toBe(3);
+
+  // Suggested tag moves to direct tags list
+  const directTagChips = page.locator(".metadata-tag-actions > .metadata-tag-list .metadata-tag-chip");
+  await expect(directTagChips.filter({ hasText: "Ocean" })).toBeVisible();
+});
+
+
+

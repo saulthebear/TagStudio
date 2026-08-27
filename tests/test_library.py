@@ -529,3 +529,58 @@ def test_filetype_return_one_filetype(
 def test_mediatype_search(library: Library, mediatype: str, num_of_mediatype: int):
     results = library.search_library(BrowsingState.from_mediatype(mediatype), page_size=500)
     assert len(results.ids) == num_of_mediatype
+
+
+def test_get_suggested_tags(library: Library, generate_tag: Callable[..., Tag]):
+    tag_a = unwrap(library.add_tag(generate_tag("tag_a", id=201)))
+    tag_b = unwrap(library.add_tag(generate_tag("tag_b", id=202)))
+    tag_c = unwrap(library.add_tag(generate_tag("tag_c", id=203)))
+    tag_d = unwrap(library.add_tag(generate_tag("tag_d", id=204)))
+    folder = unwrap(library.folder)
+
+    e1 = Entry(path=Path("e1.txt"), folder=folder, fields=library.default_fields)
+    e2 = Entry(path=Path("e2.txt"), folder=folder, fields=library.default_fields)
+    e3 = Entry(path=Path("e3.txt"), folder=folder, fields=library.default_fields)
+    assert library.add_entries([e1, e2, e3])
+
+    library.add_tags_to_entries(e1.id, [tag_a.id, tag_b.id, tag_c.id])
+    library.add_tags_to_entries(e2.id, [tag_a.id, tag_b.id, tag_c.id, tag_d.id])
+    library.add_tags_to_entries(e3.id, [tag_a.id, tag_d.id])
+
+    # Empty tag input returns []
+    assert library.get_suggested_tags([]) == []
+
+    # Suggested tags for [tag_a, tag_b]
+    suggestions = library.get_suggested_tags([tag_a.id, tag_b.id])
+    suggested_tag_ids = [tag.id for tag, _, _, _ in suggestions]
+    assert tag_c.id in suggested_tag_ids
+    assert tag_d.id in suggested_tag_ids
+    assert tag_a.id not in suggested_tag_ids
+    assert tag_b.id not in suggested_tag_ids
+
+    # tag_c should rank higher than tag_d because it appears on entries 1 and 2 with exact {tag_a, tag_b} matches
+    assert suggested_tag_ids[0] == tag_c.id
+
+    # Test explicit exclude_tag_ids
+    filtered = library.get_suggested_tags([tag_a.id, tag_b.id], exclude_tag_ids=[tag_c.id])
+    filtered_ids = [tag.id for tag, _, _, _ in filtered]
+    assert tag_c.id not in filtered_ids
+    assert tag_d.id in filtered_ids
+
+    # Verify system tags and meta tags are automatically excluded
+    sys_tag = unwrap(library.add_tag(generate_tag("system:remuxed", id=205)))
+    cat_tag = unwrap(library.add_tag(generate_tag("Format", is_category=True, id=206)))
+    hidden_tag = unwrap(library.add_tag(generate_tag("hidden_tag", is_hidden=True, id=207)))
+    meta_tag = unwrap(library.add_tag(generate_tag("meta:quality", id=208)))
+
+    library.add_tags_to_entries(e1.id, [sys_tag.id, cat_tag.id, hidden_tag.id, meta_tag.id])
+    library.add_tags_to_entries(e2.id, [sys_tag.id, cat_tag.id, hidden_tag.id, meta_tag.id])
+
+    clean_suggestions = library.get_suggested_tags([tag_a.id, tag_b.id])
+    clean_tag_ids = {tag.id for tag, _, _, _ in clean_suggestions}
+    assert sys_tag.id not in clean_tag_ids
+    assert cat_tag.id not in clean_tag_ids
+    assert hidden_tag.id not in clean_tag_ids
+    assert meta_tag.id not in clean_tag_ids
+
+

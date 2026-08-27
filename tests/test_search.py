@@ -130,10 +130,17 @@ def test_parentheses(search_library: Library, query: str, count: int):
     ["query", "count"],
     [
         ("ellipse", 17),
+        ("tag_id:1042", 17),
         ("yellow", 15),
         ("color", 25),
+        ("tag_id:1040", 25),
         ("shape", 24),
+        ("tag_id:1039", 24),
         ("yellow not green", 10),
+        ("tag_id:1013 not tag:green", 10),
+        ("tag_id:1042 and tag:red", 9),
+        ("tag_id:1042 and tag_id:1009", 9),
+        ("tag_id:1042 or tag_id:1038", 23),
     ],
 )
 def test_parent_tags(search_library: Library, query: str, count: int):

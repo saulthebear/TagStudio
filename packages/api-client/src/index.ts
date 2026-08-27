@@ -51,6 +51,23 @@ export type TagSearchResponse = {
   has_more: boolean;
 };
 
+export type TagSuggestionItem = {
+  tag: TagResponse;
+  score: number;
+  confidence: number;
+  shared_entries_count: number;
+};
+
+export type TagSuggestionsRequest = {
+  tag_ids: number[];
+  exclude_tag_ids?: number[];
+  limit?: number;
+};
+
+export type TagSuggestionsResponse = {
+  suggestions: TagSuggestionItem[];
+};
+
 export type TagColorResponse = {
   namespace: string;
   namespace_name: string;
@@ -550,6 +567,13 @@ export class TagStudioApiClient {
     }
     const suffix = params.size > 0 ? `?${params}` : "";
     return this.request(`/api/v1/tags/stats${suffix}`);
+  }
+
+  async getSuggestedTags(payload: TagSuggestionsRequest): Promise<TagSuggestionsResponse> {
+    return this.request("/api/v1/tags/suggested", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
   }
 
   async search(payload: SearchRequest): Promise<SearchResponse> {
