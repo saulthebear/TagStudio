@@ -78,6 +78,7 @@ from tagstudio.core.library.alchemy.constants import (
     DB_VERSION_LEGACY_KEY,
     JSON_FILENAME,
     SQL_FILENAME,
+    TAG_CHILDREN_ID_QUERY,
     TAG_CHILDREN_QUERY,
 )
 from tagstudio.core.library.alchemy.db import make_tables
@@ -1324,6 +1325,32 @@ class Library:
         effective_limit = max(1, min(limit, 100))
 
         with Session(self.engine) as session:
+            # Exclude system tags, meta tags, category tags, hidden tags, and reserved tags
+            excluded_system_meta_stmt = (
+                select(Tag.id).where(
+                    or_(
+                        Tag.is_category == True,
+                        Tag.is_hidden == True,
+                        Tag.name.ilike("system:%"),
+                        Tag.name.ilike("meta:%"),
+                        Tag.name.ilike("system"),
+                        Tag.name.ilike("meta"),
+                        Tag.name.ilike("meta tags"),
+                        Tag.name.ilike("system tags"),
+                        Tag.id.in_([0, 1]),
+                    )
+                )
+            )
+            system_meta_ids = set(session.scalars(excluded_system_meta_stmt).all())
+            excluded.update(system_meta_ids)
+
+            # Also exclude any descendant tags of System or Meta category tags
+            for root_name in ("System", "Meta Tags", "Meta", "System Tags"):
+                root_tags = session.scalars(select(Tag.id).where(Tag.name.ilike(root_name))).all()
+                for root_tag_id in root_tags:
+                    descendants = set(session.scalars(TAG_CHILDREN_ID_QUERY, {"tag_id": root_tag_id}))
+                    excluded.update(descendants)
+
             matching_entry_ids_stmt = (
                 select(TagEntry.entry_id)
                 .where(TagEntry.tag_id.in_(input_ids))

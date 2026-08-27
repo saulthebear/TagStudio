@@ -519,14 +519,43 @@ export function MetadataContent({
     return inheritedTagRows.map((r) => r.tagId);
   }, [inheritedTagRows]);
 
+  const systemAndMetaTagIds = useMemo(() => {
+    const ids: number[] = [];
+    for (const tag of allTags) {
+      const lowerName = tag.name.trim().toLowerCase();
+      if (
+        tag.id === 0 ||
+        tag.id === 1 ||
+        tag.is_category ||
+        tag.is_hidden ||
+        lowerName.startsWith("system:") ||
+        lowerName.startsWith("meta:") ||
+        lowerName === "system" ||
+        lowerName === "meta" ||
+        lowerName === "meta tags" ||
+        lowerName === "system tags"
+      ) {
+        ids.push(tag.id);
+      }
+    }
+    return ids;
+  }, [allTags]);
+
   const suggestedTagsQuery = useSuggestedTags({
     tagIds: directTagIds,
-    excludeTagIds: [...directTagIds, ...inheritedTagIds],
+    excludeTagIds: [...directTagIds, ...inheritedTagIds, ...systemAndMetaTagIds],
     limit: 12,
     enabled: selectedCount > 0 && directTagIds.length > 0
   });
 
-  const suggestedTags = suggestedTagsQuery.data ?? [];
+  const suggestedTags = useMemo(() => {
+    const raw = suggestedTagsQuery.data ?? [];
+    if (systemAndMetaTagIds.length === 0) {
+      return raw;
+    }
+    const metaSet = new Set(systemAndMetaTagIds);
+    return raw.filter((item) => !metaSet.has(item.tag.id));
+  }, [suggestedTagsQuery.data, systemAndMetaTagIds]);
 
   const removeTag = useCallback(async (tagId: number) => {
     await onRemoveTagFromEntries(selectedEntryIds, tagId);
