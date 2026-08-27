@@ -5,6 +5,8 @@ export type LibraryStateResponse = {
   tags_count: number;
 };
 
+export type TagType = "content" | "meta" | "system";
+
 export type TagResponse = {
   id: number;
   name: string;
@@ -16,6 +18,7 @@ export type TagResponse = {
   disambiguation_id: number | null;
   is_category: boolean;
   is_hidden: boolean;
+  tag_type: TagType;
 };
 
 export type TagStatResponse = {
@@ -29,6 +32,7 @@ export type TagStatResponse = {
   disambiguation_id: number | null;
   is_category: boolean;
   is_hidden: boolean;
+  tag_type: TagType;
   entry_count: number;
 };
 
@@ -94,6 +98,7 @@ export type TagCreatePayload = {
   disambiguation_id?: number | null;
   is_category?: boolean;
   is_hidden?: boolean;
+  tag_type?: TagType;
 };
 
 export type TagUpdatePayload = {
@@ -106,6 +111,7 @@ export type TagUpdatePayload = {
   disambiguation_id?: number | null;
   is_category?: boolean | null;
   is_hidden?: boolean | null;
+  tag_type?: TagType | null;
 };
 
 export type FieldResponse = {

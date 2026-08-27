@@ -524,43 +524,27 @@ export function MetadataContent({
     return inheritedTagRows.map((r) => r.tagId);
   }, [inheritedTagRows]);
 
-  const systemAndMetaTagIds = useMemo(() => {
-    const ids: number[] = [];
-    for (const tag of allTags) {
-      const lowerName = tag.name.trim().toLowerCase();
-      if (
-        tag.id === 0 ||
-        tag.id === 1 ||
-        tag.is_category ||
-        tag.is_hidden ||
-        lowerName.startsWith("system:") ||
-        lowerName.startsWith("meta:") ||
-        lowerName === "system" ||
-        lowerName === "meta" ||
-        lowerName === "meta tags" ||
-        lowerName === "system tags"
-      ) {
-        ids.push(tag.id);
-      }
-    }
-    return ids;
+  const nonContentTagIds = useMemo(() => {
+    return allTags
+      .filter((tag) => tag.is_category || tag.is_hidden || (tag.tag_type ?? "content") !== "content")
+      .map((tag) => tag.id);
   }, [allTags]);
 
   const suggestedTagsQuery = useSuggestedTags({
     tagIds: directTagIds,
-    excludeTagIds: [...directTagIds, ...inheritedTagIds, ...systemAndMetaTagIds],
+    excludeTagIds: [...directTagIds, ...inheritedTagIds, ...nonContentTagIds],
     limit: 12,
     enabled: selectedCount > 0 && directTagIds.length > 0
   });
 
   const suggestedTags = useMemo(() => {
     const raw = suggestedTagsQuery.data ?? [];
-    if (systemAndMetaTagIds.length === 0) {
+    if (nonContentTagIds.length === 0) {
       return raw;
     }
-    const metaSet = new Set(systemAndMetaTagIds);
-    return raw.filter((item) => !metaSet.has(item.tag.id));
-  }, [suggestedTagsQuery.data, systemAndMetaTagIds]);
+    const nonContentSet = new Set(nonContentTagIds);
+    return raw.filter((item) => !nonContentSet.has(item.tag.id));
+  }, [suggestedTagsQuery.data, nonContentTagIds]);
 
   const removeTag = useCallback(async (tagId: number) => {
     await onRemoveTagFromEntries(selectedEntryIds, tagId);

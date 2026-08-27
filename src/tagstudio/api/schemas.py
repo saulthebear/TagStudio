@@ -75,6 +75,7 @@ class TagResponse(BaseModel):
     disambiguation_id: int | None = None
     is_category: bool = False
     is_hidden: bool = False
+    tag_type: str = "content"
 
 
 class TagStatResponse(BaseModel):
@@ -88,6 +89,7 @@ class TagStatResponse(BaseModel):
     disambiguation_id: int | None = None
     is_category: bool = False
     is_hidden: bool = False
+    tag_type: str = "content"
     entry_count: int = 0
 
 
@@ -297,6 +299,7 @@ class TagCreateRequest(BaseModel):
     disambiguation_id: int | None = None
     is_category: bool = False
     is_hidden: bool = False
+    tag_type: str = "content"
 
 
 class TagUpdateRequest(BaseModel):
@@ -309,6 +312,7 @@ class TagUpdateRequest(BaseModel):
     disambiguation_id: int | None = None
     is_category: bool | None = None
     is_hidden: bool | None = None
+    tag_type: str | None = None
 
 
 class JobStatusResponse(BaseModel):

@@ -70,7 +70,7 @@ from tagstudio.core.constants import (
     TAG_META,
     TS_FOLDER_NAME,
 )
-from tagstudio.core.enums import LibraryPrefs
+from tagstudio.core.enums import LibraryPrefs, TagType
 from tagstudio.core.i18n import tr
 from tagstudio.core.library.alchemy import default_color_groups
 from tagstudio.core.library.alchemy.constants import (
@@ -150,6 +150,7 @@ def get_default_tags() -> tuple[Tag, ...]:
         name="Meta Tags",
         aliases={TagAlias(name="Meta"), TagAlias(name="Meta Tag")},
         is_category=True,
+        tag_type=TagType.META.value,
     )
     archive_tag = Tag(
         id=TAG_ARCHIVED,
@@ -159,6 +160,7 @@ def get_default_tags() -> tuple[Tag, ...]:
         is_hidden=True,
         color_slug="red",
         color_namespace="tagstudio-standard",
+        tag_type=TagType.META.value,
     )
     favorite_tag = Tag(
         id=TAG_FAVORITE,
@@ -170,6 +172,7 @@ def get_default_tags() -> tuple[Tag, ...]:
         parent_tags={meta_tag},
         color_slug="yellow",
         color_namespace="tagstudio-standard",
+        tag_type=TagType.META.value,
     )
 
     return archive_tag, favorite_tag, meta_tag
@@ -552,6 +555,8 @@ class Library:
                     self.__apply_db103_schema_changes(session)
                 if loaded_db_version < 104:
                     self.__apply_db104_schema_changes(session)
+                if loaded_db_version < 105:
+                    self.__apply_db105_schema_changes(session)
                 if loaded_db_version == 6:
                     self.__apply_repairs_for_db6(session)
 
@@ -565,6 +570,8 @@ class Library:
                     self.__apply_db102_repairs(session)
                 if loaded_db_version < 103:
                     self.__apply_db103_default_data(session)
+                if loaded_db_version < 105:
+                    self.__apply_db105_default_data(session)
 
                 # Convert file extension list to ts_ignore file, if a .ts_ignore file does not exist
                 self.migrate_sql_to_ts_ignore(library_dir)
@@ -754,6 +761,99 @@ class Library:
         except Exception as e:
             logger.error(
                 "[Library][Migration] Could not create ix_entries_date_added index!",
+                error=e,
+            )
+            session.rollback()
+
+    def __apply_db105_schema_changes(self, session: Session):
+        """Apply database schema changes introduced in DB_VERSION 105."""
+        add_tag_type_column = text(
+            "ALTER TABLE tags ADD COLUMN tag_type TEXT NOT NULL DEFAULT 'content'"
+        )
+        create_tag_type_index = text(
+            "CREATE INDEX IF NOT EXISTS ix_tags_tag_type ON tags (tag_type)"
+        )
+        try:
+            session.execute(add_tag_type_column)
+            session.commit()
+            logger.info("[Library][Migration] Added tag_type column to tags table")
+        except Exception as e:
+            logger.error(
+                "[Library][Migration] Could not create tag_type column in tags table!",
+                error=e,
+            )
+            session.rollback()
+
+        try:
+            session.execute(create_tag_type_index)
+            session.commit()
+            logger.info("[Library][Migration] Created index on tags.tag_type")
+        except Exception as e:
+            logger.error(
+                "[Library][Migration] Could not create index on tags.tag_type!",
+                error=e,
+            )
+            session.rollback()
+
+    def __apply_db105_default_data(self, session: Session):
+        """Apply default data changes introduced in DB_VERSION 105."""
+        try:
+            # 1. Update reserved/default meta tags
+            session.execute(
+                update(Tag)
+                .where(Tag.id.in_([TAG_ARCHIVED, TAG_FAVORITE, TAG_META]))
+                .values(tag_type=TagType.META.value)
+            )
+
+            # 2. Update any existing system tags (name starts with system: or named System)
+            session.execute(
+                update(Tag)
+                .where(or_(Tag.name.ilike("system:%"), Tag.name.ilike("system")))
+                .values(tag_type=TagType.SYSTEM.value)
+            )
+
+            # 3. Update descendants of "System" category to system
+            system_tag_ids = session.scalars(
+                select(Tag.id).where(Tag.name.ilike("System"))
+            ).all()
+            for sys_id in system_tag_ids:
+                descendants = session.scalars(TAG_CHILDREN_ID_QUERY, {"tag_id": sys_id}).all()
+                if descendants:
+                    session.execute(
+                        update(Tag)
+                        .where(Tag.id.in_(descendants))
+                        .values(tag_type=TagType.SYSTEM.value)
+                    )
+
+            # 4. Update descendants of "Meta Tags" or "Meta" category to meta
+            meta_tag_ids = session.scalars(
+                select(Tag.id).where(
+                    or_(
+                        Tag.name.ilike("Meta Tags"),
+                        Tag.name.ilike("Meta"),
+                        Tag.name.ilike("Meta Tag"),
+                    )
+                )
+            ).all()
+            for meta_id in meta_tag_ids:
+                descendants = session.scalars(TAG_CHILDREN_ID_QUERY, {"tag_id": meta_id}).all()
+                if descendants:
+                    session.execute(
+                        update(Tag)
+                        .where(
+                            and_(
+                                Tag.id.in_(descendants),
+                                Tag.tag_type != TagType.SYSTEM.value,
+                            )
+                        )
+                        .values(tag_type=TagType.META.value)
+                    )
+
+            session.commit()
+            logger.info("[Library][Migration] Migrated existing tags to appropriate tag_type")
+        except Exception as e:
+            logger.error(
+                "[Library][Migration] Could not migrate tags to tag_type!",
                 error=e,
             )
             session.rollback()
@@ -1362,31 +1462,18 @@ class Library:
         effective_limit = max(1, min(limit, 100))
 
         with Session(self.engine) as session:
-            # Exclude system tags, meta tags, category tags, hidden tags, and reserved tags
+            # Exclude non-content tags (meta, system), category tags, and hidden tags
             excluded_system_meta_stmt = (
                 select(Tag.id).where(
                     or_(
                         Tag.is_category == True,
                         Tag.is_hidden == True,
-                        Tag.name.ilike("system:%"),
-                        Tag.name.ilike("meta:%"),
-                        Tag.name.ilike("system"),
-                        Tag.name.ilike("meta"),
-                        Tag.name.ilike("meta tags"),
-                        Tag.name.ilike("system tags"),
-                        Tag.id.in_([0, 1]),
+                        Tag.tag_type != TagType.CONTENT.value,
                     )
                 )
             )
             system_meta_ids = set(session.scalars(excluded_system_meta_stmt).all())
             excluded.update(system_meta_ids)
-
-            # Also exclude any descendant tags of System or Meta category tags
-            for root_name in ("System", "Meta Tags", "Meta", "System Tags"):
-                root_tags = session.scalars(select(Tag.id).where(Tag.name.ilike(root_name))).all()
-                for root_tag_id in root_tags:
-                    descendants = set(session.scalars(TAG_CHILDREN_ID_QUERY, {"tag_id": root_tag_id}))
-                    excluded.update(descendants)
 
             matching_entry_ids_stmt = (
                 select(TagEntry.entry_id)

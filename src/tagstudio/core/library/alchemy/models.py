@@ -11,6 +11,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from typing_extensions import deprecated
 
 from tagstudio.core.constants import TAG_ARCHIVED, TAG_FAVORITE
+from tagstudio.core.enums import TagType
 from tagstudio.core.library.alchemy.db import Base, PathType
 from tagstudio.core.library.alchemy.enums import FieldTypeEnum
 from tagstudio.core.library.alchemy.fields import (
@@ -93,6 +94,9 @@ class Tag(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str]
     shorthand: Mapped[str | None]
+    tag_type: Mapped[str] = mapped_column(
+        default=TagType.CONTENT.value, server_default=TagType.CONTENT.value, index=True
+    )
     color_namespace: Mapped[str | None] = mapped_column()
     color_slug: Mapped[str | None] = mapped_column()
     color: Mapped[TagColorGroup | None] = relationship(lazy="joined")
@@ -140,6 +144,7 @@ class Tag(Base):
         disambiguation_id: int | None = None,
         is_category: bool = False,
         is_hidden: bool = False,
+        tag_type: str = TagType.CONTENT.value,
     ):
         self.name = name
         self.aliases = aliases or set()
@@ -151,6 +156,7 @@ class Tag(Base):
         self.disambiguation_id = disambiguation_id
         self.is_category = is_category
         self.is_hidden = is_hidden
+        self.tag_type = tag_type
         self.id = id  # pyright: ignore[reportAttributeAccessIssue]
         super().__init__()
 

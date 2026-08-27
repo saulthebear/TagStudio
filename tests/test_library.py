@@ -10,7 +10,7 @@ from tempfile import TemporaryDirectory
 import pytest
 import structlog
 
-from tagstudio.core.enums import DefaultEnum, LibraryPrefs
+from tagstudio.core.enums import DefaultEnum, LibraryPrefs, TagType
 from tagstudio.core.library.alchemy.enums import BrowsingState
 from tagstudio.core.library.alchemy.fields import (
     FieldID,  # pyright: ignore[reportPrivateUsage]
@@ -568,10 +568,10 @@ def test_get_suggested_tags(library: Library, generate_tag: Callable[..., Tag]):
     assert tag_d.id in filtered_ids
 
     # Verify system tags and meta tags are automatically excluded
-    sys_tag = unwrap(library.add_tag(generate_tag("system:remuxed", id=205)))
+    sys_tag = unwrap(library.add_tag(generate_tag("system:remuxed", tag_type=TagType.SYSTEM.value, id=205)))
     cat_tag = unwrap(library.add_tag(generate_tag("Format", is_category=True, id=206)))
     hidden_tag = unwrap(library.add_tag(generate_tag("hidden_tag", is_hidden=True, id=207)))
-    meta_tag = unwrap(library.add_tag(generate_tag("meta:quality", id=208)))
+    meta_tag = unwrap(library.add_tag(generate_tag("meta:quality", tag_type=TagType.META.value, id=208)))
 
     library.add_tags_to_entries(e1.id, [sys_tag.id, cat_tag.id, hidden_tag.id, meta_tag.id])
     library.add_tags_to_entries(e2.id, [sys_tag.id, cat_tag.id, hidden_tag.id, meta_tag.id])

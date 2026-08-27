@@ -10,6 +10,7 @@ from sqlalchemy import ColumnElement, and_, distinct, func, or_, select
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.operators import ilike_op
 
+from tagstudio.core.enums import TagType
 from tagstudio.core.library.alchemy.constants import TAG_CHILDREN_ID_QUERY
 from tagstudio.core.library.alchemy.joins import TagEntry
 from tagstudio.core.library.alchemy.models import Entry, Tag, TagAlias
@@ -118,7 +119,7 @@ class SQLBoolExpressionBuilder(BaseVisitor[ColumnElement[bool]]):
                 user_tag_entries = (
                     select(TagEntry.entry_id)
                     .join(Tag, Tag.id == TagEntry.tag_id)
-                    .where(~Tag.name.ilike("system:%"))
+                    .where(Tag.tag_type == TagType.CONTENT.value)
                 )
                 return ~Entry.id.in_(user_tag_entries)
 

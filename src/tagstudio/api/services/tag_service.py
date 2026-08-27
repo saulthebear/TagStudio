@@ -67,6 +67,7 @@ def create_tag(lib: Library, request: TagCreateRequest) -> Tag:
         disambiguation_id=request.disambiguation_id,
         is_category=request.is_category,
         is_hidden=request.is_hidden,
+        tag_type=request.tag_type,
     )
 
     created = lib.add_tag(
@@ -107,6 +108,8 @@ def update_tag(lib: Library, tag_id: int, request: TagUpdateRequest) -> Tag:
             tag.is_category = request.is_category
         if "is_hidden" in provided_fields and request.is_hidden is not None:
             tag.is_hidden = request.is_hidden
+        if "tag_type" in provided_fields and request.tag_type is not None:
+            tag.tag_type = request.tag_type
 
         existing_parent_ids = {
             parent_id

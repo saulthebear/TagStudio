@@ -2,6 +2,7 @@ import {
   type TagColorNamespaceResponse,
   type TagCreatePayload,
   type TagResponse,
+  type TagType,
   type TagUpdatePayload
 } from "@tagstudio/api-client";
 import { useQuery } from "@tanstack/react-query";
@@ -85,6 +86,7 @@ export function useTagEditorWorkflow({
   const [colorSlug, setColorSlug] = useState<string | null>(null);
   const [isCategory, setIsCategory] = useState(false);
   const [isHidden, setIsHidden] = useState(false);
+  const [tagType, setTagType] = useState<TagType>("content");
 
   const [parentPickerOpen, setParentPickerOpen] = useState(false);
   const [parentQuery, setParentQuery] = useState("");
@@ -165,6 +167,7 @@ export function useTagEditorWorkflow({
     setColorSlug(mode === "create" ? null : (tag?.color_slug ?? null));
     setIsCategory(mode === "create" ? false : (tag?.is_category ?? false));
     setIsHidden(mode === "create" ? false : (tag?.is_hidden ?? false));
+    setTagType(mode === "create" ? "content" : (tag?.tag_type ?? "content"));
     setParentPickerOpen(false);
     setParentQuery("");
     setColorPickerOpen(false);
@@ -267,7 +270,8 @@ export function useTagEditorWorkflow({
       color_namespace: colorNamespace,
       color_slug: colorSlug,
       is_category: isCategory,
-      is_hidden: isHidden
+      is_hidden: isHidden,
+      tag_type: tagType
     };
 
     setSavePending(true);
@@ -280,7 +284,8 @@ export function useTagEditorWorkflow({
               aliases: payload.aliases,
               parent_ids: payload.parent_ids,
               is_category: payload.is_category,
-              is_hidden: payload.is_hidden
+              is_hidden: payload.is_hidden,
+              tag_type: payload.tag_type
             });
 
       if (saved) {
@@ -304,6 +309,7 @@ export function useTagEditorWorkflow({
     colorSlug,
     isCategory,
     isHidden,
+    tagType,
     parentIds,
     parentPickerOpen,
     parentQuery,
@@ -321,6 +327,7 @@ export function useTagEditorWorkflow({
     setDisambiguationId,
     setIsCategory,
     setIsHidden,
+    setTagType,
     setParentPickerOpen,
     setParentQuery,
     setColorPickerOpen,

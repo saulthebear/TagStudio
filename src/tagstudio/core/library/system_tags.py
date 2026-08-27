@@ -15,6 +15,7 @@ from pathlib import Path
 import structlog
 
 from tagstudio.core.constants import TS_FOLDER_NAME
+from tagstudio.core.enums import TagType
 from tagstudio.core.library.alchemy.library import Library
 from tagstudio.core.library.alchemy.models import Tag
 from tagstudio.core.media.remux import (
@@ -60,6 +61,7 @@ def ensure_system_tags(library: Library) -> dict[str, int]:
         new_parent = Tag(
             name=SYSTEM_CATEGORY_NAME,
             is_category=True,
+            tag_type=TagType.SYSTEM.value,
         )
         created_parent = library.add_tag(new_parent)
         if created_parent is None:
@@ -79,6 +81,7 @@ def ensure_system_tags(library: Library) -> dict[str, int]:
                 color_namespace=spec["color_namespace"],
                 color_slug=spec["color_slug"],
                 is_category=False,
+                tag_type=TagType.SYSTEM.value,
             )
             created_tag = library.add_tag(new_tag, parent_ids=[parent_id])
             if created_tag is None:

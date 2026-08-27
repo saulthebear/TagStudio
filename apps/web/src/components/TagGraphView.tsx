@@ -54,11 +54,6 @@ function getLinkId(node: number | GraphNode): number {
   return typeof node === "object" ? node.id : node;
 }
 
-/** Check if a tag is a system tag by name convention */
-function isSystemTag(name: string): boolean {
-  return name.startsWith("system:") || name === "System";
-}
-
 export function TagGraphView({
   tags,
   coOccurrences,
@@ -92,7 +87,7 @@ export function TagGraphView({
   const graphTags = useMemo(() => {
     let filtered = [...tags];
     if (hideSystemTags) {
-      filtered = filtered.filter((t) => !isSystemTag(t.name));
+      filtered = filtered.filter((t) => (t.tag_type ?? "content") !== "system");
     }
     return filtered
       .sort((a, b) => b.entry_count - a.entry_count)

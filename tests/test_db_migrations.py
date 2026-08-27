@@ -50,6 +50,21 @@ def test_library_migrations(path: str):
         with library.engine.connect() as connection:
             indexes = connection.execute(text("PRAGMA index_list('entries')")).fetchall()
             assert any(index[1] == "ix_entries_date_added" for index in indexes)
+
+            tag_columns = connection.execute(text("PRAGMA table_info('tags')")).fetchall()
+            assert any(col[1] == "tag_type" for col in tag_columns)
+
+            tag_indexes = connection.execute(text("PRAGMA index_list('tags')")).fetchall()
+            assert any(idx[1] == "ix_tags_tag_type" for idx in tag_indexes)
+
+        # Verify default tags migrated to meta type
+        archived_tag = library.get_tag(0)
+        if archived_tag is not None:
+            assert archived_tag.tag_type == "meta"
+
+        favorite_tag = library.get_tag(1)
+        if favorite_tag is not None:
+            assert favorite_tag.tag_type == "meta"
         library.close()
         shutil.rmtree(temp_path)
         assert status.success

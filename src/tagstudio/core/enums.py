@@ -23,6 +23,14 @@ class ShowFilepathOption(int, enum.Enum):
     DEFAULT = SHOW_RELATIVE_PATHS
 
 
+class TagType(str, enum.Enum):
+    """Semantic classification and role of a tag."""
+
+    CONTENT = "content"
+    META = "meta"
+    SYSTEM = "system"
+
+
 class TagClickActionOption(int, enum.Enum):
     """Values representing the options for the "tag_click_action" setting."""
 
