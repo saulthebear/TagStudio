@@ -387,6 +387,17 @@ export type TelemetrySlowOperation = {
   metadata: Record<string, unknown> | null;
 };
 
+export type TelemetryTimeseriesPoint = {
+  timestamp: string;
+  requests: number;
+  errors: number;
+  avg_latency_ms: number;
+  p50_ms: number;
+  p95_ms: number;
+  thumbnail_hits: number;
+  thumbnail_misses: number;
+};
+
 export type TelemetrySummaryResponse = {
   window_seconds: number;
   api: {
@@ -411,6 +422,7 @@ export type TelemetrySummaryResponse = {
     avg_generate_ms: number;
   };
   slow_operations: TelemetrySlowOperation[];
+  timeseries?: TelemetryTimeseriesPoint[];
 };
 
 export type TelemetryErrorRecord = {

@@ -38,8 +38,8 @@ type TopFilterBarProps = {
   refreshPending: boolean;
   videoMuted: boolean;
   theme?: ThemeMode;
-  activePage?: "grid" | "tags";
-  onNavigatePage?: (page: "grid" | "tags") => void;
+  activePage?: "grid" | "tags" | "observability";
+  onNavigatePage?: (page: "grid" | "tags" | "observability") => void;
   onSearchInputChange: (value: string) => void;
   onSearch: () => void;
   onSortingModeChange: (value: SortingMode) => void;

@@ -17,6 +17,7 @@ import { LibraryGate } from "@/components/LibraryGate";
 import { LibrarySwitcherModal } from "@/components/LibrarySwitcherModal";
 import { ModalHeader } from "@/components/ModalHeader";
 import { ModalLayerPortal } from "@/components/ModalLayerPortal";
+import { ObservabilityPage } from "@/components/ObservabilityPage";
 import { RefreshStatusPanel } from "@/components/RefreshStatusPanel";
 import { SettingsModal } from "@/components/SettingsModal";
 import { SplitPane } from "@/components/SplitPane";
@@ -72,8 +73,18 @@ export function App() {
   const [fullScreenModalOpen, setFullScreenModalOpen] = useState(false);
   const [shortcutsHelpOpen, setShortcutsHelpOpen] = useState(false);
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
-  const [activePage, setActivePage] = useState<"grid" | "tags">(() => {
-    return typeof window !== "undefined" && window.location.hash === "#/tags" ? "tags" : "grid";
+  const [activePage, setActivePage] = useState<"grid" | "tags" | "observability">(() => {
+    if (typeof window === "undefined") {
+      return "grid";
+    }
+    const hash = window.location.hash;
+    if (hash === "#/tags") {
+      return "tags";
+    }
+    if (hash === "#/observability" || hash === "#/diagnostics") {
+      return "observability";
+    }
+    return "grid";
   });
 
   useEffect(() => {
@@ -88,15 +99,37 @@ export function App() {
     setDiagnosticsOpen((prev) => !prev);
   }, []);
 
-  const handleNavigatePage = useCallback((page: "grid" | "tags") => {
+  const handleNavigatePage = useCallback((page: "grid" | "tags" | "observability") => {
     addBreadcrumb("nav.navigate_page", { page });
     setActivePage(page);
-    window.location.hash = page === "tags" ? "#/tags" : "#/";
+    if (page === "tags") {
+      window.location.hash = "#/tags";
+    } else if (page === "observability") {
+      window.location.hash = "#/observability";
+    } else {
+      window.location.hash = "#/";
+    }
   }, []);
+
+  const handleExpandDiagnosticsToFullPage = useCallback(() => {
+    setDiagnosticsOpen(false);
+    handleNavigatePage("observability");
+  }, [handleNavigatePage]);
+
+  const handleMinimizeDiagnosticsToModal = useCallback(() => {
+    handleNavigatePage("grid");
+    setDiagnosticsOpen(true);
+  }, [handleNavigatePage]);
 
   useEffect(() => {
     const onHashChange = () => {
-      const page = window.location.hash === "#/tags" ? "tags" : "grid";
+      const hash = window.location.hash;
+      const page =
+        hash === "#/tags"
+          ? "tags"
+          : hash === "#/observability" || hash === "#/diagnostics"
+            ? "observability"
+            : "grid";
       addBreadcrumb("nav.hash_change", { page });
       setActivePage(page);
     };
@@ -640,7 +673,12 @@ export function App() {
               />
             ) : null}
 
-            {activePage === "tags" ? (
+            {activePage === "observability" ? (
+              <ObservabilityPage
+                onBack={() => handleNavigatePage("grid")}
+                onMinimizeToModal={handleMinimizeDiagnosticsToModal}
+              />
+            ) : activePage === "tags" ? (
               <TagExplorerPage
                 workflow={tagExplorerWorkflow}
                 gridPane={gridPane}
@@ -754,6 +792,7 @@ export function App() {
         <DiagnosticsModal
           open={diagnosticsOpen}
           onClose={() => setDiagnosticsOpen(false)}
+          onExpandToFullPage={handleExpandDiagnosticsToFullPage}
         />
 
         <ModalLayerPortal open={Boolean(trashDialogState)} dimBackdrop={true} onBackdropClick={() => setTrashDialogState(null)}>

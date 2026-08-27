@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   type TelemetryErrorRecord,
   type TelemetrySummaryResponse
@@ -10,6 +10,7 @@ import {
   Clock,
   FileText,
   Layers,
+  Maximize2,
   RefreshCw,
   Search
 } from "lucide-react";
@@ -19,19 +20,21 @@ import { ModalHeader } from "@/components/ModalHeader";
 import { ModalLayerPortal } from "@/components/ModalLayerPortal";
 import { useDraggableModalPosition } from "@/hooks/useDraggableModalPosition";
 
-type DiagnosticsModalProps = {
+export type DiagnosticsModalProps = {
   open: boolean;
   onClose: () => void;
+  onExpandToFullPage?: () => void;
 };
 
 type DiagnosticsTab = "overview" | "errors" | "slow" | "logs";
 
-export function DiagnosticsModal({ open, onClose }: DiagnosticsModalProps) {
+export function DiagnosticsModal({ open, onClose, onExpandToFullPage }: DiagnosticsModalProps) {
   const [activeTab, setActiveTab] = useState<DiagnosticsTab>("overview");
   const [summary, setSummary] = useState<TelemetrySummaryResponse | null>(null);
   const [errors, setErrors] = useState<TelemetryErrorRecord[]>([]);
   const [logs, setLogs] = useState<Record<string, unknown>[]>([]);
   const [loading, setLoading] = useState(false);
+  const [routeSearchQuery, setRouteSearchQuery] = useState<string>("");
   const [logFilterLevel, setLogFilterLevel] = useState<string>("all");
   const [logSearchQuery, setLogSearchQuery] = useState<string>("");
   const [autoRefresh, setAutoRefresh] = useState(false);
@@ -87,6 +90,17 @@ export function DiagnosticsModal({ open, onClose }: DiagnosticsModalProps) {
     return () => clearInterval(interval);
   }, [autoRefresh, fetchData, open]);
 
+  const filteredRoutes = useMemo(() => {
+    if (!summary?.api.routes) {
+      return [];
+    }
+    if (!routeSearchQuery.trim()) {
+      return summary.api.routes;
+    }
+    const q = routeSearchQuery.toLowerCase();
+    return summary.api.routes.filter((r) => r.route.toLowerCase().includes(q));
+  }, [summary, routeSearchQuery]);
+
   if (!open) {
     return null;
   }
@@ -95,7 +109,7 @@ export function DiagnosticsModal({ open, onClose }: DiagnosticsModalProps) {
     <ModalLayerPortal open={open} dimBackdrop={true} onBackdropClick={onClose}>
       <div
         ref={draggable.panelRef}
-        className={`overlay-panel panel diagnostics-panel modal-draggable-panel max-w-4xl w-full max-h-[85vh] flex flex-col bg-slate-900 border border-slate-700 text-slate-100 shadow-2xl rounded-xl ${
+        className={`overlay-panel panel diagnostics-panel modal-draggable-panel max-w-4xl w-full max-h-[85vh] flex flex-col min-h-0 overflow-hidden bg-slate-900 border border-slate-700 text-slate-100 shadow-2xl rounded-xl ${
           draggable.isDragging ? "modal-panel-dragging" : ""
         }`}
         role="dialog"
@@ -110,8 +124,8 @@ export function DiagnosticsModal({ open, onClose }: DiagnosticsModalProps) {
           onClose={onClose}
         />
 
-        {/* Tab Header */}
-        <div className="flex items-center justify-between px-6 py-2 border-b border-slate-800 bg-slate-950/40">
+        {/* Tab Header & Action Bar */}
+        <div className="flex items-center justify-between px-6 py-2 border-b border-slate-800 bg-slate-950/40 flex-shrink-0">
           <nav className="flex gap-2">
             <button
               type="button"
@@ -168,7 +182,7 @@ export function DiagnosticsModal({ open, onClose }: DiagnosticsModalProps) {
             </button>
           </nav>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <label className="flex items-center gap-1.5 text-xs text-slate-400 select-none cursor-pointer">
               <input
                 type="checkbox"
@@ -187,11 +201,22 @@ export function DiagnosticsModal({ open, onClose }: DiagnosticsModalProps) {
             >
               <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
             </Button>
+            {onExpandToFullPage ? (
+              <Button
+                variant="secondary"
+                className="p-1.5 h-7 w-7 flex items-center justify-center text-slate-300 hover:text-white"
+                onClick={onExpandToFullPage}
+                title="Expand to Full-Page View"
+                aria-label="Expand to Full-Page View"
+              >
+                <Maximize2 className="w-3.5 h-3.5" />
+              </Button>
+            ) : null}
           </div>
         </div>
 
-        {/* Tab Content */}
-        <div className="p-6 overflow-y-auto flex-1 flex flex-col gap-6 text-sm">
+        {/* Tab Content Body */}
+        <div className="p-6 overflow-y-auto flex-1 min-h-0 flex flex-col gap-6 text-sm">
           {activeTab === "overview" ? (
             <>
               {summary ? (
@@ -239,15 +264,28 @@ export function DiagnosticsModal({ open, onClose }: DiagnosticsModalProps) {
                     </div>
                   </div>
 
-                  {/* Route Latency Table */}
+                  {/* Route Latency Table with Search & Scroll Bounding */}
                   <div className="flex flex-col gap-2">
-                    <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
-                      Endpoint Performance (Past Hour)
-                    </h3>
-                    {summary.api.routes.length > 0 ? (
-                      <div className="border border-slate-800 rounded-lg overflow-hidden bg-slate-950/30">
-                        <table className="w-full text-left text-xs">
-                          <thead className="bg-slate-800/60 text-slate-400 font-semibold">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                        Endpoint Performance (Past Hour)
+                      </h3>
+                      <div className="relative">
+                        <Search className="w-3 h-3 absolute left-2 top-1/2 -translate-y-1/2 text-slate-500" />
+                        <input
+                          type="text"
+                          className="bg-slate-950/60 border border-slate-700/80 rounded px-2 py-0.5 pl-6 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500 w-36 sm:w-48"
+                          placeholder="Filter routes..."
+                          value={routeSearchQuery}
+                          onChange={(e) => setRouteSearchQuery(e.target.value)}
+                        />
+                      </div>
+                    </div>
+
+                    {filteredRoutes.length > 0 ? (
+                      <div className="border border-slate-800 rounded-lg overflow-x-auto max-w-full bg-slate-950/30 max-h-64 overflow-y-auto">
+                        <table className="w-full text-left text-xs border-collapse">
+                          <thead className="sticky top-0 bg-slate-800/95 text-slate-300 font-semibold backdrop-blur z-10">
                             <tr>
                               <th className="p-2.5">Route</th>
                               <th className="p-2.5 text-right">Requests</th>
@@ -257,7 +295,7 @@ export function DiagnosticsModal({ open, onClose }: DiagnosticsModalProps) {
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-800/60 font-mono">
-                            {summary.api.routes.map((route) => (
+                            {filteredRoutes.map((route) => (
                               <tr key={route.route} className="hover:bg-slate-800/30">
                                 <td className="p-2.5 text-slate-200">{route.route}</td>
                                 <td className="p-2.5 text-right text-slate-300">{route.count}</td>
@@ -277,7 +315,7 @@ export function DiagnosticsModal({ open, onClose }: DiagnosticsModalProps) {
                       </div>
                     ) : (
                       <p className="text-xs text-slate-500 italic p-4 bg-slate-950/20 rounded border border-slate-800/40">
-                        No requests recorded in the current window.
+                        No requests recorded matching filter in current window.
                       </p>
                     )}
                   </div>
@@ -479,7 +517,17 @@ export function DiagnosticsModal({ open, onClose }: DiagnosticsModalProps) {
         </div>
 
         {/* Modal Footer */}
-        <div className="px-6 py-3 border-t border-slate-800 bg-slate-950/30 flex items-center justify-end">
+        <div className="px-6 py-3 border-t border-slate-800 bg-slate-950/30 flex items-center justify-between flex-shrink-0">
+          {onExpandToFullPage ? (
+            <Button
+              variant="secondary"
+              className="flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300"
+              onClick={onExpandToFullPage}
+            >
+              <Maximize2 className="w-3.5 h-3.5" />
+              <span>Open Full Page</span>
+            </Button>
+          ) : <div />}
           <Button variant="secondary" onClick={onClose}>
             Close
           </Button>
