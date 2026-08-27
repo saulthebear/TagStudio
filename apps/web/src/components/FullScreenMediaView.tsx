@@ -66,18 +66,6 @@ const MIN_ZOOM = 1;
 const MAX_ZOOM = 5;
 const ZOOM_STEP = 0.05;
 
-const ANIMATED_IMAGE_SUFFIXES = new Set(["gif", "apng", "webp"]);
-const ANIMATED_IMAGE_MEDIA_TYPES = new Set(["image/gif", "image/apng", "image/webp"]);
-
-const normalizeSuffix = (suffix?: string | null): string => suffix?.trim().toLowerCase().replace(/^\./, "") ?? "";
-
-function isAnimatedFormat(suffix?: string | null, mediaType?: string | null): boolean {
-  return (
-    ANIMATED_IMAGE_SUFFIXES.has(normalizeSuffix(suffix)) ||
-    (mediaType != null && ANIMATED_IMAGE_MEDIA_TYPES.has(mediaType.toLowerCase()))
-  );
-}
-
 export function FullScreenMediaView({
   selectedEntry,
   selectedEntryIds = [],
@@ -294,11 +282,8 @@ export function FullScreenMediaView({
     dragStartRef.current = null;
   }, []);
 
-  const animatedImageSource = useMemo(() => {
+  const imageSource = useMemo(() => {
     if (!selectedEntry || preview?.preview_kind !== "image") {
-      return null;
-    }
-    if (!isAnimatedFormat(selectedEntry.suffix, preview.media_type)) {
       return null;
     }
     return preview.media_url ? resolveApiUrl(preview.media_url) : getMediaUrl(selectedEntry.id);
@@ -351,8 +336,8 @@ export function FullScreenMediaView({
           {isImage ? (
             <img
               src={
-                animatedImageSource ??
-                (preview.thumbnail_url
+                imageSource ??
+                (preview?.thumbnail_url
                   ? resolveApiUrl(preview.thumbnail_url)
                   : getThumbnailUrl(selectedEntry.id, { kind: "preview", fit: "contain" }))
               }
