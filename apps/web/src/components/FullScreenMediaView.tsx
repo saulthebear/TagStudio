@@ -10,8 +10,8 @@ import {
 import { ChevronLeft, ChevronRight, FileText, RotateCcw, Tag, Trash2, X, ZoomIn, ZoomOut } from "lucide-react";
 import { type MouseEvent, type SyntheticEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { AddTagsModal } from "@/components/AddTagsModal";
 import { MetadataContent } from "@/components/InspectorPane";
+import { useModalStack } from "@/hooks/useModalStackDepth";
 import { findMatchingShortcut } from "@/lib/shortcuts";
 
 export type FullScreenMediaViewProps = {
@@ -113,6 +113,9 @@ export function FullScreenMediaView({
   const [metadataOpen, setMetadataOpen] = useState(false);
   const dragStartRef = useRef<{ x: number; y: number; initialPanX: number; initialPanY: number } | null>(null);
 
+  const { stackIds } = useModalStack();
+  const hasOpenModals = stackIds.length > 0;
+
   // Reset zoom & pan when selected entry changes
   useEffect(() => {
     setZoomScale(1);
@@ -122,13 +125,14 @@ export function FullScreenMediaView({
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (hasOpenModals) {
+        return;
+      }
+
       if (event.key === "Escape") {
         event.preventDefault();
         event.stopPropagation();
-        event.stopImmediatePropagation();
-        if (addTagsOpen) {
-          setAddTagsOpen(false);
-        } else if (metadataOpen) {
+        if (metadataOpen) {
           setMetadataOpen(false);
         } else {
           onClose();
@@ -199,7 +203,7 @@ export function FullScreenMediaView({
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [
-    addTagsOpen,
+    hasOpenModals,
     metadataOpen,
     onClose,
     onDeleteEntries,
@@ -295,10 +299,6 @@ export function FullScreenMediaView({
     }
   }, [onVideoPreviewUnmuted]);
 
-  const entryTagIdsByEntry = useMemo(() => {
-    if (!selectedEntry) return new Map<number, Set<number>>();
-    return new Map([[selectedEntry.id, new Set(selectedEntry.tags.map((t) => t.id))]]);
-  }, [selectedEntry]);
 
   const effectiveSelectedEntryIds = useMemo(() => {
     if (selectedEntryIds.length > 0) return selectedEntryIds;
@@ -431,6 +431,8 @@ export function FullScreenMediaView({
               onNewFieldValueChange={onNewFieldValueChange}
               onApplyField={onApplyField}
               openAddTagsRequestNonce={0}
+              isAddTagsOpen={addTagsOpen}
+              onAddTagsOpenChange={setAddTagsOpen}
             />
           ) : (
             <p className="text-sm text-slate-400">Metadata not available.</p>
@@ -558,26 +560,6 @@ export function FullScreenMediaView({
           <ChevronRight className="h-4 w-4" />
         </button>
       </div>
-
-      {/* Add Tags Modal (rendered as portal on top of base page layout) */}
-      {addTagsOpen && onAddTagToEntries && onCreateTag && onUpdateTag ? (
-        <AddTagsModal
-          open={addTagsOpen}
-          allTags={allTags}
-          selectedEntryIds={selectedEntry ? [selectedEntry.id] : []}
-          entryTagIdsByEntry={entryTagIdsByEntry}
-          onClose={() => {
-            setAddTagsOpen(false);
-            void onRefreshSelection?.();
-          }}
-          onAddTagToEntries={onAddTagToEntries}
-          onCreateTag={onCreateTag}
-          onUpdateTag={onUpdateTag}
-          onAfterTagChanged={async () => {
-            await onRefreshSelection?.();
-          }}
-        />
-      ) : null}
     </div>
   );
 }

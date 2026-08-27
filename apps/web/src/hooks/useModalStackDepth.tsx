@@ -31,16 +31,19 @@ export function ModalStackProvider({ children }: { children: ReactNode }) {
   return <ModalStackContext.Provider value={value}>{children}</ModalStackContext.Provider>;
 }
 
+export function useModalStack(): ModalStackContextValue {
+  const context = useContext(ModalStackContext);
+  if (!context) {
+    throw new Error("useModalStack must be used within a ModalStackProvider.");
+  }
+  return context;
+}
+
 export function useModalStackDepth(id: string, open: boolean): {
   depth: number;
   isTopmost: boolean;
 } {
-  const context = useContext(ModalStackContext);
-  if (!context) {
-    throw new Error("useModalStackDepth must be used within a ModalStackProvider.");
-  }
-
-  const { stackIds, register, unregister } = context;
+  const { stackIds, register, unregister } = useModalStack();
 
   useEffect(() => {
     if (!open) {

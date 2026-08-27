@@ -1,4 +1,4 @@
-import { type ReactNode, useId } from "react";
+import { type ReactNode, useEffect, useId } from "react";
 import { createPortal } from "react-dom";
 
 import { useModalStackDepth } from "@/hooks/useModalStackDepth";
@@ -6,6 +6,7 @@ import { useModalStackDepth } from "@/hooks/useModalStackDepth";
 export type ModalLayerPortalProps = {
   open: boolean;
   onBackdropClick?: () => void;
+  onEscape?: () => void;
   zIndexBase?: number;
   dimBackdrop?: boolean;
   children: ReactNode;
@@ -14,12 +15,36 @@ export type ModalLayerPortalProps = {
 export function ModalLayerPortal({
   open,
   onBackdropClick,
+  onEscape,
   zIndexBase = 1000,
   dimBackdrop = true,
   children
 }: ModalLayerPortalProps) {
   const modalId = useId();
   const { depth, isTopmost } = useModalStackDepth(modalId, open);
+
+  useEffect(() => {
+    if (!open || !isTopmost) {
+      return;
+    }
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") {
+        return;
+      }
+      if (event.defaultPrevented) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+      const closeHandler = onEscape ?? onBackdropClick;
+      closeHandler?.();
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [isTopmost, onBackdropClick, onEscape, open]);
 
   if (!open) {
     return null;

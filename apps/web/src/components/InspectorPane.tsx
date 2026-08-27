@@ -352,6 +352,8 @@ export type MetadataContentProps = {
   onNewFieldValueChange: (value: string) => void;
   onApplyField: () => void;
   openAddTagsRequestNonce: number;
+  isAddTagsOpen?: boolean;
+  onAddTagsOpenChange?: (open: boolean) => void;
 };
 
 export function MetadataContent({
@@ -378,9 +380,26 @@ export function MetadataContent({
   onNewFieldKeyChange,
   onNewFieldValueChange,
   onApplyField,
-  openAddTagsRequestNonce
+  openAddTagsRequestNonce,
+  isAddTagsOpen,
+  onAddTagsOpenChange
 }: MetadataContentProps) {
-  const [addTagsOpen, setAddTagsOpen] = useState(false);
+  const [internalAddTagsOpen, setInternalAddTagsOpen] = useState(false);
+  const isControlledAddTags = isAddTagsOpen !== undefined;
+  const effectiveAddTagsOpen = isControlledAddTags ? isAddTagsOpen : internalAddTagsOpen;
+
+  const setEffectiveAddTagsOpen = useCallback(
+    (nextOpen: boolean) => {
+      if (onAddTagsOpenChange) {
+        onAddTagsOpenChange(nextOpen);
+      }
+      if (!isControlledAddTags) {
+        setInternalAddTagsOpen(nextOpen);
+      }
+    },
+    [isControlledAddTags, onAddTagsOpenChange]
+  );
+
   const [editTag, setEditTag] = useState<TagResponse | null>(null);
   const [hoveredTagId, setHoveredTagId] = useState<number | null>(null);
   const [tagsOpen, setTagsOpen] = useState(true);
@@ -395,10 +414,10 @@ export function MetadataContent({
 
   useEffect(() => {
     if (openAddTagsRequestNonce > previousOpenAddTagsRequestNonce.current && selectedCount > 0) {
-      setAddTagsOpen(true);
+      setEffectiveAddTagsOpen(true);
     }
     previousOpenAddTagsRequestNonce.current = openAddTagsRequestNonce;
-  }, [openAddTagsRequestNonce, selectedCount]);
+  }, [openAddTagsRequestNonce, selectedCount, setEffectiveAddTagsOpen]);
 
   const tagById = useMemo(() => {
     const map = new Map<number, TagResponse>();
@@ -604,7 +623,7 @@ export function MetadataContent({
                 Paste Tags
               </Button>
             ) : null}
-            <Button size="sm" onClick={() => setAddTagsOpen(true)} disabled={tagMutationPending}>
+            <Button size="sm" onClick={() => setEffectiveAddTagsOpen(true)} disabled={tagMutationPending}>
               Add Tag
             </Button>
           </div>
@@ -887,12 +906,12 @@ export function MetadataContent({
       </div>
 
       <AddTagsModal
-        open={addTagsOpen}
+        open={effectiveAddTagsOpen}
         allTags={allTags}
         selectedEntryIds={selectedEntryIds}
         entryTagIdsByEntry={entryTagIdsByEntry}
         onClose={() => {
-          setAddTagsOpen(false);
+          setEffectiveAddTagsOpen(false);
           void onRefreshSelection();
         }}
         onAddTagToEntries={onAddTagToEntries}
