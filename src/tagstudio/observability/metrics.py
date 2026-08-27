@@ -228,6 +228,66 @@ class MetricsStore:
             total_thumb = thumb_hits + thumb_misses
             hit_ratio = round((thumb_hits / total_thumb) * 100, 1) if total_thumb > 0 else 100.0
 
+            # 5. Timeseries data points for charts (24-30 time buckets across the window)
+            now_dt = datetime.now(UTC)
+            start_dt = now_dt - timedelta(seconds=window_seconds)
+            num_buckets = 30
+            bucket_duration_sec = max(1.0, window_seconds / num_buckets)
+
+            # Query all requests with timestamps in window
+            ts_req_rows = conn.execute(
+                """
+                SELECT timestamp, duration_ms, status_code
+                FROM api_requests
+                WHERE timestamp >= ?
+                ORDER BY timestamp ASC
+                """,
+                (cutoff,),
+            ).fetchall()
+
+            # Query all thumbnail operations in window
+            ts_thumb_rows = conn.execute(
+                """
+                SELECT timestamp, operation_name
+                FROM operation_timers
+                WHERE timestamp >= ? AND category = 'thumbnail'
+                ORDER BY timestamp ASC
+                """,
+                (cutoff,),
+            ).fetchall()
+
+            buckets: list[dict[str, Any]] = []
+            for b_idx in range(num_buckets):
+                b_start = start_dt + timedelta(seconds=b_idx * bucket_duration_sec)
+                b_end = start_dt + timedelta(seconds=(b_idx + 1) * bucket_duration_sec)
+                b_start_iso = b_start.isoformat()
+                b_end_iso = b_end.isoformat()
+
+                # Filter requests in this bucket
+                b_reqs = [r for r in ts_req_rows if b_start_iso <= r["timestamp"] < b_end_iso]
+                b_errors = sum(1 for r in b_reqs if r["status_code"] >= 400)
+                b_durs = sorted([r["duration_ms"] for r in b_reqs])
+
+                b_p50 = b_durs[int(len(b_durs) * 0.50)] if b_durs else 0.0
+                b_p95 = b_durs[int(len(b_durs) * 0.95)] if b_durs else 0.0
+                b_avg = round(sum(b_durs) / len(b_durs), 2) if b_durs else 0.0
+
+                # Filter thumbnail operations in this bucket
+                b_thumbs = [t for t in ts_thumb_rows if b_start_iso <= t["timestamp"] < b_end_iso]
+                b_th_hits = sum(1 for t in b_thumbs if t["operation_name"] == "cache_hit")
+                b_th_misses = sum(1 for t in b_thumbs if t["operation_name"] == "generate")
+
+                buckets.append({
+                    "timestamp": b_start_iso,
+                    "requests": len(b_reqs),
+                    "errors": b_errors,
+                    "avg_latency_ms": b_avg,
+                    "p50_ms": round(b_p50, 2),
+                    "p95_ms": round(b_p95, 2),
+                    "thumbnail_hits": b_th_hits,
+                    "thumbnail_misses": b_th_misses,
+                })
+
             return {
                 "window_seconds": window_seconds,
                 "api": {
@@ -241,7 +301,7 @@ class MetricsStore:
                         "p99": round(p99, 2),
                         "max": round(max_latency, 2),
                     },
-                    "routes": route_summary[:15],
+                    "routes": route_summary[:25],
                 },
                 "errors_total": error_count,
                 "thumbnails": {
@@ -262,6 +322,7 @@ class MetricsStore:
                     }
                     for r in slow_ops
                 ],
+                "timeseries": buckets,
             }
 
     def get_recent_errors(self, limit: int = 50) -> list[dict[str, Any]]:

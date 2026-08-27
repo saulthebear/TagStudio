@@ -338,6 +338,8 @@ export function TagGraphView({
     focusSubsetIds,
     selectedTagIds,
     coOccurrencePairMap,
+    renderedAncestorMap,
+    renderedDescendantMap,
     selectionMode
   ]);
 
