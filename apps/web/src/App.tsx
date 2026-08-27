@@ -8,6 +8,7 @@ import {
 } from "react";
 
 import { api } from "@/api/client";
+import { DiagnosticsModal } from "@/components/DiagnosticsModal";
 import { ErrorPanel } from "@/components/ErrorPanel";
 import { FullScreenMediaView } from "@/components/FullScreenMediaView";
 import { InspectorPane } from "@/components/InspectorPane";
@@ -30,6 +31,9 @@ import { ModalStackProvider } from "@/hooks/useModalStackDepth";
 import { useSearchWorkflow } from "@/hooks/useSearchWorkflow";
 import { useSettingsWorkflow } from "@/hooks/useSettingsWorkflow";
 import { useTagExplorerWorkflow } from "@/hooks/useTagExplorerWorkflow";
+import { ErrorBoundary } from "@/observability/ErrorBoundary";
+import { addBreadcrumb } from "@/observability/logger";
+import { installGlobalErrorHandlers, recordClientError } from "@/observability/telemetry";
 import {
   formatAppliedFilterSummary,
   getActiveFilterCount,
@@ -67,22 +71,34 @@ export function App() {
   const [videoPreviewStartsMuted, setVideoPreviewStartsMuted] = useState(true);
   const [fullScreenModalOpen, setFullScreenModalOpen] = useState(false);
   const [shortcutsHelpOpen, setShortcutsHelpOpen] = useState(false);
+  const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
   const [activePage, setActivePage] = useState<"grid" | "tags">(() => {
     return typeof window !== "undefined" && window.location.hash === "#/tags" ? "tags" : "grid";
   });
+
+  useEffect(() => {
+    installGlobalErrorHandlers();
+  }, []);
 
   const handleToggleShortcutsHelp = useCallback(() => {
     setShortcutsHelpOpen((prev) => !prev);
   }, []);
 
+  const handleToggleDiagnostics = useCallback(() => {
+    setDiagnosticsOpen((prev) => !prev);
+  }, []);
+
   const handleNavigatePage = useCallback((page: "grid" | "tags") => {
+    addBreadcrumb("nav.navigate_page", { page });
     setActivePage(page);
     window.location.hash = page === "tags" ? "#/tags" : "#/";
   }, []);
 
   useEffect(() => {
     const onHashChange = () => {
-      setActivePage(window.location.hash === "#/tags" ? "tags" : "grid");
+      const page = window.location.hash === "#/tags" ? "tags" : "grid";
+      addBreadcrumb("nav.hash_change", { page });
+      setActivePage(page);
     };
     window.addEventListener("hashchange", onHashChange);
     return () => window.removeEventListener("hashchange", onHashChange);
@@ -94,6 +110,7 @@ export function App() {
 
   const onError = useCallback((message: string) => {
     setUiError(message);
+    recordClientError(message, { errorType: "AppWorkflowError", immediateFlush: false });
   }, []);
   const handleVideoPreviewUnmuted = useCallback(() => {
     setVideoPreviewStartsMuted(false);
@@ -528,8 +545,9 @@ export function App() {
 
   return (
     <ModalStackProvider>
-      <main className="app-shell app-shell-live">
-        {uiError ? <ErrorPanel message={uiError} /> : null}
+      <ErrorBoundary onOpenDiagnostics={handleToggleDiagnostics}>
+        <main className="app-shell app-shell-live">
+          {uiError ? <ErrorPanel message={uiError} /> : null}
 
         {!isLibraryOpen ? (
           <LibraryGate
@@ -608,6 +626,7 @@ export function App() {
               onOpenSettings={openSettings}
               onToggleMute={toggleVideoMute}
               onOpenShortcutsHelp={handleToggleShortcutsHelp}
+              onOpenDiagnostics={handleToggleDiagnostics}
               theme={theme}
               onThemeChange={setTheme}
             />
@@ -722,6 +741,7 @@ export function App() {
           onStartRemux={startRemux}
           remuxPending={remuxPending}
           onOpenShortcutsHelp={handleToggleShortcutsHelp}
+          onOpenDiagnostics={handleToggleDiagnostics}
           onSave={handleSaveSettings}
           onClose={closeSettings}
         />
@@ -729,6 +749,11 @@ export function App() {
         <KeyboardShortcutsHelpModal
           open={shortcutsHelpOpen}
           onClose={() => setShortcutsHelpOpen(false)}
+        />
+
+        <DiagnosticsModal
+          open={diagnosticsOpen}
+          onClose={() => setDiagnosticsOpen(false)}
         />
 
         <ModalLayerPortal open={Boolean(trashDialogState)} dimBackdrop={true} onBackdropClick={() => setTrashDialogState(null)}>
@@ -811,6 +836,7 @@ export function App() {
           </div>
         ) : null}
       </main>
+    </ErrorBoundary>
     </ModalStackProvider>
   );
 }

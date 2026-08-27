@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { type SortingMode } from "@tagstudio/api-client";
 import {
+  Activity,
   FolderOpen,
   Grid,
   Keyboard,
@@ -50,6 +51,7 @@ type TopFilterBarProps = {
   onOpenSettings: () => void;
   onToggleMute: () => void;
   onOpenShortcutsHelp?: () => void;
+  onOpenDiagnostics?: () => void;
   onThemeChange?: (theme: ThemeMode) => void;
 };
 
@@ -85,6 +87,7 @@ export function TopFilterBar({
   onOpenSettings,
   onToggleMute,
   onOpenShortcutsHelp,
+  onOpenDiagnostics,
   onThemeChange
 }: TopFilterBarProps) {
   const [isVaultExpanded, setIsVaultExpanded] = useState(false);
@@ -339,6 +342,18 @@ export function TopFilterBar({
           aria-label="Keyboard Shortcuts"
         >
           <Keyboard size={18} />
+        </button>
+      ) : null}
+
+      {onOpenDiagnostics ? (
+        <button
+          type="button"
+          className="filter-icon-btn"
+          onClick={onOpenDiagnostics}
+          title="System Diagnostics & Observability"
+          aria-label="System Diagnostics & Observability"
+        >
+          <Activity size={18} />
         </button>
       ) : null}
 

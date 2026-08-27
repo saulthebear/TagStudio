@@ -3,6 +3,8 @@ import { type EntrySummaryResponse, type SortingMode } from "@tagstudio/api-clie
 
 import { api } from "@/api/client";
 import { dedupeEntries, type SearchOverrides } from "@/hooks/workflowTypes";
+import { addBreadcrumb } from "@/observability/logger";
+import { recordClientError, recordTiming } from "@/observability/telemetry";
 
 export type SearchRequest = {
   query: string;
@@ -175,6 +177,15 @@ export function useSearchWorkflow({
       }
       const requestId = ++searchRequestIdRef.current;
 
+      addBreadcrumb("search.execute", {
+        query: normalizedQuery,
+        pageIndex,
+        append,
+        sortingMode: effectiveSortingMode
+      });
+
+      const searchStartTime = performance.now();
+
       if (append) {
         setLoadingMore(true);
       } else {
@@ -196,6 +207,13 @@ export function useSearchWorkflow({
           return;
         }
 
+        const durationMs = performance.now() - searchStartTime;
+        recordTiming("frontend.search_query", durationMs, {
+          query: normalizedQuery,
+          resultsCount: data.entries.length,
+          totalCount: data.total_count
+        });
+
         activeRandomSeedRef.current = isRandomSort ? (data.random_seed ?? null) : null;
         onClearError();
         setActiveQuery(normalizedQuery);
@@ -213,6 +231,10 @@ export function useSearchWorkflow({
         if (requestId !== searchRequestIdRef.current) {
           return;
         }
+        recordClientError(error instanceof Error ? error : "Search failed.", {
+          errorType: "SearchWorkflowError",
+          context: { query: normalizedQuery, pageIndex }
+        });
         onError(error instanceof Error ? error.message : "Search failed.");
       } finally {
         if (requestId === searchRequestIdRef.current) {

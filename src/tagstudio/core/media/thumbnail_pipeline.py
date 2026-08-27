@@ -7,6 +7,7 @@ import platform
 import shutil
 import subprocess
 import threading
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from queue import Empty, PriorityQueue
@@ -17,6 +18,7 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 from PIL.Image import Resampling
 
 from tagstudio.core.constants import THUMB_CACHE_NAME, TS_FOLDER_NAME
+from tagstudio.observability.metrics import get_metrics_store
 
 try:
     import cv2
@@ -188,6 +190,7 @@ class ThumbnailPipeline:
         fit: ThumbnailFit = "cover",
         kind: ThumbnailKind = "grid",
     ) -> Path:
+        start_time = time.perf_counter()
         entry_path = entry_path.resolve()
         if not entry_path.exists() or not entry_path.is_file():
             raise FileNotFoundError(entry_path)
@@ -196,8 +199,17 @@ class ThumbnailPipeline:
         key, relative_path = self._cache_location(entry_path, options)
         cache_path = self.cache_root / relative_path
 
+        store = get_metrics_store(library_dir=self.library_dir)
+
         if cache_path.exists():
             self._touch(cache_path)
+            duration_ms = round((time.perf_counter() - start_time) * 1000, 2)
+            store.record_operation(
+                category="thumbnail",
+                operation_name="cache_hit",
+                duration_ms=duration_ms,
+                metadata={"fit": options.fit, "kind": options.kind, "size": options.size},
+            )
             return cache_path
 
         key_lock = self._get_key_lock(key)
@@ -205,10 +217,23 @@ class ThumbnailPipeline:
             with key_lock:
                 if cache_path.exists():
                     self._touch(cache_path)
+                    duration_ms = round((time.perf_counter() - start_time) * 1000, 2)
+                    store.record_operation(
+                        category="thumbnail",
+                        operation_name="cache_hit",
+                        duration_ms=duration_ms,
+                        metadata={"fit": options.fit, "kind": options.kind, "size": options.size},
+                    )
                     return cache_path
 
                 image = self._render_thumbnail(entry_path, options)
                 if image is None:
+                    store.record_error(
+                        source="thumbnail",
+                        error_type="ThumbnailUnsupportedError",
+                        message=f"Unsupported thumbnail input: {entry_path.name}",
+                        context={"path": str(entry_path)},
+                    )
                     raise ThumbnailUnsupportedError(f"Unsupported thumbnail input: {entry_path}")
 
                 self._save_webp(cache_path, image)
@@ -219,6 +244,14 @@ class ThumbnailPipeline:
                 with self._config_lock:
                     self._cache_size_bytes += max(0, size_bytes)
                 self._evict_if_needed()
+
+                duration_ms = round((time.perf_counter() - start_time) * 1000, 2)
+                store.record_operation(
+                    category="thumbnail",
+                    operation_name="generate",
+                    duration_ms=duration_ms,
+                    metadata={"fit": options.fit, "kind": options.kind, "size": options.size, "bytes": size_bytes},
+                )
                 return cache_path
         finally:
             self._release_key_lock(key)

@@ -23,6 +23,8 @@ from warnings import catch_warnings
 import sqlalchemy
 import structlog
 from humanfriendly import format_timespan  # pyright: ignore[reportUnknownVariableType]
+
+from tagstudio.observability.metrics import get_metrics_store
 from sqlalchemy import (
     URL,
     ColumnExpressionArgument,
@@ -1127,7 +1129,17 @@ class Library:
                 ids = list(session.scalars(statement))
                 total_count = len(ids)
             end_time = time.time()
+            sql_duration_ms = round((end_time - start_time) * 1000, 2)
             logger.info(f"SQL Execution finished ({format_timespan(end_time - start_time)})")
+
+            if self.library_dir:
+                store = get_metrics_store(library_dir=self.library_dir)
+                store.record_operation(
+                    category="db_query",
+                    operation_name="search_library",
+                    duration_ms=sql_duration_ms,
+                    metadata={"page_size": page_size, "total_count": total_count, "results_count": len(ids)},
+                )
 
             res = SearchResult(
                 total_count=total_count,
@@ -1238,6 +1250,7 @@ class Library:
 
     def get_tag_stats(self) -> list[tuple[Tag, int]]:
         """Return all tags paired with the count of entries assigned to each tag."""
+        start_time = time.perf_counter()
         with Session(self.engine) as session:
             counts_query = (
                 select(TagEntry.tag_id, func.count(TagEntry.entry_id).label("entry_count"))
@@ -1258,6 +1271,17 @@ class Library:
             for tag in tags:
                 session.expunge(tag)
                 result.append((tag, counts_map.get(tag.id, 0)))
+
+            if self.library_dir:
+                duration_ms = round((time.perf_counter() - start_time) * 1000, 2)
+                store = get_metrics_store(library_dir=self.library_dir)
+                store.record_operation(
+                    category="db_query",
+                    operation_name="get_tag_stats",
+                    duration_ms=duration_ms,
+                    metadata={"tags_count": len(result)},
+                )
+
             return result
 
     def get_tag_co_occurrences(self, limit: int = 2000) -> list[tuple[int, int, int]]:
@@ -1265,6 +1289,7 @@ class Library:
 
         Returns a list of (tag_id_a, tag_id_b, shared_count).
         """
+        start_time = time.perf_counter()
         with Session(self.engine) as session:
             te_a = aliased(TagEntry)
             te_b = aliased(TagEntry)
@@ -1280,7 +1305,19 @@ class Library:
                 .limit(limit)
             )
             rows = session.execute(query).all()
-            return [(int(row[0]), int(row[1]), int(row[2])) for row in rows]
+            res = [(int(row[0]), int(row[1]), int(row[2])) for row in rows]
+
+            if self.library_dir:
+                duration_ms = round((time.perf_counter() - start_time) * 1000, 2)
+                store = get_metrics_store(library_dir=self.library_dir)
+                store.record_operation(
+                    category="db_query",
+                    operation_name="get_tag_co_occurrences",
+                    duration_ms=duration_ms,
+                    metadata={"limit": limit, "pairs_count": len(res)},
+                )
+
+            return res
 
     def update_entry_path(self, entry_id: int | Entry, path: Path) -> bool:
         """Set the path field of an entry.

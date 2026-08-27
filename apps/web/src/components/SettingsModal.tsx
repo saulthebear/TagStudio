@@ -30,6 +30,7 @@ type SettingsModalProps = {
   onStartRemux?: () => void;
   remuxPending?: boolean;
   onOpenShortcutsHelp?: () => void;
+  onOpenDiagnostics?: () => void;
   onSave: () => void;
   onClose: () => void;
 };
@@ -70,6 +71,7 @@ export function SettingsModal({
   onStartRemux,
   remuxPending = false,
   onOpenShortcutsHelp,
+  onOpenDiagnostics,
   onSave,
   onClose
 }: SettingsModalProps) {
@@ -260,6 +262,23 @@ export function SettingsModal({
               }}
             >
               View Shortcuts (?)
+            </Button>
+          </div>
+        ) : null}
+
+        {onOpenDiagnostics ? (
+          <div className="settings-row flex items-center justify-between pt-1">
+            <span>System Diagnostics</span>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                onClose();
+                onOpenDiagnostics();
+              }}
+            >
+              Observability & Logs
             </Button>
           </div>
         ) : null}

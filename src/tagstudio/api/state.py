@@ -8,6 +8,8 @@ from typing import Any
 
 from tagstudio.core.library.alchemy.library import Library, LibraryStatus
 from tagstudio.core.media.thumbnail_pipeline import ThumbnailPipeline
+from tagstudio.observability.logging import configure_logging
+from tagstudio.observability.metrics import get_metrics_store
 
 
 def _env_int(name: str, default: int) -> int:
@@ -99,6 +101,7 @@ class ApiState:
             self.library = None
             self.library_path = None
             self.thumbnail_pipeline = None
+            configure_logging(library_dir=None)
 
     def open_library(self, library_path: Path) -> LibraryStatus:
         with self.lock:
@@ -111,6 +114,8 @@ class ApiState:
                     self.thumbnail_pipeline.close()
                 self.library = lib
                 self.library_path = library_path
+                configure_logging(library_dir=library_path)
+                get_metrics_store(library_dir=library_path)
                 settings = self.get_web_settings()
                 thumbs = settings["thumbnails"]
                 self.thumbnail_pipeline = ThumbnailPipeline(

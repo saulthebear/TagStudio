@@ -353,22 +353,94 @@ export type SettingsUpdateRequest = {
   remux?: RemuxSettingsUpdateRequest;
 };
 
+export type TelemetryRouteStat = {
+  route: string;
+  count: number;
+  errors: number;
+  avg_ms: number;
+  p95_ms: number;
+};
+
+export type TelemetrySlowOperation = {
+  category: string;
+  operation: string;
+  duration_ms: number;
+  timestamp: string;
+  trace_id: string | null;
+  metadata: Record<string, unknown> | null;
+};
+
+export type TelemetrySummaryResponse = {
+  window_seconds: number;
+  api: {
+    total_requests: number;
+    error_requests: number;
+    error_rate_pct: number;
+    latency_ms: {
+      avg: number;
+      p50: number;
+      p95: number;
+      p99: number;
+      max: number;
+    };
+    routes: TelemetryRouteStat[];
+  };
+  errors_total: number;
+  thumbnails: {
+    total_requests: number;
+    cache_hits: number;
+    cache_misses: number;
+    hit_ratio_pct: number;
+    avg_generate_ms: number;
+  };
+  slow_operations: TelemetrySlowOperation[];
+};
+
+export type TelemetryErrorRecord = {
+  id: number;
+  timestamp: string;
+  trace_id: string | null;
+  source: string;
+  error_type: string;
+  message: string;
+  stack_trace: string | null;
+  context: Record<string, unknown> | null;
+};
+
+export type TelemetryEventItem = {
+  kind: "error" | "timing" | "breadcrumb";
+  trace_id?: string;
+  name: string;
+  duration_ms?: number;
+  error_type?: string;
+  message?: string;
+  stack_trace?: string;
+  metadata?: Record<string, unknown>;
+};
+
+export type TelemetryEventsBatchPayload = {
+  events: TelemetryEventItem[];
+};
+
 
 export type ApiConfig = {
   baseUrl: string;
   token?: string;
   allowQueryToken?: boolean;
+  getTraceId?: () => string | null;
 };
 
 export class TagStudioApiClient {
   readonly baseUrl: string;
   private readonly token?: string;
   private readonly allowQueryToken: boolean;
+  private readonly getTraceId?: () => string | null;
 
   constructor(config: ApiConfig) {
     this.baseUrl = config.baseUrl.replace(/\/$/, "");
     this.token = config.token;
     this.allowQueryToken = config.allowQueryToken ?? false;
+    this.getTraceId = config.getTraceId;
   }
 
   async health(): Promise<{ status: string }> {
@@ -638,6 +710,50 @@ export class TagStudioApiClient {
     return this.resolveUrl(`/api/v1/jobs/${jobId}/events`);
   }
 
+  async getTelemetrySummary(windowSeconds?: number): Promise<TelemetrySummaryResponse> {
+    const params = new URLSearchParams();
+    if (typeof windowSeconds === "number") {
+      params.set("window_seconds", String(windowSeconds));
+    }
+    const suffix = params.size > 0 ? `?${params.toString()}` : "";
+    return this.request(`/api/v1/telemetry/summary${suffix}`);
+  }
+
+  async getTelemetryErrors(limit?: number): Promise<TelemetryErrorRecord[]> {
+    const params = new URLSearchParams();
+    if (typeof limit === "number") {
+      params.set("limit", String(limit));
+    }
+    const suffix = params.size > 0 ? `?${params.toString()}` : "";
+    return this.request(`/api/v1/telemetry/errors${suffix}`);
+  }
+
+  async getTelemetryLogs(
+    params: { limit?: number; level?: string; query?: string } = {}
+  ): Promise<Record<string, unknown>[]> {
+    const searchParams = new URLSearchParams();
+    if (typeof params.limit === "number") {
+      searchParams.set("limit", String(params.limit));
+    }
+    if (params.level) {
+      searchParams.set("level", params.level);
+    }
+    if (params.query) {
+      searchParams.set("query", params.query);
+    }
+    const suffix = searchParams.size > 0 ? `?${searchParams.toString()}` : "";
+    return this.request(`/api/v1/telemetry/logs${suffix}`);
+  }
+
+  async postTelemetryEvents(
+    payload: TelemetryEventsBatchPayload
+  ): Promise<{ success: boolean; ingested: number }> {
+    return this.request("/api/v1/telemetry/events", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  }
+
   resolveUrl(path: string): string {
     const baseUrl = new URL(`${this.baseUrl}/`);
     const resolvedPath = path.startsWith("http://")
@@ -660,6 +776,10 @@ export class TagStudioApiClient {
     }
     if (this.token) {
       headers.set("x-tagstudio-token", this.token);
+    }
+    const traceId = this.getTraceId?.();
+    if (traceId && !headers.has("x-trace-id")) {
+      headers.set("x-trace-id", traceId);
     }
 
     const response = await fetch(`${this.baseUrl}${path}`, {

@@ -1,5 +1,7 @@
 import { TagStudioApiClient } from "@tagstudio/api-client";
 
+import { getActiveTraceId } from "@/observability/tracer";
+
 const DEFAULT_API_BASE_URL = "http://127.0.0.1:5987";
 
 function normalizeApiBaseUrl(raw: string | undefined): string | undefined {
@@ -29,5 +31,7 @@ const allowQueryToken = normalizeFlag(import.meta.env.VITE_TAGSTUDIO_API_ALLOW_Q
 export const api = new TagStudioApiClient({
   baseUrl: apiBaseUrl,
   token: apiToken,
-  allowQueryToken
+  allowQueryToken,
+  getTraceId: getActiveTraceId
 });
+

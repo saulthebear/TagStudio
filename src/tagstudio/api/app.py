@@ -7,6 +7,10 @@ from tagstudio.api.auth import TokenAuthMiddleware
 from tagstudio.api.jobs import JobManager
 from tagstudio.api.routes import create_router
 from tagstudio.api.state import ApiState
+from tagstudio.api.telemetry_routes import create_telemetry_router
+from tagstudio.observability.logging import configure_logging
+from tagstudio.observability.metrics import get_metrics_store
+from tagstudio.observability.middleware import ObservabilityMiddleware
 
 
 def _env_flag(name: str, default: bool) -> bool:
@@ -36,6 +40,9 @@ def create_app(
     require_token: bool = True,
     allow_query_token: bool | None = None,
 ) -> FastAPI:
+    configure_logging()
+    get_metrics_store()
+
     state = ApiState(token=api_token)
     jobs = JobManager()
 
@@ -62,8 +69,10 @@ def create_app(
         require_token=require_token,
         allow_query_token=effective_allow_query_token,
     )
+    app.add_middleware(ObservabilityMiddleware)
 
     app.include_router(create_router(state=state, jobs=jobs))
+    app.include_router(create_telemetry_router(state=state))
 
     @app.on_event("shutdown")
     def close_library_on_shutdown() -> None:
@@ -72,3 +81,4 @@ def create_app(
     app.state.tagstudio = state
     app.state.jobs = jobs
     return app
+

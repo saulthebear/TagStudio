@@ -261,6 +261,11 @@ tagstudio/tests/fixtures/library/*
 tagstudio/tests/fixtures/json_library/.TagStudio/*.sqlite
 TagStudio.ini
 *.sqlite-journal
+*.jsonl
+*.db-wal
+*.db-shm
+logs/
+.observability/
 
 .envrc
 .direnv
