@@ -148,6 +148,12 @@ export function useSettingsWorkflow({
     setSettingsHydrated(true);
   }, [settings.data]);
 
+  useEffect(() => {
+    if (settings.isError) {
+      setSettingsHydrated(true);
+    }
+  }, [settings.isError]);
+
   const saveSettingsMutation = useMutation({
     mutationFn: (draft: SettingsDraft) =>
       api.updateSettings({

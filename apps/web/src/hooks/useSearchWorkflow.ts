@@ -260,7 +260,7 @@ export function useSearchWorkflow({
       return;
     }
 
-    if (!settingsHydrated && settingsFetching) {
+    if (!settingsHydrated) {
       return;
     }
 
@@ -270,7 +270,6 @@ export function useSearchWorkflow({
     executeSearch,
     isLibraryOpen,
     needsInitialSearch,
-    settingsFetching,
     settingsHydrated
   ]);
 

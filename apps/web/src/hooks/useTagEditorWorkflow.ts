@@ -13,7 +13,23 @@ import { useDraggableModalPosition } from "@/hooks/useDraggableModalPosition";
 import { useSearchInputFocus } from "@/hooks/useSearchInputFocus";
 import { useTagColors } from "@/hooks/useTagColors";
 import { createTagColorLookup } from "@/lib/tag-styles";
-import { createTagDisplayContext, moveHighlightIndex, scoreTags } from "@/lib/tag-workflows";
+import {
+  createTagDisplayContext,
+  moveHighlightIndex,
+  normalizeTagQuery,
+  scoreTags,
+  shouldShowCreateAndAdd
+} from "@/lib/tag-workflows";
+
+export type ParentCandidateRow =
+  | {
+      kind: "tag";
+      tag: TagResponse;
+    }
+  | {
+      kind: "create";
+      query: string;
+    };
 
 type UseTagEditorWorkflowParams = {
   open: boolean;
@@ -211,22 +227,39 @@ export function useTagEditorWorkflow({
     [parentCandidatesQuery.data, parentQuery]
   );
 
+  const hasExactParentMatch = useMemo(
+    () => !shouldShowCreateAndAdd(parentQuery, parentCandidates),
+    [parentCandidates, parentQuery]
+  );
+
+  const parentRows = useMemo<ParentCandidateRow[]>(() => {
+    const rows: ParentCandidateRow[] = parentCandidates.map((tag) => ({ kind: "tag", tag }));
+    const normalized = normalizeTagQuery(parentQuery);
+    if (normalized && !hasExactParentMatch) {
+      rows.unshift({ kind: "create", query: parentQuery.trim() });
+    }
+    return rows;
+  }, [hasExactParentMatch, parentCandidates, parentQuery]);
+
   const preferredHighlightParentIndex = useMemo(() => {
-    const firstActionableIndex = parentCandidates.findIndex(
-      (candidate) => !parentIds.includes(candidate.id)
-    );
+    const firstActionableIndex = parentRows.findIndex((row) => {
+      if (row.kind === "create") {
+        return true;
+      }
+      return !parentIds.includes(row.tag.id);
+    });
     return firstActionableIndex >= 0 ? firstActionableIndex : 0;
-  }, [parentCandidates, parentIds]);
+  }, [parentIds, parentRows]);
 
   useEffect(() => {
-    if (parentCandidates.length === 0) {
+    if (parentRows.length === 0) {
       if (highlightedParentIndex !== 0) {
         setHighlightedParentIndex(0);
       }
       return;
     }
 
-    if (highlightedParentIndex >= parentCandidates.length) {
+    if (highlightedParentIndex >= parentRows.length) {
       setHighlightedParentIndex(preferredHighlightParentIndex);
       return;
     }
@@ -235,7 +268,7 @@ export function useTagEditorWorkflow({
       setHighlightedParentIndex(preferredHighlightParentIndex);
       setAutoHighlightParentMatch(false);
     }
-  }, [autoHighlightParentMatch, highlightedParentIndex, parentCandidates.length, preferredHighlightParentIndex]);
+  }, [autoHighlightParentMatch, highlightedParentIndex, parentRows.length, preferredHighlightParentIndex]);
 
   const tagDisplayContext = useMemo(() => {
     const tagByIdMap = new Map<number, TagResponse>();
@@ -295,6 +328,28 @@ export function useTagEditorWorkflow({
     focusParentSearchInput();
   };
 
+  const createAndAddParent = async (name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) {
+      return;
+    }
+    const created = await onCreate({
+      name: trimmed,
+      aliases: [],
+      parent_ids: [],
+      color_namespace: null,
+      color_slug: null,
+      disambiguation_id: null,
+      is_category: false,
+      is_hidden: false
+    });
+    if (created) {
+      addParent(created.id);
+      void allTagsQuery.refetch();
+      void parentCandidatesQuery.refetch();
+    }
+  };
+
   const onParentQueryChange = (nextValue: string) => {
     setParentQuery(nextValue);
     setHighlightedParentIndex(0);
@@ -305,23 +360,27 @@ export function useTagEditorWorkflow({
     if (event.key === "ArrowDown") {
       event.preventDefault();
       setAutoHighlightParentMatch(false);
-      setHighlightedParentIndex((prev) => moveHighlightIndex(prev, parentCandidates.length, "down"));
+      setHighlightedParentIndex((prev) => moveHighlightIndex(prev, parentRows.length, "down"));
       return;
     }
 
     if (event.key === "ArrowUp") {
       event.preventDefault();
       setAutoHighlightParentMatch(false);
-      setHighlightedParentIndex((prev) => moveHighlightIndex(prev, parentCandidates.length, "up"));
+      setHighlightedParentIndex((prev) => moveHighlightIndex(prev, parentRows.length, "up"));
       return;
     }
 
     if (event.key === "Enter") {
       event.preventDefault();
-      if (parentCandidates.length > 0) {
-        const targetCandidate = parentCandidates[highlightedParentIndex] ?? parentCandidates[0];
-        if (targetCandidate && !parentIds.includes(targetCandidate.id)) {
-          addParent(targetCandidate.id);
+      if (parentRows.length > 0) {
+        const targetRow = parentRows[highlightedParentIndex] ?? parentRows[0];
+        if (targetRow) {
+          if (targetRow.kind === "create") {
+            void createAndAddParent(targetRow.query);
+          } else if (!parentIds.includes(targetRow.tag.id)) {
+            addParent(targetRow.tag.id);
+          }
         }
       }
     }
@@ -404,6 +463,7 @@ export function useTagEditorWorkflow({
     savePending,
     canSave,
     parentCandidates,
+    parentRows,
     colorGroups: tagColorsQuery.data ?? [],
     tagEditorDrag,
     parentPickerDrag,
@@ -424,6 +484,7 @@ export function useTagEditorWorkflow({
     removeAlias,
     removeParent,
     addParent,
+    createAndAddParent,
     clearColor,
     setColor,
     saveTag

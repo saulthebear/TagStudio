@@ -240,10 +240,24 @@ export function TagEditorModal({
             </div>
             <div className="add-tags-list-shell tag-editor-parent-candidates">
               <Virtuoso
-                data={workflow.parentCandidates}
+                data={workflow.parentRows}
                 style={{ height: 360 }}
-                itemContent={(index, candidate) => {
+                itemContent={(index, row) => {
                   const highlighted = index === workflow.highlightedParentIndex;
+
+                  if (row.kind === "create") {
+                    return (
+                      <button
+                        type="button"
+                        className={`add-tags-create-row ${highlighted ? "add-tags-row-highlighted" : ""}`}
+                        onClick={() => void workflow.createAndAddParent(row.query)}
+                      >
+                        Create &amp; Add &quot;{row.query}&quot;
+                      </button>
+                    );
+                  }
+
+                  const candidate = row.tag;
                   const alreadyAdded = workflow.parentIds.includes(candidate.id);
                   const tagLabel = getTagDisplayLabel(candidate, workflow.tagDisplayContext);
                   const tagStyle = resolveTagChipStyle(candidate, workflow.tagColorLookup);
