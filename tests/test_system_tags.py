@@ -1,8 +1,6 @@
 from pathlib import Path
-from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
-import pytest
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -103,8 +101,10 @@ def test_sync_retroactive_system_tags(tmp_path: Path) -> None:
             return VideoInspectionStatus.CORRUPTED
         return VideoInspectionStatus.NATIVE
 
-    with patch("tagstudio.core.library.system_tags.find_ffprobe", return_value="ffprobe"), \
-         patch("tagstudio.core.library.system_tags.inspect_video", side_effect=fake_inspect):
+    with (
+        patch("tagstudio.core.library.system_tags.find_ffprobe", return_value="ffprobe"),
+        patch("tagstudio.core.library.system_tags.inspect_video", side_effect=fake_inspect),
+    ):
         summary = sync_retroactive_system_tags(lib)
 
     assert summary["remuxed_tagged"] == 1
@@ -145,6 +145,7 @@ def test_untagged_search_ignores_system_tags(tmp_path: Path) -> None:
 
     # Search for untagged entries
     from tagstudio.core.library.alchemy.enums import BrowsingState
+
     state = BrowsingState(query="special:untagged")
     res = lib.search_library(state, page_size=100)
     found_ids = set(res.ids)
@@ -156,4 +157,3 @@ def test_untagged_search_ignores_system_tags(tmp_path: Path) -> None:
     assert e_user_tagged.id not in found_ids
 
     lib.close()
-

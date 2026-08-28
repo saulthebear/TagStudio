@@ -198,8 +198,7 @@ export function App() {
     setInspectorSplitState,
     mobileActivePane,
     setMobileActivePane,
-    settingsHydrated,
-    settingsFetching
+    settingsHydrated
   } = useSettingsWorkflow({
     activeLibraryPath,
     isLibraryOpen,
@@ -226,7 +225,6 @@ export function App() {
     activeLibraryPath,
     isLibraryOpen,
     settingsHydrated,
-    settingsFetching,
     sortingMode,
     ascending,
     showHiddenEntries,

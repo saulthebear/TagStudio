@@ -250,7 +250,12 @@ class ThumbnailPipeline:
                     category="thumbnail",
                     operation_name="generate",
                     duration_ms=duration_ms,
-                    metadata={"fit": options.fit, "kind": options.kind, "size": options.size, "bytes": size_bytes},
+                    metadata={
+                        "fit": options.fit,
+                        "kind": options.kind,
+                        "size": options.size,
+                        "bytes": size_bytes,
+                    },
                 )
                 return cache_path
         finally:

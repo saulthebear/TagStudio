@@ -24,8 +24,6 @@ from warnings import catch_warnings
 import sqlalchemy
 import structlog
 from humanfriendly import format_timespan  # pyright: ignore[reportUnknownVariableType]
-
-from tagstudio.observability.metrics import get_metrics_store
 from sqlalchemy import (
     URL,
     ColumnExpressionArgument,
@@ -50,7 +48,6 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import (
     InstanceState,
     Session,
-    aliased,
     contains_eager,
     joinedload,
     make_transient,
@@ -112,6 +109,7 @@ from tagstudio.core.library.alchemy.models import (
 from tagstudio.core.library.alchemy.visitors import SQLBoolExpressionBuilder
 from tagstudio.core.library.json.library import Library as JsonLibrary
 from tagstudio.core.utils.types import unwrap
+from tagstudio.observability.metrics import get_metrics_store
 
 if TYPE_CHECKING:
     from sqlalchemy import Select
@@ -814,9 +812,7 @@ class Library:
             )
 
             # 3. Update descendants of "System" category to system
-            system_tag_ids = session.scalars(
-                select(Tag.id).where(Tag.name.ilike("System"))
-            ).all()
+            system_tag_ids = session.scalars(select(Tag.id).where(Tag.name.ilike("System"))).all()
             for sys_id in system_tag_ids:
                 descendants = session.scalars(TAG_CHILDREN_ID_QUERY, {"tag_id": sys_id}).all()
                 if descendants:
@@ -1249,7 +1245,11 @@ class Library:
                     category="db_query",
                     operation_name="search_library",
                     duration_ms=sql_duration_ms,
-                    metadata={"page_size": page_size, "total_count": total_count, "results_count": len(ids)},
+                    metadata={
+                        "page_size": page_size,
+                        "total_count": total_count,
+                        "results_count": len(ids),
+                    },
                 )
 
             res = SearchResult(
@@ -1360,7 +1360,7 @@ class Library:
             return tags, total_count
 
     def get_tag_stats(self) -> list[tuple[Tag, int]]:
-        """Return all tags paired with the count of entries assigned to each tag (including descendant tags)."""
+        """Return all tags paired with the count of entries assigned to each tag."""
         start_time = time.perf_counter()
         with Session(self.engine) as session:
             descendant_counts_query = text("""
@@ -1431,7 +1431,8 @@ class Library:
                     eb.tag_id AS tag_id_b,
                     COUNT(ea.entry_id) AS shared_count
                 FROM EntryAncestorTags ea
-                INNER JOIN EntryAncestorTags eb ON ea.entry_id = eb.entry_id AND ea.tag_id < eb.tag_id
+                INNER JOIN EntryAncestorTags eb
+                    ON ea.entry_id = eb.entry_id AND ea.tag_id < eb.tag_id
                 GROUP BY ea.tag_id, eb.tag_id
                 ORDER BY shared_count DESC, ea.tag_id, eb.tag_id
                 LIMIT :limit;
@@ -1457,10 +1458,7 @@ class Library:
         exclude_tag_ids: Iterable[int] | None = None,
         limit: int = 10,
     ) -> list[tuple[Tag, float, float, int]]:
-        """Return suggested tags based on co-occurrence and Jaccard association with the given tag_ids.
-
-        Returns a list of tuples: (tag, score, confidence, shared_entries_count).
-        """
+        """Return suggested tags based on co-occurrence and Jaccard association."""
         input_ids = {int(tid) for tid in tag_ids}
         if not input_ids or self.engine is None:
             return []
@@ -1473,13 +1471,11 @@ class Library:
 
         with Session(self.engine) as session:
             # Exclude non-content tags (meta, system), category tags, and hidden tags
-            excluded_system_meta_stmt = (
-                select(Tag.id).where(
-                    or_(
-                        Tag.is_category == True,
-                        Tag.is_hidden == True,
-                        Tag.tag_type != TagType.CONTENT.value,
-                    )
+            excluded_system_meta_stmt = select(Tag.id).where(
+                or_(
+                    Tag.is_category.is_(True),
+                    Tag.is_hidden.is_(True),
+                    Tag.tag_type != TagType.CONTENT.value,
                 )
             )
             system_meta_ids = set(session.scalars(excluded_system_meta_stmt).all())
@@ -1491,17 +1487,14 @@ class Library:
                 return []
 
             matching_entry_ids_stmt = (
-                select(TagEntry.entry_id)
-                .where(TagEntry.tag_id.in_(content_input_ids))
-                .distinct()
+                select(TagEntry.entry_id).where(TagEntry.tag_id.in_(content_input_ids)).distinct()
             )
             matching_entry_ids = set(session.scalars(matching_entry_ids_stmt).all())
             if not matching_entry_ids:
                 return []
 
-            all_entry_tags_stmt = (
-                select(TagEntry.entry_id, TagEntry.tag_id)
-                .where(TagEntry.entry_id.in_(matching_entry_ids))
+            all_entry_tags_stmt = select(TagEntry.entry_id, TagEntry.tag_id).where(
+                TagEntry.entry_id.in_(matching_entry_ids)
             )
             entry_tags_rows = session.execute(all_entry_tags_stmt).all()
 

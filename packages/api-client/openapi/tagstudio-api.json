@@ -1086,6 +1086,200 @@
         }
       }
     },
+    "/api/v1/tags/merge": {
+      "post": {
+        "summary": "Merge Tags",
+        "operationId": "merge_tags_api_v1_tags_merge_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TagMergeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TagMergeResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tags/merge:undo": {
+      "post": {
+        "summary": "Undo Merge Tags",
+        "operationId": "undo_merge_tags_api_v1_tags_merge_undo_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TagMergeUndoRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TagResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tags/batch:update": {
+      "post": {
+        "summary": "Batch Update Tags",
+        "operationId": "batch_update_tags_api_v1_tags_batch_update_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TagBatchUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TagResponse"
+                  },
+                  "type": "array",
+                  "title": "Response Batch Update Tags Api V1 Tags Batch Update Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tags/batch:delete": {
+      "post": {
+        "summary": "Batch Delete Tags",
+        "operationId": "batch_delete_tags_api_v1_tags_batch_delete_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TagBatchDeleteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TagBatchDeleteResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tags/batch:delete:undo": {
+      "post": {
+        "summary": "Undo Batch Delete Tags",
+        "operationId": "undo_batch_delete_tags_api_v1_tags_batch_delete_undo_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TagBatchDeleteUndoRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/jobs/refresh": {
       "post": {
         "summary": "Start Refresh Job",
@@ -2660,6 +2854,122 @@
         ],
         "title": "SystemTagsSyncResponse"
       },
+      "TagBatchDeleteRequest": {
+        "properties": {
+          "tag_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Tag Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "tag_ids"
+        ],
+        "title": "TagBatchDeleteRequest"
+      },
+      "TagBatchDeleteResponse": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success"
+          },
+          "deleted_count": {
+            "type": "integer",
+            "title": "Deleted Count"
+          },
+          "undo_data": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Undo Data"
+          }
+        },
+        "type": "object",
+        "required": [
+          "success",
+          "deleted_count"
+        ],
+        "title": "TagBatchDeleteResponse"
+      },
+      "TagBatchDeleteUndoRequest": {
+        "properties": {
+          "undo_data": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Undo Data"
+          }
+        },
+        "type": "object",
+        "required": [
+          "undo_data"
+        ],
+        "title": "TagBatchDeleteUndoRequest"
+      },
+      "TagBatchUpdateRequest": {
+        "properties": {
+          "tag_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Tag Ids"
+          },
+          "tag_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tag Type"
+          },
+          "is_hidden": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Hidden"
+          },
+          "is_category": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Category"
+          },
+          "add_parent_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Add Parent Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "tag_ids"
+        ],
+        "title": "TagBatchUpdateRequest"
+      },
       "TagCoOccurrence": {
         "properties": {
           "tag_id_a": {
@@ -2842,6 +3152,83 @@
           "name"
         ],
         "title": "TagCreateRequest"
+      },
+      "TagMergeRequest": {
+        "properties": {
+          "source_tag_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Source Tag Ids"
+          },
+          "target_tag_id": {
+            "type": "integer",
+            "title": "Target Tag Id"
+          },
+          "updated_tag": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TagUpdateRequest"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "source_tag_ids",
+          "target_tag_id"
+        ],
+        "title": "TagMergeRequest"
+      },
+      "TagMergeResponse": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success"
+          },
+          "target_tag": {
+            "$ref": "#/components/schemas/TagResponse"
+          },
+          "merged_count": {
+            "type": "integer",
+            "title": "Merged Count"
+          },
+          "affected_entries_count": {
+            "type": "integer",
+            "title": "Affected Entries Count"
+          },
+          "undo_data": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Undo Data"
+          }
+        },
+        "type": "object",
+        "required": [
+          "success",
+          "target_tag",
+          "merged_count",
+          "affected_entries_count"
+        ],
+        "title": "TagMergeResponse"
+      },
+      "TagMergeUndoRequest": {
+        "properties": {
+          "undo_data": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Undo Data"
+          }
+        },
+        "type": "object",
+        "required": [
+          "undo_data"
+        ],
+        "title": "TagMergeUndoRequest"
       },
       "TagMutationRequest": {
         "properties": {

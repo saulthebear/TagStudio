@@ -10,12 +10,13 @@ containing browser-compatible codecs) and to perform a lossless remux using
 FFmpeg.
 """
 
-from enum import Enum
+import contextlib
 import json
 import os
-from pathlib import Path
 import shutil
 import subprocess
+from enum import Enum
+from pathlib import Path
 
 import structlog
 
@@ -86,7 +87,7 @@ def find_ffprobe() -> str | None:
 
 
 def is_browser_native_container(format_name: str) -> bool:
-    """Return True if the container format string corresponds to a browser-native MP4/MOV container."""
+    """Return True if the container format string corresponds to MP4/MOV container."""
     if not format_name:
         return False
     tokens = {tok.strip().lower() for tok in format_name.split(",")}
@@ -97,9 +98,12 @@ def _run_ffprobe(path: Path, ffprobe_cmd: str, timeout: float = 30.0) -> dict | 
     """Run ffprobe and return parsed JSON output, or None on failure."""
     cmd = [
         ffprobe_cmd,
-        "-v", "error",
-        "-show_entries", "format=format_name:stream=codec_name,codec_type,disposition",
-        "-of", "json",
+        "-v",
+        "error",
+        "-show_entries",
+        "format=format_name:stream=codec_name,codec_type,disposition",
+        "-of",
+        "json",
         str(path),
     ]
     try:
@@ -229,9 +233,12 @@ def remux_to_mp4(
     cmd = [
         ffmpeg_cmd,
         "-y",
-        "-i", str(path),
-        "-c", "copy",
-        "-movflags", "+faststart",
+        "-i",
+        str(path),
+        "-c",
+        "copy",
+        "-movflags",
+        "+faststart",
         str(temp_output_path),
     ]
 
@@ -318,10 +325,8 @@ def purge_backups(backup_dir: Path) -> int:
                 logger.warning("purge_backups.unlink_failed", path=str(item), error=str(err))
 
     # Clean up empty directories
-    for dirpath, dirnames, filenames in os.walk(backup_dir, topdown=False):
-        try:
+    for dirpath, _dirnames, _filenames in os.walk(backup_dir, topdown=False):
+        with contextlib.suppress(OSError):
             os.rmdir(dirpath)
-        except OSError:
-            pass
 
     return deleted_count

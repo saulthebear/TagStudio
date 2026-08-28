@@ -272,4 +272,3 @@ class ApiState:
         settings["confirmations"] = confirmations
         settings["remux"] = remux
         return settings
-

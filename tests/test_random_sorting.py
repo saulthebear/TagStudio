@@ -24,7 +24,7 @@ def test_browsing_state_random_seed_initialization() -> None:
 
 
 def test_random_sorting_order_variation(search_library: Library) -> None:
-    # When random sort is performed across different sessions/seeds, ordering is not sequential ID order
+    # When random sort is performed, ordering is not sequential ID order
     results_a = search_library.search_library(
         BrowsingState(sorting_mode=SortingModeEnum.RANDOM), page_size=100
     )
@@ -33,7 +33,7 @@ def test_random_sorting_order_variation(search_library: Library) -> None:
     )
 
     assert len(results_a.ids) > 1
-    # Sorted by ID would be list(sorted(results_a.ids))
+    assert len(results_b.ids) > 1
     sequential_ids = sorted(results_a.ids)
     assert results_a.ids != sequential_ids, "Random search should not return simple sequential IDs"
 

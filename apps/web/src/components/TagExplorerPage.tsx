@@ -1,6 +1,5 @@
 import { type ReactNode, useMemo, useState } from "react";
 import {
-  type TagBatchDeleteRequest,
   type TagBatchUpdateRequest,
   type TagCreatePayload,
   type TagMergeRequest,
@@ -147,7 +146,6 @@ export function TagExplorerPage({
         });
       }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Failed to merge tags.";
       clientLog.error("tags.merge_error", err, { payload });
       throw err;
     }
@@ -161,7 +159,6 @@ export function TagExplorerPage({
       await reloadTagStats();
       await refreshVisibleEntries?.();
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Failed to update tags.";
       clientLog.error("tags.batch_update_error", err, { payload });
       throw err;
     }
@@ -179,7 +176,6 @@ export function TagExplorerPage({
       await reloadTagStats();
       await refreshVisibleEntries?.();
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Failed to assign parent tag.";
       clientLog.error("tags.batch_add_parent_error", err, { payload });
       throw err;
     }

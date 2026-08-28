@@ -16,7 +16,9 @@ _SENSITIVE_KEYS = {"token", "api_token", "password", "secret", "authorization", 
 _TOKEN_QUERY_PATTERN = re.compile(r"([?&]token=)([^&]+)", re.IGNORECASE)
 
 
-def redact_sensitive_data(logger: Any, method_name: str, event_dict: dict[str, Any]) -> dict[str, Any]:
+def redact_sensitive_data(
+    logger: Any, method_name: str, event_dict: dict[str, Any]
+) -> dict[str, Any]:
     """Redact sensitive fields such as tokens, secrets, and auth headers from log events."""
     for key in list(event_dict.keys()):
         lower_key = key.lower()
@@ -65,7 +67,9 @@ class JsonlFormatter(logging.Formatter):
 _logging_configured = False
 
 
-def configure_logging(library_dir: Path | None = None, log_level: str = "INFO") -> tuple[Path, Path]:
+def configure_logging(
+    library_dir: Path | None = None, log_level: str = "INFO"
+) -> tuple[Path, Path]:
     """Configure structlog and standard logging with console, text log, and JSONL log sinks.
 
     Returns the paths to (text_log_file, jsonl_log_file).
@@ -96,9 +100,11 @@ def configure_logging(library_dir: Path | None = None, log_level: str = "INFO") 
     )
     text_handler.setLevel(numeric_level)
     text_handler.setFormatter(
-        logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s", datefmt="%Y-%m-%dT%H:%M:%SZ")
+        logging.Formatter(
+            "%(asctime)s [%(levelname)s] %(name)s: %(message)s", datefmt="%Y-%m-%dT%H:%M:%SZ"
+        )
     )
-    setattr(text_handler, "_tagstudio_telemetry", True)
+    text_handler._tagstudio_telemetry = True
     root_logger.addHandler(text_handler)
 
     # 2. JSONL file handler (structured)
@@ -110,7 +116,7 @@ def configure_logging(library_dir: Path | None = None, log_level: str = "INFO") 
     )
     jsonl_handler.setLevel(numeric_level)
     jsonl_handler.setFormatter(JsonlFormatter())
-    setattr(jsonl_handler, "_tagstudio_telemetry", True)
+    jsonl_handler._tagstudio_telemetry = True
     root_logger.addHandler(jsonl_handler)
 
     # 3. Console handler (if not already present)

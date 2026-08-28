@@ -1,4 +1,5 @@
 from typing import Any
+
 from fastapi import HTTPException
 from sqlalchemy import delete, or_, select, update
 from sqlalchemy.orm import Session
@@ -170,9 +171,7 @@ def update_tag(lib: Library, tag_id: int, request: TagUpdateRequest) -> Tag:
     return updated
 
 
-def merge_tags(
-    lib: Library, request: TagMergeRequest
-) -> tuple[Tag, int, dict[str, Any]]:
+def merge_tags(lib: Library, request: TagMergeRequest) -> tuple[Tag, int, dict[str, Any]]:
     if lib.engine is None:
         raise HTTPException(status_code=409, detail="No library open.")
 
@@ -191,7 +190,9 @@ def merge_tags(
             raise HTTPException(status_code=404, detail="One or more source tags not found.")
 
         target_parent_ids = list(
-            session.scalars(select(TagParent.parent_id).where(TagParent.child_id == target_tag_id)).all()
+            session.scalars(
+                select(TagParent.parent_id).where(TagParent.child_id == target_tag_id)
+            ).all()
         )
         target_snapshot = {
             "id": target_tag.id,
@@ -224,31 +225,37 @@ def merge_tags(
             all_affected_entry_ids.update(stag_entry_ids)
 
             stag_parent_ids = list(
-                session.scalars(select(TagParent.parent_id).where(TagParent.child_id == stag_id)).all()
+                session.scalars(
+                    select(TagParent.parent_id).where(TagParent.child_id == stag_id)
+                ).all()
             )
             stag_child_ids = list(
-                session.scalars(select(TagParent.child_id).where(TagParent.parent_id == stag_id)).all()
+                session.scalars(
+                    select(TagParent.child_id).where(TagParent.parent_id == stag_id)
+                ).all()
             )
             stag_disambiguated_ids = list(
                 session.scalars(select(Tag.id).where(Tag.disambiguation_id == stag_id)).all()
             )
 
-            sources_snapshot.append({
-                "id": stag.id,
-                "name": stag.name,
-                "shorthand": stag.shorthand,
-                "color_namespace": stag.color_namespace,
-                "color_slug": stag.color_slug,
-                "disambiguation_id": stag.disambiguation_id,
-                "is_category": stag.is_category,
-                "is_hidden": stag.is_hidden,
-                "tag_type": stag.tag_type,
-                "aliases": [a.name for a in stag.aliases],
-                "parent_ids": stag_parent_ids,
-                "child_ids": stag_child_ids,
-                "disambiguated_ids": stag_disambiguated_ids,
-                "entry_ids": stag_entry_ids,
-            })
+            sources_snapshot.append(
+                {
+                    "id": stag.id,
+                    "name": stag.name,
+                    "shorthand": stag.shorthand,
+                    "color_namespace": stag.color_namespace,
+                    "color_slug": stag.color_slug,
+                    "disambiguation_id": stag.disambiguation_id,
+                    "is_category": stag.is_category,
+                    "is_hidden": stag.is_hidden,
+                    "tag_type": stag.tag_type,
+                    "aliases": [a.name for a in stag.aliases],
+                    "parent_ids": stag_parent_ids,
+                    "child_ids": stag_child_ids,
+                    "disambiguated_ids": stag_disambiguated_ids,
+                    "entry_ids": stag_entry_ids,
+                }
+            )
 
             for eid in stag_entry_ids:
                 if eid not in target_entry_ids:
@@ -310,7 +317,9 @@ def merge_tags(
 
             if "disambiguation_id" in provided:
                 current_parents = set(
-                    session.scalars(select(TagParent.parent_id).where(TagParent.child_id == target_tag_id)).all()
+                    session.scalars(
+                        select(TagParent.parent_id).where(TagParent.child_id == target_tag_id)
+                    ).all()
                 )
                 validate_disambiguation(up.disambiguation_id, current_parents)
                 target_tag.disambiguation_id = up.disambiguation_id
@@ -354,8 +363,7 @@ def undo_merge_tags(lib: Library, undo_data: dict[str, Any]) -> Tag:
         if entries_retagged_ids:
             session.execute(
                 delete(TagEntry).where(
-                    TagEntry.tag_id == target_tag_id,
-                    TagEntry.entry_id.in_(entries_retagged_ids)
+                    TagEntry.tag_id == target_tag_id, TagEntry.entry_id.in_(entries_retagged_ids)
                 )
             )
 
@@ -439,9 +447,15 @@ def batch_update_tags(lib: Library, request: TagBatchUpdateRequest) -> list[Tag]
                 tag.is_category = request.is_category
             if request.add_parent_ids:
                 existing_parents = set(
-                    session.scalars(select(TagParent.parent_id).where(TagParent.child_id == tag.id)).all()
+                    session.scalars(
+                        select(TagParent.parent_id).where(TagParent.child_id == tag.id)
+                    ).all()
                 )
-                valid_new = [pid for pid in request.add_parent_ids if pid != tag.id and pid not in existing_parents]
+                valid_new = [
+                    pid
+                    for pid in request.add_parent_ids
+                    if pid != tag.id and pid not in existing_parents
+                ]
                 for pid in valid_new:
                     session.add(TagParent(parent_id=pid, child_id=tag.id))
 
@@ -468,43 +482,52 @@ def batch_delete_tags(lib: Library, request: TagBatchDeleteRequest) -> tuple[int
         tags = session.scalars(select(Tag).where(Tag.id.in_(tag_ids))).all()
         for tag in tags:
             tid = tag.id
-            parent_ids = list(session.scalars(select(TagParent.parent_id).where(TagParent.child_id == tid)).all())
-            child_ids = list(session.scalars(select(TagParent.child_id).where(TagParent.parent_id == tid)).all())
-            disambiguated_ids = list(session.scalars(select(Tag.id).where(Tag.disambiguation_id == tid)).all())
-            entry_ids = list(session.scalars(select(TagEntry.entry_id).where(TagEntry.tag_id == tid)).all())
+            parent_ids = list(
+                session.scalars(select(TagParent.parent_id).where(TagParent.child_id == tid)).all()
+            )
+            child_ids = list(
+                session.scalars(select(TagParent.child_id).where(TagParent.parent_id == tid)).all()
+            )
+            disambiguated_ids = list(
+                session.scalars(select(Tag.id).where(Tag.disambiguation_id == tid)).all()
+            )
+            entry_ids = list(
+                session.scalars(select(TagEntry.entry_id).where(TagEntry.tag_id == tid)).all()
+            )
             aliases = [a.name for a in tag.aliases]
 
-            snapshots.append({
-                "id": tag.id,
-                "name": tag.name,
-                "shorthand": tag.shorthand,
-                "color_namespace": tag.color_namespace,
-                "color_slug": tag.color_slug,
-                "disambiguation_id": tag.disambiguation_id,
-                "is_category": tag.is_category,
-                "is_hidden": tag.is_hidden,
-                "tag_type": tag.tag_type,
-                "aliases": aliases,
-                "parent_ids": parent_ids,
-                "child_ids": child_ids,
-                "disambiguated_ids": disambiguated_ids,
-                "entry_ids": entry_ids,
-            })
+            snapshots.append(
+                {
+                    "id": tag.id,
+                    "name": tag.name,
+                    "shorthand": tag.shorthand,
+                    "color_namespace": tag.color_namespace,
+                    "color_slug": tag.color_slug,
+                    "disambiguation_id": tag.disambiguation_id,
+                    "is_category": tag.is_category,
+                    "is_hidden": tag.is_hidden,
+                    "tag_type": tag.tag_type,
+                    "aliases": aliases,
+                    "parent_ids": parent_ids,
+                    "child_ids": child_ids,
+                    "disambiguated_ids": disambiguated_ids,
+                    "entry_ids": entry_ids,
+                }
+            )
 
             session.execute(delete(TagAlias).where(TagAlias.tag_id == tid))
             session.execute(delete(TagEntry).where(TagEntry.tag_id == tid))
             session.execute(
                 delete(TagParent).where(or_(TagParent.child_id == tid, TagParent.parent_id == tid))
             )
-            session.execute(update(Tag).where(Tag.disambiguation_id == tid).values(disambiguation_id=None))
+            session.execute(
+                update(Tag).where(Tag.disambiguation_id == tid).values(disambiguation_id=None)
+            )
             session.execute(delete(Tag).where(Tag.id == tid))
 
         session.commit()
 
-    undo_data = {
-        "operation": "batch_delete",
-        "snapshots": snapshots
-    }
+    undo_data = {"operation": "batch_delete", "snapshots": snapshots}
     return len(snapshots), undo_data
 
 

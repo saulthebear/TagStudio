@@ -224,16 +224,28 @@ class JobManager:
                                     entry = library.get_entry_full_by_path(rel_p)
                                     if entry is not None:
                                         try:
-                                            tag_entries_with_system_tag(library, entry.id, TAG_SYSTEM_CORRUPTED)
+                                            tag_entries_with_system_tag(
+                                                library, entry.id, TAG_SYSTEM_CORRUPTED
+                                            )
                                         except Exception as exc:
-                                            logger.warning("tag_corrupted.failed", path=str(rel_p), error=str(exc))
+                                            logger.warning(
+                                                "tag_corrupted.failed",
+                                                path=str(rel_p),
+                                                error=str(exc),
+                                            )
                                 elif inspection == VideoInspectionStatus.UNSUPPORTED:
                                     entry = library.get_entry_full_by_path(rel_p)
                                     if entry is not None:
                                         try:
-                                            tag_entries_with_system_tag(library, entry.id, TAG_SYSTEM_UNSUPPORTED)
+                                            tag_entries_with_system_tag(
+                                                library, entry.id, TAG_SYSTEM_UNSUPPORTED
+                                            )
                                         except Exception as exc:
-                                            logger.warning("tag_unsupported.failed", path=str(rel_p), error=str(exc))
+                                            logger.warning(
+                                                "tag_unsupported.failed",
+                                                path=str(rel_p),
+                                                error=str(exc),
+                                            )
 
                     if candidate_paths:
                         if remux_on_import == "auto" and ffmpeg_cmd:
@@ -264,15 +276,21 @@ class JobManager:
                                         if new_p != full_p:
                                             new_rel = new_p.relative_to(library_dir)
                                             library.update_entry_path(entry.id, new_rel)
-                                        tag_entries_with_system_tag(library, entry.id, TAG_SYSTEM_REMUXED)
+                                        tag_entries_with_system_tag(
+                                            library, entry.id, TAG_SYSTEM_REMUXED
+                                        )
                                 except Exception as err:
-                                    logger.warning("auto_remux.failed", path=str(full_p), error=str(err))
+                                    logger.warning(
+                                        "auto_remux.failed", path=str(full_p), error=str(err)
+                                    )
 
                                 self._emit(
                                     job_id,
                                     "job.progress",
                                     status="running",
-                                    message=f"Auto-remuxing videos ({idx}/{len(candidate_paths)})...",
+                                    message=(
+                                        f"Auto-remuxing videos ({idx}/{len(candidate_paths)})..."
+                                    ),
                                     progress_current=idx,
                                     progress_total=len(candidate_paths),
                                 )
@@ -317,7 +335,9 @@ class JobManager:
             ffprobe_cmd = find_ffprobe()
             ffmpeg_cmd = find_ffmpeg()
             if not ffprobe_cmd or not ffmpeg_cmd:
-                raise RuntimeError("FFmpeg and FFprobe are required for remuxing but were not found.")
+                raise RuntimeError(
+                    "FFmpeg and FFprobe are required for remuxing but were not found."
+                )
 
             self._emit(
                 job_id,
@@ -341,12 +361,18 @@ class JobManager:
                             try:
                                 tag_entries_with_system_tag(library, entry.id, TAG_SYSTEM_CORRUPTED)
                             except Exception as exc:
-                                logger.warning("tag_corrupted.failed", path=str(full_p), error=str(exc))
+                                logger.warning(
+                                    "tag_corrupted.failed", path=str(full_p), error=str(exc)
+                                )
                         elif inspection == VideoInspectionStatus.UNSUPPORTED:
                             try:
-                                tag_entries_with_system_tag(library, entry.id, TAG_SYSTEM_UNSUPPORTED)
+                                tag_entries_with_system_tag(
+                                    library, entry.id, TAG_SYSTEM_UNSUPPORTED
+                                )
                             except Exception as exc:
-                                logger.warning("tag_unsupported.failed", path=str(full_p), error=str(exc))
+                                logger.warning(
+                                    "tag_unsupported.failed", path=str(full_p), error=str(exc)
+                                )
 
             total_candidates = len(candidates)
             if total_candidates == 0:
@@ -361,9 +387,7 @@ class JobManager:
                 return
 
             backup_dir = (
-                library_dir / TS_FOLDER_NAME / "remux_backups"
-                if mode == "backup"
-                else None
+                library_dir / TS_FOLDER_NAME / "remux_backups" if mode == "backup" else None
             )
 
             self._emit(
@@ -376,7 +400,7 @@ class JobManager:
             )
 
             successful_count = 0
-            for idx, (entry_id, full_p, rel_p) in enumerate(candidates, 1):
+            for idx, (entry_id, full_p, _rel_p) in enumerate(candidates, 1):
                 self._emit(
                     job_id,
                     "job.progress",
@@ -414,7 +438,10 @@ class JobManager:
                 job_id,
                 "job.completed",
                 status="completed",
-                message=f"Remux completed. Successfully remuxed {successful_count} of {total_candidates} video(s).",
+                message=(
+                    f"Remux completed. Successfully remuxed {successful_count} of "
+                    f"{total_candidates} video(s)."
+                ),
                 progress_current=total_candidates,
                 progress_total=total_candidates,
             )

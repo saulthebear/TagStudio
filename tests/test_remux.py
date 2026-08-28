@@ -1,10 +1,5 @@
-import os
-import shutil
-import subprocess
 from pathlib import Path
 from unittest.mock import MagicMock, patch
-
-import pytest
 
 from tagstudio.core.media.remux import (
     VideoInspectionStatus,
@@ -63,7 +58,6 @@ def test_inspect_video_unsupported_mpeg2() -> None:
     }
     with patch("tagstudio.core.media.remux._run_ffprobe", return_value=probe_output):
         assert inspect_video(Path("test.mp4"), "ffprobe") == VideoInspectionStatus.UNSUPPORTED
-
 
 
 def test_needs_remux_mpegts_with_h264_aac() -> None:

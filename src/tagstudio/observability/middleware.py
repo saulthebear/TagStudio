@@ -9,7 +9,7 @@ from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoin
 from starlette.requests import Request
 from starlette.responses import Response
 
-from tagstudio.observability.context import set_current_trace_id
+from tagstudio.observability.context import set_current_trace_id, trace_id_var
 from tagstudio.observability.metrics import get_metrics_store
 
 logger = structlog.get_logger(__name__)
@@ -70,15 +70,38 @@ class ObservabilityMiddleware(BaseHTTPMiddleware):
                 )
             except Exception as store_err:
                 logger.debug("Failed to record api metric", error=str(store_err))
+            finally:
+                trace_id_var.reset(token)
 
         response.headers["X-Trace-Id"] = trace_id
         response.headers["X-Response-Time-Ms"] = f"{duration_ms:.2f}"
 
         if status_code >= 500:
-            logger.error("api.request.failed", route=route, method=method, status=status_code, duration_ms=duration_ms, trace_id=trace_id)
+            logger.error(
+                "api.request.failed",
+                route=route,
+                method=method,
+                status=status_code,
+                duration_ms=duration_ms,
+                trace_id=trace_id,
+            )
         elif status_code >= 400:
-            logger.warning("api.request.client_error", route=route, method=method, status=status_code, duration_ms=duration_ms, trace_id=trace_id)
+            logger.warning(
+                "api.request.client_error",
+                route=route,
+                method=method,
+                status=status_code,
+                duration_ms=duration_ms,
+                trace_id=trace_id,
+            )
         else:
-            logger.info("api.request.success", route=route, method=method, status=status_code, duration_ms=duration_ms, trace_id=trace_id)
+            logger.info(
+                "api.request.success",
+                route=route,
+                method=method,
+                status=status_code,
+                duration_ms=duration_ms,
+                trace_id=trace_id,
+            )
 
         return response

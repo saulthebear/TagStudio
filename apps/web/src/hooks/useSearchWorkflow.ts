@@ -21,7 +21,6 @@ type UseSearchWorkflowArgs = {
   activeLibraryPath: string | null;
   isLibraryOpen: boolean;
   settingsHydrated: boolean;
-  settingsFetching: boolean;
   sortingMode: SortingMode;
   ascending: boolean;
   showHiddenEntries: boolean;
@@ -52,7 +51,6 @@ export function useSearchWorkflow({
   activeLibraryPath,
   isLibraryOpen,
   settingsHydrated,
-  settingsFetching,
   sortingMode,
   ascending,
   showHiddenEntries,

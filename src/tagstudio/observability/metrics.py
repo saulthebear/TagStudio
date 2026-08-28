@@ -21,6 +21,7 @@ class MetricsStore:
         self._init_db()
 
     def _get_connection(self) -> sqlite3.Connection:
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
         conn = sqlite3.connect(str(self.db_path), check_same_thread=False, timeout=10.0)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA journal_mode=WAL;")
@@ -90,10 +91,20 @@ class MetricsStore:
         with self._lock, self._get_connection() as conn:
             conn.execute(
                 """
-                INSERT INTO api_requests (timestamp, trace_id, method, route, status_code, duration_ms, error_message)
+                INSERT INTO api_requests (
+                    timestamp, trace_id, method, route, status_code, duration_ms, error_message
+                )
                 VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
-                (timestamp, effective_trace_id, method, route, status_code, duration_ms, error_message),
+                (
+                    timestamp,
+                    effective_trace_id,
+                    method,
+                    route,
+                    status_code,
+                    duration_ms,
+                    error_message,
+                ),
             )
 
     def record_operation(
@@ -111,7 +122,9 @@ class MetricsStore:
         with self._lock, self._get_connection() as conn:
             conn.execute(
                 """
-                INSERT INTO operation_timers (timestamp, trace_id, category, operation_name, duration_ms, metadata_json)
+                INSERT INTO operation_timers (
+                    timestamp, trace_id, category, operation_name, duration_ms, metadata_json
+                )
                 VALUES (?, ?, ?, ?, ?, ?)
                 """,
                 (timestamp, effective_trace_id, category, operation_name, duration_ms, meta_json),
@@ -133,7 +146,9 @@ class MetricsStore:
         with self._lock, self._get_connection() as conn:
             conn.execute(
                 """
-                INSERT INTO error_records (timestamp, trace_id, source, error_type, message, stack_trace, context_json)
+                INSERT INTO error_records (
+                    timestamp, trace_id, source, error_type, message, stack_trace, context_json
+                )
                 VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
                 (timestamp, effective_trace_id, source, error_type, message, stack_trace, ctx_json),
@@ -178,13 +193,15 @@ class MetricsStore:
             route_summary = []
             for route, stat in route_stats.items():
                 durs = sorted(stat["durations"])
-                route_summary.append({
-                    "route": route,
-                    "count": stat["count"],
-                    "errors": stat["errors"],
-                    "avg_ms": round(sum(durs) / len(durs), 2),
-                    "p95_ms": round(durs[int(len(durs) * 0.95)], 2) if durs else 0.0,
-                })
+                route_summary.append(
+                    {
+                        "route": route,
+                        "count": stat["count"],
+                        "errors": stat["errors"],
+                        "avg_ms": round(sum(durs) / len(durs), 2),
+                        "p95_ms": round(durs[int(len(durs) * 0.95)], 2) if durs else 0.0,
+                    }
+                )
             route_summary.sort(key=lambda x: x["count"], reverse=True)
 
             # 2. Total error records count
@@ -277,23 +294,27 @@ class MetricsStore:
                 b_th_hits = sum(1 for t in b_thumbs if t["operation_name"] == "cache_hit")
                 b_th_misses = sum(1 for t in b_thumbs if t["operation_name"] == "generate")
 
-                buckets.append({
-                    "timestamp": b_start_iso,
-                    "requests": len(b_reqs),
-                    "errors": b_errors,
-                    "avg_latency_ms": b_avg,
-                    "p50_ms": round(b_p50, 2),
-                    "p95_ms": round(b_p95, 2),
-                    "thumbnail_hits": b_th_hits,
-                    "thumbnail_misses": b_th_misses,
-                })
+                buckets.append(
+                    {
+                        "timestamp": b_start_iso,
+                        "requests": len(b_reqs),
+                        "errors": b_errors,
+                        "avg_latency_ms": b_avg,
+                        "p50_ms": round(b_p50, 2),
+                        "p95_ms": round(b_p95, 2),
+                        "thumbnail_hits": b_th_hits,
+                        "thumbnail_misses": b_th_misses,
+                    }
+                )
 
             return {
                 "window_seconds": window_seconds,
                 "api": {
                     "total_requests": total_requests,
                     "error_requests": error_requests,
-                    "error_rate_pct": round((error_requests / total_requests) * 100, 2) if total_requests > 0 else 0.0,
+                    "error_rate_pct": round((error_requests / total_requests) * 100, 2)
+                    if total_requests > 0
+                    else 0.0,
                     "latency_ms": {
                         "avg": avg_latency,
                         "p50": round(p50, 2),
@@ -309,7 +330,9 @@ class MetricsStore:
                     "cache_hits": thumb_hits,
                     "cache_misses": thumb_misses,
                     "hit_ratio_pct": hit_ratio,
-                    "avg_generate_ms": round(sum(thumb_durations) / len(thumb_durations), 2) if thumb_durations else 0.0,
+                    "avg_generate_ms": round(sum(thumb_durations) / len(thumb_durations), 2)
+                    if thumb_durations
+                    else 0.0,
                 },
                 "slow_operations": [
                     {
@@ -329,7 +352,8 @@ class MetricsStore:
         with self._lock, self._get_connection() as conn:
             rows = conn.execute(
                 """
-                SELECT id, timestamp, trace_id, source, error_type, message, stack_trace, context_json
+                SELECT
+                    id, timestamp, trace_id, source, error_type, message, stack_trace, context_json
                 FROM error_records
                 ORDER BY id DESC
                 LIMIT ?
@@ -359,14 +383,14 @@ class MetricsStore:
             conn.execute("DELETE FROM error_records WHERE timestamp < ?", (cutoff,))
 
 
-# Global singleton instance (lazily initialized or bound to active library)
-_global_metrics_store: MetricsStore | None = None
+# Thread-safe cache of MetricsStore instances keyed by library directory
+_stores: dict[str, MetricsStore] = {}
 _store_lock = threading.Lock()
 
 
 def get_metrics_store(library_dir: Path | None = None) -> MetricsStore:
-    global _global_metrics_store
+    key = str(library_dir.resolve()) if library_dir is not None else "__default__"
     with _store_lock:
-        if _global_metrics_store is None or (_global_metrics_store and library_dir is not None):
-            _global_metrics_store = MetricsStore(library_dir=library_dir)
-        return _global_metrics_store
+        if key not in _stores:
+            _stores[key] = MetricsStore(library_dir=library_dir)
+        return _stores[key]

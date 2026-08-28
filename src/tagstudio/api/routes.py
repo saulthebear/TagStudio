@@ -45,6 +45,7 @@ from tagstudio.api.schemas import (
     TagBatchUpdateRequest,
     TagColorNamespaceResponse,
     TagColorResponse,
+    TagCoOccurrence,
     TagCreateRequest,
     TagMergeRequest,
     TagMergeResponse,
@@ -55,10 +56,9 @@ from tagstudio.api.schemas import (
     TagSearchResponse,
     TagStatResponse,
     TagStatsResponse,
-    TagSuggestionsRequest,
     TagSuggestionItem,
+    TagSuggestionsRequest,
     TagSuggestionsResponse,
-    TagCoOccurrence,
     TagUpdateRequest,
     ThumbnailFit,
     ThumbnailKind,
@@ -87,12 +87,26 @@ from tagstudio.api.services.entry_service import (
 )
 from tagstudio.api.services.tag_service import (
     batch_delete_tags as batch_delete_tags_service,
+)
+from tagstudio.api.services.tag_service import (
     batch_update_tags as batch_update_tags_service,
+)
+from tagstudio.api.services.tag_service import (
     create_tag as create_tag_service,
+)
+from tagstudio.api.services.tag_service import (
     get_descendant_tag_ids,
+)
+from tagstudio.api.services.tag_service import (
     merge_tags as merge_tags_service,
+)
+from tagstudio.api.services.tag_service import (
     undo_batch_delete_tags as undo_batch_delete_tags_service,
+)
+from tagstudio.api.services.tag_service import (
     undo_merge_tags as undo_merge_tags_service,
+)
+from tagstudio.api.services.tag_service import (
     update_tag as update_tag_service,
 )
 from tagstudio.api.state import ApiState
@@ -108,7 +122,6 @@ from tagstudio.core.media.remux import (
     purge_backups,
 )
 from tagstudio.core.media.thumbnail_pipeline import ThumbnailUnsupportedError
-
 from tagstudio.core.utils.silent_subprocess import silent_popen
 
 TEXT_SUFFIXES = {"txt", "md", "json", "toml", "yaml", "yml", "csv", "log", "py", "ts", "tsx"}
@@ -940,4 +953,3 @@ def create_router(*, state: ApiState, jobs: JobManager) -> APIRouter:
         return StreamingResponse(stream, media_type="text/event-stream")
 
     return router
-

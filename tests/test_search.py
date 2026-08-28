@@ -167,4 +167,3 @@ def test_empty_or_list_query(search_library: Library):
     # Non-existent tag alongside an existing tag in OR expression evaluates non-existent as false
     verify_count(search_library, "nonexistent_tag_xyz or green", 5)
     verify_count(search_library, "nonexistent_tag_xyz or non_existent_tag_abc", 0)
-

@@ -57,7 +57,8 @@ def make_tables(engine: Engine) -> None:
                 conn.execute(
                     text(
                         "INSERT INTO tags "
-                        "(id, name, color_namespace, color_slug, is_category, is_hidden, tag_type) VALUES "
+                        "(id, name, color_namespace, color_slug, "
+                        "is_category, is_hidden, tag_type) VALUES "
                         f"({RESERVED_TAG_END}, 'temp', NULL, NULL, false, false, 'content')"
                     )
                 )

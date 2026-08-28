@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Query
@@ -31,8 +30,10 @@ def create_telemetry_router(*, state: ApiState) -> APIRouter:
     router = APIRouter(prefix="/api/v1/telemetry", tags=["telemetry"])
 
     @router.get("/summary")
-    def get_summary(window_seconds: int = Query(default=3600, ge=60, le=86400 * 30)) -> dict[str, Any]:
-        """Return aggregated latency percentiles, slow queries, error rates, and thumbnail cache stats."""
+    def get_summary(
+        window_seconds: int = Query(default=3600, ge=60, le=86400 * 30),
+    ) -> dict[str, Any]:
+        """Return aggregated latency percentiles, slow queries, and cache stats."""
         lib = state.get_library()
         lib_dir = lib.library_dir if lib else None
         store = get_metrics_store(library_dir=lib_dir)

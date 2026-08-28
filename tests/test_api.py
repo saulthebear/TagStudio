@@ -947,13 +947,17 @@ def test_remux_settings_and_endpoints() -> None:
             assert settings_data["remux"] == {"mode": "backup", "on_import": "ask"}
 
             # Patch remux settings
-            patch_res = client.patch("/api/v1/settings", json={"remux": {"mode": "replace", "on_import": "auto"}})
+            patch_res = client.patch(
+                "/api/v1/settings", json={"remux": {"mode": "replace", "on_import": "auto"}}
+            )
             assert patch_res.status_code == 200
             assert patch_res.json()["remux"] == {"mode": "replace", "on_import": "auto"}
 
             # Check remux check endpoint
-            with patch("tagstudio.api.routes.find_ffprobe", return_value="ffprobe"), \
-                 patch("tagstudio.api.routes.needs_remux", return_value=False):
+            with (
+                patch("tagstudio.api.routes.find_ffprobe", return_value="ffprobe"),
+                patch("tagstudio.api.routes.needs_remux", return_value=False),
+            ):
                 check_res = client.post("/api/v1/jobs/remux:check")
                 assert check_res.status_code == 200
                 assert check_res.json() == {"candidates_count": 0, "total_scanned": 0}
@@ -969,8 +973,10 @@ def test_remux_settings_and_endpoints() -> None:
             assert purge_res.json() == {"files_deleted": 0}
 
             # Start remux job
-            with patch("tagstudio.api.jobs.find_ffmpeg", return_value="ffmpeg"), \
-                 patch("tagstudio.api.jobs.find_ffprobe", return_value="ffprobe"):
+            with (
+                patch("tagstudio.api.jobs.find_ffmpeg", return_value="ffmpeg"),
+                patch("tagstudio.api.jobs.find_ffprobe", return_value="ffprobe"),
+            ):
                 job_res = client.post("/api/v1/jobs/remux")
                 assert job_res.status_code == 200
                 job_id = job_res.json()["job_id"]
@@ -997,7 +1003,10 @@ def test_tags_stats_endpoint() -> None:
 
             entry_ids = list(get_entry_ids_by_filename(client).values())
             # Tag the first entry with tag_b as well (foo and bar co-occur)
-            client.post("/api/v1/entries/tags:add", json={"entry_ids": [entry_ids[0]], "tag_ids": [tag_b_id]})
+            client.post(
+                "/api/v1/entries/tags:add",
+                json={"entry_ids": [entry_ids[0]], "tag_ids": [tag_b_id]},
+            )
 
             stats_res = client.get("/api/v1/tags/stats")
             assert stats_res.status_code == 200
@@ -1040,7 +1049,10 @@ def test_tags_suggested_endpoint() -> None:
 
             entry_ids = list(get_entry_ids_by_filename(client).values())
             # Tag entry 0 with foo, bar, baz
-            client.post("/api/v1/entries/tags:add", json={"entry_ids": [entry_ids[0]], "tag_ids": [tag_b_id, tag_c_id]})
+            client.post(
+                "/api/v1/entries/tags:add",
+                json={"entry_ids": [entry_ids[0]], "tag_ids": [tag_b_id, tag_c_id]},
+            )
 
             # Get suggestions for [foo]
             sug_res = client.post("/api/v1/tags/suggested", json={"tag_ids": [foo_id]})
@@ -1053,24 +1065,33 @@ def test_tags_suggested_endpoint() -> None:
             assert foo_id not in suggested_tag_ids
 
             # Test exclude_tag_ids
-            excl_res = client.post("/api/v1/tags/suggested", json={"tag_ids": [foo_id], "exclude_tag_ids": [tag_b_id]})
+            excl_res = client.post(
+                "/api/v1/tags/suggested", json={"tag_ids": [foo_id], "exclude_tag_ids": [tag_b_id]}
+            )
             assert excl_res.status_code == 200
             excl_ids = [s["tag"]["id"] for s in excl_res.json()["suggestions"]]
             assert tag_b_id not in excl_ids
             assert tag_c_id in excl_ids
 
             # Test system tags are excluded and cannot be seed tags
-            sys_tag_res = client.post("/api/v1/tags", json={"name": "system:remuxed", "tag_type": "system"})
+            sys_tag_res = client.post(
+                "/api/v1/tags", json={"name": "system:remuxed", "tag_type": "system"}
+            )
             assert sys_tag_res.status_code == 200
             sys_tag_id = sys_tag_res.json()["id"]
 
-            client.post("/api/v1/entries/tags:add", json={"entry_ids": [entry_ids[0]], "tag_ids": [sys_tag_id]})
+            client.post(
+                "/api/v1/entries/tags:add",
+                json={"entry_ids": [entry_ids[0]], "tag_ids": [sys_tag_id]},
+            )
 
             sys_seed_res = client.post("/api/v1/tags/suggested", json={"tag_ids": [sys_tag_id]})
             assert sys_seed_res.status_code == 200
             assert sys_seed_res.json()["suggestions"] == []
 
-            with_sys_res = client.post("/api/v1/tags/suggested", json={"tag_ids": [foo_id, sys_tag_id]})
+            with_sys_res = client.post(
+                "/api/v1/tags/suggested", json={"tag_ids": [foo_id, sys_tag_id]}
+            )
             assert with_sys_res.status_code == 200
             with_sys_ids = [s["tag"]["id"] for s in with_sys_res.json()["suggestions"]]
             assert sys_tag_id not in with_sys_ids
@@ -1104,18 +1125,22 @@ def test_tag_merge_and_undo_endpoints() -> None:
 
             entry_ids = list(get_entry_ids_by_filename(client).values())
             # Tag entry 0 with tag1, entry 1 with tag2
-            client.post("/api/v1/entries/tags:add", json={"entry_ids": [entry_ids[0]], "tag_ids": [tag1_id]})
-            client.post("/api/v1/entries/tags:add", json={"entry_ids": [entry_ids[1]], "tag_ids": [tag2_id]})
+            client.post(
+                "/api/v1/entries/tags:add", json={"entry_ids": [entry_ids[0]], "tag_ids": [tag1_id]}
+            )
+            client.post(
+                "/api/v1/entries/tags:add", json={"entry_ids": [entry_ids[1]], "tag_ids": [tag2_id]}
+            )
 
             # Merge tag2 into tag1
-            merge_res = client.post("/api/v1/tags/merge", json={
-                "source_tag_ids": [tag2_id],
-                "target_tag_id": tag1_id,
-                "updated_tag": {
-                    "name": "tag1_merged",
-                    "aliases": ["t1", "t2", "tag2"]
-                }
-            })
+            merge_res = client.post(
+                "/api/v1/tags/merge",
+                json={
+                    "source_tag_ids": [tag2_id],
+                    "target_tag_id": tag1_id,
+                    "updated_tag": {"name": "tag1_merged", "aliases": ["t1", "t2", "tag2"]},
+                },
+            )
             assert merge_res.status_code == 200
             merge_data = merge_res.json()
             assert merge_data["success"] is True
@@ -1174,13 +1199,16 @@ def test_tag_batch_update_and_delete_endpoints() -> None:
             tag_parent = client.post("/api/v1/tags", json={"name": "batch_parent"}).json()["id"]
 
             # Batch update properties
-            batch_update_res = client.post("/api/v1/tags/batch:update", json={
-                "tag_ids": [tag_a, tag_b],
-                "tag_type": "meta",
-                "is_hidden": True,
-                "is_category": True,
-                "add_parent_ids": [tag_parent]
-            })
+            batch_update_res = client.post(
+                "/api/v1/tags/batch:update",
+                json={
+                    "tag_ids": [tag_a, tag_b],
+                    "tag_type": "meta",
+                    "is_hidden": True,
+                    "is_category": True,
+                    "add_parent_ids": [tag_parent],
+                },
+            )
             assert batch_update_res.status_code == 200
             updated_list = batch_update_res.json()
             assert len(updated_list) == 2
@@ -1203,11 +1231,10 @@ def test_tag_batch_update_and_delete_endpoints() -> None:
             assert tag_b not in tags_after_del
 
             # Undo batch delete
-            undo_del_res = client.post("/api/v1/tags/batch:delete:undo", json={"undo_data": undo_data})
+            undo_del_res = client.post(
+                "/api/v1/tags/batch:delete:undo", json={"undo_data": undo_data}
+            )
             assert undo_del_res.status_code == 200
             tags_after_undo = [t["id"] for t in client.get("/api/v1/tags").json()]
             assert tag_a in tags_after_undo
             assert tag_b in tags_after_undo
-
-
-

@@ -367,7 +367,6 @@ class JobStatusResponse(BaseModel):
     remux_candidates_count: int | None = None
 
 
-
 class JobCreateResponse(BaseModel):
     job_id: str
     status: str
@@ -460,7 +459,6 @@ class SystemTagsSyncResponse(BaseModel):
     unsupported_tagged: int
 
 
-
 class SettingsResponse(BaseModel):
     sorting_mode: SortingMode = SortingMode.DATE_ADDED
     ascending: bool = True
@@ -485,4 +483,3 @@ class SettingsUpdateRequest(BaseModel):
 
 class SuccessResponse(BaseModel):
     success: bool
-

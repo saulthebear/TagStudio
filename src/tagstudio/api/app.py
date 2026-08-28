@@ -81,4 +81,3 @@ def create_app(
     app.state.tagstudio = state
     app.state.jobs = jobs
     return app
-

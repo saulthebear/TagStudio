@@ -9,8 +9,6 @@ to track files processed by background operations (e.g. remuxing) or flagged
 during probing (e.g. corrupted container headers).
 """
 
-from collections.abc import Iterable
-from pathlib import Path
 
 import structlog
 
@@ -102,10 +100,7 @@ def tag_entries_with_system_tag(
 
     Returns the number of tag attachments made.
     """
-    if isinstance(entry_ids, int):
-        ids = [entry_ids]
-    else:
-        ids = list(entry_ids)
+    ids = [entry_ids] if isinstance(entry_ids, int) else list(entry_ids)
 
     if not ids:
         return 0
@@ -121,7 +116,8 @@ def tag_entries_with_system_tag(
 def sync_retroactive_system_tags(library: Library) -> dict[str, int]:
     """Perform a retroactive scan to apply system tags to all matching entries.
 
-    - Matches backed-up originals in .TagStudio/remux_backups against library entries -> system:remuxed
+    - Matches backed-up originals in .TagStudio/remux_backups against library entries
+      -> system:remuxed
     - Probes all video entries for corrupted/truncated container data -> system:corrupted
     - Probes all video entries for unsupported codecs requiring re-encoding -> system:unsupported
 
@@ -175,7 +171,9 @@ def sync_retroactive_system_tags(library: Library) -> dict[str, int]:
     if corrupted_entry_ids:
         library.add_tags_to_entries(list(corrupted_entry_ids), system_tags[TAG_SYSTEM_CORRUPTED])
     if unsupported_entry_ids:
-        library.add_tags_to_entries(list(unsupported_entry_ids), system_tags[TAG_SYSTEM_UNSUPPORTED])
+        library.add_tags_to_entries(
+            list(unsupported_entry_ids), system_tags[TAG_SYSTEM_UNSUPPORTED]
+        )
 
     logger.info(
         "sync_retroactive_system_tags.complete",
