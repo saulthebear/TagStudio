@@ -17,6 +17,7 @@ import {
   FolderTree,
   Network,
   Pencil,
+  Plus,
   RefreshCw,
   Search,
   SlidersHorizontal,
@@ -115,6 +116,7 @@ export function TagExplorerPage({
     lastOpenRatio: 0.58
   });
 
+  const [isCreateTagOpen, setIsCreateTagOpen] = useState(false);
   const [mobileTab, setMobileTab] = useState<"results" | "explorer">("explorer");
 
   // Multi-tag merge handler
@@ -289,6 +291,16 @@ export function TagExplorerPage({
               <span className="hidden sm:inline">Graph</span>
             </button>
           </div>
+
+          <button
+            type="button"
+            className="filter-icon-btn h-8 w-8"
+            onClick={() => setIsCreateTagOpen(true)}
+            title="Add tag"
+            aria-label="Add tag"
+          >
+            <Plus size={14} />
+          </button>
 
           <button
             type="button"
@@ -554,16 +566,21 @@ export function TagExplorerPage({
         )}
       </div>
 
-      {/* Single Tag Editor Modal */}
-      {editingTag && (
+      {/* Create / Edit Tag Modal */}
+      {(isCreateTagOpen || editingTag) && (
         <TagEditorModal
-          open={Boolean(editingTag)}
-          mode="edit"
-          tag={editingTag}
-          onClose={() => setEditingTag(null)}
+          open={isCreateTagOpen || Boolean(editingTag)}
+          mode={isCreateTagOpen ? "create" : "edit"}
+          tag={isCreateTagOpen ? null : editingTag}
+          onClose={() => {
+            setIsCreateTagOpen(false);
+            setEditingTag(null);
+          }}
           onCreate={createTag ?? (async () => null)}
           onUpdate={updateTag ?? (async () => null)}
           onSaved={async () => {
+            setIsCreateTagOpen(false);
+            setEditingTag(null);
             await reloadTagStats();
             await refreshVisibleEntries?.();
           }}
