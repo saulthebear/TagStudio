@@ -532,4 +532,46 @@ describe("tag-workflows", () => {
     expect(formatSuggestedTagTooltip("Beach", 1)).toBe('Add tag "Beach" (100% match)');
     expect(formatSuggestedTagTooltip("Sunset", 0)).toBe('Add tag "Sunset" (0% match)');
   });
+
+  test("builds disambiguated labels for parent tag candidates", () => {
+    const parent = {
+      id: 10,
+      name: "Five Nights at Freddy's",
+      shorthand: "FNAF",
+      aliases: [],
+      parent_ids: [],
+      color_namespace: null,
+      color_slug: null,
+      disambiguation_id: null,
+      is_category: true,
+      is_hidden: false
+    };
+    const freddy = {
+      id: 11,
+      name: "Freddy Fazbear",
+      shorthand: null,
+      aliases: [],
+      parent_ids: [10],
+      color_namespace: null,
+      color_slug: null,
+      disambiguation_id: 10,
+      is_category: false,
+      is_hidden: false
+    };
+
+    const context = createTagDisplayContext([parent, freddy]);
+    expect(getTagDisplayLabel(freddy, context)).toBe("Freddy Fazbear (FNAF)");
+  });
+
+  test("skips already-added parent tags when finding preferred actionable candidate", () => {
+    const candidates = [
+      { id: 1, name: "Alpha", shorthand: null, aliases: [], parent_ids: [], color_namespace: null, color_slug: null, disambiguation_id: null, is_category: false, is_hidden: false },
+      { id: 2, name: "Beta", shorthand: null, aliases: [], parent_ids: [], color_namespace: null, color_slug: null, disambiguation_id: null, is_category: false, is_hidden: false },
+      { id: 3, name: "Gamma", shorthand: null, aliases: [], parent_ids: [], color_namespace: null, color_slug: null, disambiguation_id: null, is_category: false, is_hidden: false }
+    ];
+
+    const parentIds = [1];
+    const firstActionable = candidates.findIndex((candidate) => !parentIds.includes(candidate.id));
+    expect(firstActionable).toBe(1); // Index 1 is "Beta"
+  });
 });

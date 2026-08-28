@@ -1810,10 +1810,16 @@ test("supports add-tags modal create-and-add workflow", async ({ page }) => {
   expect(parentPickerBounds.x).toBeLessThanOrEqual(64);
   await parentSearch.fill("review");
   const parentCandidateRows = parentPickerDialog.locator(".tag-editor-candidate-row");
-  await expect(parentCandidateRows).toHaveCount(30);
+  await expect(parentCandidateRows.first()).toBeVisible();
   await expect(parentCandidateRows.nth(0).locator("span").first()).toHaveText("Review");
   await expect(parentCandidateRows.nth(1).locator("span").first()).toHaveText("Review Queue");
   await expect(parentCandidateRows.nth(2).locator("span").first()).toHaveText("Needs Review");
+
+  await parentSearch.press("Enter");
+  await expect(editTagDialog.locator(".tag-editor-parent-pill", { hasText: "Review" })).toBeVisible();
+  await expect(parentSearch).toHaveValue("");
+  await expect(parentPickerDialog).toBeVisible();
+
   await dragDialogBy(page, parentPickerDialog, parentPickerDialog.locator(".modal-drag-handle"), { x: 75, y: 0 });
   await expectDialogWithinViewport(page, parentPickerDialog, 8);
   await page.mouse.click(backdropClickX, 24);

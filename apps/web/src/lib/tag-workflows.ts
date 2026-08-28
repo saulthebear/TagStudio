@@ -171,7 +171,7 @@ export function createTagDisplayContext(tags: TagResponse[]): TagDisplayContext 
 
 function resolveParentDisplayLabel(parentId: number, tagById: ReadonlyMap<number, TagResponse>): string {
   const parent = tagById.get(parentId);
-  const label = parent?.name.trim();
+  const label = parent?.shorthand?.trim() || parent?.name.trim();
   return label ? label : `#${parentId}`;
 }
 

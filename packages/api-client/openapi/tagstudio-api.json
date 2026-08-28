@@ -1269,6 +1269,232 @@
           }
         }
       }
+    },
+    "/api/v1/telemetry/summary": {
+      "get": {
+        "tags": [
+          "telemetry"
+        ],
+        "summary": "Get Summary",
+        "description": "Return aggregated latency percentiles, slow queries, error rates, and thumbnail cache stats.",
+        "operationId": "get_summary_api_v1_telemetry_summary_get",
+        "parameters": [
+          {
+            "name": "window_seconds",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 2592000,
+              "minimum": 60,
+              "default": 3600,
+              "title": "Window Seconds"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Summary Api V1 Telemetry Summary Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/telemetry/errors": {
+      "get": {
+        "tags": [
+          "telemetry"
+        ],
+        "summary": "Get Errors",
+        "description": "Return recent error records across backend and frontend.",
+        "operationId": "get_errors_api_v1_telemetry_errors_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": true
+                  },
+                  "title": "Response Get Errors Api V1 Telemetry Errors Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/telemetry/logs": {
+      "get": {
+        "tags": [
+          "telemetry"
+        ],
+        "summary": "Get Logs",
+        "description": "Return recent log lines parsed from the local JSONL log file.",
+        "operationId": "get_logs_api_v1_telemetry_logs_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "default": 100,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "level",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Level"
+            }
+          },
+          {
+            "name": "query",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Query"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": true
+                  },
+                  "title": "Response Get Logs Api V1 Telemetry Logs Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/telemetry/events": {
+      "post": {
+        "tags": [
+          "telemetry"
+        ],
+        "summary": "Record Events",
+        "description": "Ingest batched frontend telemetry events (errors, interaction timings, breadcrumbs).",
+        "operationId": "record_events_api_v1_telemetry_events_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TelemetryEventsBatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Record Events Api V1 Telemetry Events Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2604,6 +2830,11 @@
             "type": "boolean",
             "title": "Is Hidden",
             "default": false
+          },
+          "tag_type": {
+            "type": "string",
+            "title": "Tag Type",
+            "default": "content"
           }
         },
         "type": "object",
@@ -2727,6 +2958,11 @@
             "type": "boolean",
             "title": "Is Hidden",
             "default": false
+          },
+          "tag_type": {
+            "type": "string",
+            "title": "Tag Type",
+            "default": "content"
           }
         },
         "type": "object",
@@ -2846,6 +3082,11 @@
             "type": "boolean",
             "title": "Is Hidden",
             "default": false
+          },
+          "tag_type": {
+            "type": "string",
+            "title": "Tag Type",
+            "default": "content"
           },
           "entry_count": {
             "type": "integer",
@@ -3053,10 +3294,123 @@
               }
             ],
             "title": "Is Hidden"
+          },
+          "tag_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tag Type"
           }
         },
         "type": "object",
         "title": "TagUpdateRequest"
+      },
+      "TelemetryEventItem": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "title": "Kind",
+            "description": "Kind of telemetry event: 'error', 'timing', 'breadcrumb'"
+          },
+          "trace_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trace Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "duration_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Ms"
+          },
+          "error_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Type"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "stack_trace": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stack Trace"
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metadata"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "name"
+        ],
+        "title": "TelemetryEventItem"
+      },
+      "TelemetryEventsBatch": {
+        "properties": {
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/TelemetryEventItem"
+            },
+            "type": "array",
+            "title": "Events"
+          }
+        },
+        "type": "object",
+        "required": [
+          "events"
+        ],
+        "title": "TelemetryEventsBatch"
       },
       "ThumbnailFit": {
         "type": "string",

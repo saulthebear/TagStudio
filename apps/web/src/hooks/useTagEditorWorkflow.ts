@@ -6,13 +6,14 @@ import {
   type TagUpdatePayload
 } from "@tagstudio/api-client";
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { type KeyboardEventHandler, useEffect, useMemo, useState } from "react";
 
 import { api } from "@/api/client";
 import { useDraggableModalPosition } from "@/hooks/useDraggableModalPosition";
 import { useSearchInputFocus } from "@/hooks/useSearchInputFocus";
 import { useTagColors } from "@/hooks/useTagColors";
-import { scoreTags } from "@/lib/tag-workflows";
+import { createTagColorLookup } from "@/lib/tag-styles";
+import { createTagDisplayContext, moveHighlightIndex, scoreTags } from "@/lib/tag-workflows";
 
 type UseTagEditorWorkflowParams = {
   open: boolean;
@@ -90,6 +91,8 @@ export function useTagEditorWorkflow({
 
   const [parentPickerOpen, setParentPickerOpen] = useState(false);
   const [parentQuery, setParentQuery] = useState("");
+  const [highlightedParentIndex, setHighlightedParentIndex] = useState(0);
+  const [autoHighlightParentMatch, setAutoHighlightParentMatch] = useState(true);
   const [colorPickerOpen, setColorPickerOpen] = useState(false);
   const [savePending, setSavePending] = useState(false);
   const { inputRef: parentSearchInputRef, focusInput: focusParentSearchInput } = useSearchInputFocus();
@@ -170,6 +173,8 @@ export function useTagEditorWorkflow({
     setTagType(mode === "create" ? "content" : (tag?.tag_type ?? "content"));
     setParentPickerOpen(false);
     setParentQuery("");
+    setHighlightedParentIndex(0);
+    setAutoHighlightParentMatch(true);
     setColorPickerOpen(false);
     setSavePending(false);
   }, [initialName, mode, open, tag]);
@@ -179,6 +184,8 @@ export function useTagEditorWorkflow({
       return;
     }
 
+    setHighlightedParentIndex(0);
+    setAutoHighlightParentMatch(true);
     focusParentSearchInput();
   }, [focusParentSearchInput, open, parentPickerOpen]);
 
@@ -203,6 +210,45 @@ export function useTagEditorWorkflow({
     () => scoreTags(parentCandidatesQuery.data ?? [], parentQuery),
     [parentCandidatesQuery.data, parentQuery]
   );
+
+  const preferredHighlightParentIndex = useMemo(() => {
+    const firstActionableIndex = parentCandidates.findIndex(
+      (candidate) => !parentIds.includes(candidate.id)
+    );
+    return firstActionableIndex >= 0 ? firstActionableIndex : 0;
+  }, [parentCandidates, parentIds]);
+
+  useEffect(() => {
+    if (parentCandidates.length === 0) {
+      if (highlightedParentIndex !== 0) {
+        setHighlightedParentIndex(0);
+      }
+      return;
+    }
+
+    if (highlightedParentIndex >= parentCandidates.length) {
+      setHighlightedParentIndex(preferredHighlightParentIndex);
+      return;
+    }
+
+    if (autoHighlightParentMatch && highlightedParentIndex === 0 && preferredHighlightParentIndex > 0) {
+      setHighlightedParentIndex(preferredHighlightParentIndex);
+      setAutoHighlightParentMatch(false);
+    }
+  }, [autoHighlightParentMatch, highlightedParentIndex, parentCandidates.length, preferredHighlightParentIndex]);
+
+  const tagDisplayContext = useMemo(() => {
+    const tagByIdMap = new Map<number, TagResponse>();
+    for (const item of allTagsQuery.data ?? []) {
+      tagByIdMap.set(item.id, item);
+    }
+    for (const candidate of parentCandidates) {
+      tagByIdMap.set(candidate.id, candidate);
+    }
+    return createTagDisplayContext([...tagByIdMap.values()]);
+  }, [allTagsQuery.data, parentCandidates]);
+
+  const tagColorLookup = useMemo(() => createTagColorLookup(tagColorsQuery.data), [tagColorsQuery.data]);
 
   const disambiguationLabel = useMemo(() => {
     if (!disambiguationId) {
@@ -239,9 +285,46 @@ export function useTagEditorWorkflow({
   };
 
   const addParent = (parentId: number) => {
+    if (parentIds.includes(parentId)) {
+      return;
+    }
     setParentIds((prev) => [...prev, parentId]);
-    setParentPickerOpen(false);
     setParentQuery("");
+    setHighlightedParentIndex(0);
+    setAutoHighlightParentMatch(true);
+    focusParentSearchInput();
+  };
+
+  const onParentQueryChange = (nextValue: string) => {
+    setParentQuery(nextValue);
+    setHighlightedParentIndex(0);
+    setAutoHighlightParentMatch(true);
+  };
+
+  const onParentQueryKeyDown: KeyboardEventHandler<HTMLInputElement> = (event) => {
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setAutoHighlightParentMatch(false);
+      setHighlightedParentIndex((prev) => moveHighlightIndex(prev, parentCandidates.length, "down"));
+      return;
+    }
+
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setAutoHighlightParentMatch(false);
+      setHighlightedParentIndex((prev) => moveHighlightIndex(prev, parentCandidates.length, "up"));
+      return;
+    }
+
+    if (event.key === "Enter") {
+      event.preventDefault();
+      if (parentCandidates.length > 0) {
+        const targetCandidate = parentCandidates[highlightedParentIndex] ?? parentCandidates[0];
+        if (targetCandidate && !parentIds.includes(targetCandidate.id)) {
+          addParent(targetCandidate.id);
+        }
+      }
+    }
   };
 
   const clearColor = () => {
@@ -314,6 +397,9 @@ export function useTagEditorWorkflow({
     parentPickerOpen,
     parentQuery,
     parentSearchInputRef,
+    highlightedParentIndex,
+    tagDisplayContext,
+    tagColorLookup,
     colorPickerOpen,
     savePending,
     canSave,
@@ -330,6 +416,8 @@ export function useTagEditorWorkflow({
     setTagType,
     setParentPickerOpen,
     setParentQuery,
+    onParentQueryChange,
+    onParentQueryKeyDown,
     setColorPickerOpen,
     addAliasRow,
     updateAlias,

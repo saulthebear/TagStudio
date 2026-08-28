@@ -1,9 +1,12 @@
 import { type TagCreatePayload, type TagResponse, type TagUpdatePayload } from "@tagstudio/api-client";
 import { Button } from "@tagstudio/ui";
+import { Virtuoso } from "react-virtuoso";
 
 import { ModalHeader } from "@/components/ModalHeader";
 import { ModalLayerPortal } from "@/components/ModalLayerPortal";
 import { useTagEditorWorkflow } from "@/hooks/useTagEditorWorkflow";
+import { resolveTagChipStyle } from "@/lib/tag-styles";
+import { getTagDisplayLabel } from "@/lib/tag-workflows";
 
 type TagEditorModalProps = {
   open: boolean;
@@ -184,7 +187,7 @@ export function TagEditorModal({
         <ModalLayerPortal open={workflow.parentPickerOpen} onBackdropClick={() => workflow.setParentPickerOpen(false)}>
           <div
             ref={workflow.parentPickerDrag.panelRef}
-            className={`overlay-panel panel tag-workflow-panel tag-editor-subpanel modal-draggable-panel ${workflow.parentPickerDrag.isDragging ? "modal-panel-dragging" : ""}`}
+            className={`overlay-panel panel tag-workflow-panel tag-editor-subpanel add-tags-panel modal-draggable-panel ${workflow.parentPickerDrag.isDragging ? "modal-panel-dragging" : ""}`}
             role="dialog"
             aria-modal="true"
             aria-label="Add parent tags"
@@ -194,32 +197,48 @@ export function TagEditorModal({
               title="Add Parent Tag(s)"
               dragHandleProps={workflow.parentPickerDrag.dragHandleProps}
               onClose={() => workflow.setParentPickerOpen(false)}
+              className="add-tags-header"
             />
-            <div className="tag-editor-parent-controls">
+            <div className="add-tags-controls tag-editor-parent-controls">
               <input
                 ref={workflow.parentSearchInputRef}
                 className="input-base"
                 placeholder="Search tags"
                 value={workflow.parentQuery}
-                onChange={(event) => workflow.setParentQuery(event.target.value)}
+                onChange={(event) => workflow.onParentQueryChange(event.target.value)}
+                onKeyDown={workflow.onParentQueryKeyDown}
+                autoFocus
               />
             </div>
-            <div className="tag-editor-parent-candidates">
-              {workflow.parentCandidates.map((candidate) => {
-                const alreadyAdded = workflow.parentIds.includes(candidate.id);
-                return (
-                  <button
-                    key={candidate.id}
-                    type="button"
-                    className="tag-editor-candidate-row"
-                    disabled={alreadyAdded}
-                    onClick={() => workflow.addParent(candidate.id)}
-                  >
-                    <span>{candidate.name}</span>
-                    <span>{alreadyAdded ? "Added" : "Add"}</span>
-                  </button>
-                );
-              })}
+            <div className="add-tags-list-shell tag-editor-parent-candidates">
+              <Virtuoso
+                data={workflow.parentCandidates}
+                style={{ height: 360 }}
+                itemContent={(index, candidate) => {
+                  const highlighted = index === workflow.highlightedParentIndex;
+                  const alreadyAdded = workflow.parentIds.includes(candidate.id);
+                  const tagLabel = getTagDisplayLabel(candidate, workflow.tagDisplayContext);
+                  const tagStyle = resolveTagChipStyle(candidate, workflow.tagColorLookup);
+
+                  return (
+                    <div className={`add-tags-row ${highlighted ? "add-tags-row-highlighted" : ""}`}>
+                      <button
+                        type="button"
+                        className="add-tags-row-main tag-editor-candidate-row"
+                        disabled={alreadyAdded}
+                        onClick={() => workflow.addParent(candidate.id)}
+                      >
+                        <span className="add-tags-row-label-chip" style={tagStyle}>
+                          {tagLabel}
+                        </span>
+                        <span className="add-tags-row-state">
+                          {alreadyAdded ? "Added" : "Add"}
+                        </span>
+                      </button>
+                    </div>
+                  );
+                }}
+              />
             </div>
             <div className="overlay-panel-actions">
               <Button variant="secondary" onClick={() => workflow.setParentPickerOpen(false)}>
