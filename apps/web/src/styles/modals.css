@@ -421,6 +421,13 @@ body.modal-dragging {
   max-height: none;
 }
 
+.tag-editor-color-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
 .tag-editor-color-grid {
   display: grid;
   gap: 0.45rem;

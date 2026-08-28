@@ -6,7 +6,9 @@ import {
   computeInheritedTagRows,
   createTagDisplayContext,
   deriveTagApplicationState,
+  filterColorGroupsToParentColors,
   formatSuggestedTagTooltip,
+  getParentTagColors,
   getTagDisplayLabel,
   isEditShortcutKey,
   moveHighlightIndex,
@@ -579,5 +581,114 @@ describe("tag-workflows", () => {
     const parentIds = [1];
     const firstActionable = candidates.findIndex((candidate) => !parentIds.includes(candidate.id));
     expect(firstActionable).toBe(1); // Index 1 is "Beta"
+  });
+
+  test("extracts deduplicated parent tag colors via getParentTagColors", () => {
+    expect(getParentTagColors([])).toEqual([]);
+    expect(
+      getParentTagColors([
+        { color_namespace: null, color_slug: null },
+        { color_namespace: null, color_slug: "blue" }
+      ])
+    ).toEqual([]);
+
+    const singleParent = [
+      { color_namespace: "ts", color_slug: "red" },
+      { color_namespace: null, color_slug: null }
+    ];
+    expect(getParentTagColors(singleParent)).toEqual([{ namespace: "ts", slug: "red" }]);
+
+    const duplicateColors = [
+      { color_namespace: "ts", color_slug: "red" },
+      { color_namespace: "ts", color_slug: "red" }
+    ];
+    expect(getParentTagColors(duplicateColors)).toEqual([{ namespace: "ts", slug: "red" }]);
+
+    const multiParents = [
+      { color_namespace: "ts", color_slug: "red" },
+      { color_namespace: "custom", color_slug: "neon" },
+      { color_namespace: "ts", color_slug: "blue" },
+      { color_namespace: "ts", color_slug: "red" }
+    ];
+    expect(getParentTagColors(multiParents)).toEqual([
+      { namespace: "ts", slug: "red" },
+      { namespace: "custom", slug: "neon" },
+      { namespace: "ts", slug: "blue" }
+    ]);
+  });
+
+  test("filters color groups to parent tag colors via filterColorGroupsToParentColors", () => {
+    const groups = [
+      {
+        namespace: "ts",
+        namespace_name: "TagStudio Palette",
+        colors: [
+          {
+            namespace: "ts",
+            namespace_name: "TagStudio Palette",
+            slug: "red",
+            name: "Red",
+            primary: "#ef4444",
+            secondary: "#b91c1c",
+            color_border: false
+          },
+          {
+            namespace: "ts",
+            namespace_name: "TagStudio Palette",
+            slug: "blue",
+            name: "Blue",
+            primary: "#3b82f6",
+            secondary: "#1d4ed8",
+            color_border: false
+          },
+          {
+            namespace: "ts",
+            namespace_name: "TagStudio Palette",
+            slug: "green",
+            name: "Green",
+            primary: "#22c55e",
+            secondary: "#15803d",
+            color_border: false
+          }
+        ]
+      },
+      {
+        namespace: "standard",
+        namespace_name: "Standard Palette",
+        colors: [
+          {
+            namespace: "standard",
+            namespace_name: "Standard Palette",
+            slug: "gray",
+            name: "Gray",
+            primary: "#64748b",
+            secondary: "#334155",
+            color_border: false
+          }
+        ]
+      }
+    ];
+
+    expect(filterColorGroupsToParentColors(undefined, [{ namespace: "ts", slug: "red" }])).toEqual([]);
+    expect(filterColorGroupsToParentColors(groups, [])).toEqual([]);
+
+    const filtered = filterColorGroupsToParentColors(groups, [
+      { namespace: "ts", slug: "blue" },
+      { namespace: "ts", slug: "red" }
+    ]);
+    expect(filtered.length).toBe(1);
+    expect(filtered[0].namespace).toBe("ts");
+    expect(filtered[0].colors.map((c) => c.slug)).toEqual(["red", "blue"]);
+
+    // Test with unlisted/fallback parent color
+    const withFallback = filterColorGroupsToParentColors(groups, [
+      { namespace: "ts", slug: "green" },
+      { namespace: "unlisted", slug: "custom-purple" }
+    ]);
+    expect(withFallback.length).toBe(2);
+    expect(withFallback[0].namespace).toBe("ts");
+    expect(withFallback[0].colors.map((c) => c.slug)).toEqual(["green"]);
+    expect(withFallback[1].namespace).toBe("unlisted");
+    expect(withFallback[1].colors.map((c) => c.slug)).toEqual(["custom-purple"]);
   });
 });

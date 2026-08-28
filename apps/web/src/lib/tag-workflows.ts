@@ -1,4 +1,4 @@
-import { type TagResponse, type TagStatResponse } from "@tagstudio/api-client";
+import { type TagColorNamespaceResponse, type TagResponse, type TagStatResponse } from "@tagstudio/api-client";
 
 export function normalizeTagQuery(value: string): string {
   return value.trim().toLowerCase();
@@ -482,5 +482,84 @@ export function formatSuggestedTagTooltip(label: string, confidence: number): st
   const percentage = Math.round(confidence * 100);
   return `Add tag "${label}" (${percentage}% match)`;
 }
+
+export type TagColorIdentifier = {
+  namespace: string;
+  slug: string;
+};
+
+export function getParentTagColors(
+  parents: readonly Pick<TagResponse, "color_namespace" | "color_slug">[]
+): TagColorIdentifier[] {
+  const seen = new Set<string>();
+  const out: TagColorIdentifier[] = [];
+
+  for (const parent of parents) {
+    if (parent.color_namespace && parent.color_slug) {
+      const key = `${parent.color_namespace}/${parent.color_slug}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        out.push({
+          namespace: parent.color_namespace,
+          slug: parent.color_slug
+        });
+      }
+    }
+  }
+
+  return out;
+}
+
+export function filterColorGroupsToParentColors(
+  groups: TagColorNamespaceResponse[] | undefined,
+  parentColors: readonly TagColorIdentifier[]
+): TagColorNamespaceResponse[] {
+  if (!groups || groups.length === 0 || parentColors.length === 0) {
+    return [];
+  }
+
+  const parentColorKeys = new Set(parentColors.map((c) => `${c.namespace}/${c.slug}`));
+  const matchedKeys = new Set<string>();
+  const filtered: TagColorNamespaceResponse[] = [];
+
+  for (const group of groups) {
+    const matchingColors = group.colors.filter((color) =>
+      parentColorKeys.has(`${group.namespace}/${color.slug}`)
+    );
+    if (matchingColors.length > 0) {
+      filtered.push({
+        ...group,
+        colors: matchingColors
+      });
+      for (const color of matchingColors) {
+        matchedKeys.add(`${group.namespace}/${color.slug}`);
+      }
+    }
+  }
+
+  for (const pc of parentColors) {
+    const key = `${pc.namespace}/${pc.slug}`;
+    if (!matchedKeys.has(key)) {
+      filtered.push({
+        namespace: pc.namespace,
+        namespace_name: pc.namespace,
+        colors: [
+          {
+            namespace: pc.namespace,
+            namespace_name: pc.namespace,
+            slug: pc.slug,
+            name: pc.slug,
+            primary: "#64748b",
+            secondary: null,
+            color_border: false
+          }
+        ]
+      });
+    }
+  }
+
+  return filtered;
+}
+
 
 

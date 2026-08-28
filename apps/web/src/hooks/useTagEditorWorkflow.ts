@@ -15,6 +15,8 @@ import { useTagColors } from "@/hooks/useTagColors";
 import { createTagColorLookup } from "@/lib/tag-styles";
 import {
   createTagDisplayContext,
+  filterColorGroupsToParentColors,
+  getParentTagColors,
   moveHighlightIndex,
   normalizeTagQuery,
   scoreTags,
@@ -110,6 +112,7 @@ export function useTagEditorWorkflow({
   const [highlightedParentIndex, setHighlightedParentIndex] = useState(0);
   const [autoHighlightParentMatch, setAutoHighlightParentMatch] = useState(true);
   const [colorPickerOpen, setColorPickerOpen] = useState(false);
+  const [colorPickerMode, setColorPickerMode] = useState<"all" | "parent">("all");
   const [savePending, setSavePending] = useState(false);
   const { inputRef: parentSearchInputRef, focusInput: focusParentSearchInput } = useSearchInputFocus();
 
@@ -192,6 +195,7 @@ export function useTagEditorWorkflow({
     setHighlightedParentIndex(0);
     setAutoHighlightParentMatch(true);
     setColorPickerOpen(false);
+    setColorPickerMode("all");
     setSavePending(false);
   }, [initialName, mode, open, tag]);
 
@@ -221,6 +225,9 @@ export function useTagEditorWorkflow({
         .sort((a, b) => a.name.localeCompare(b.name)),
     [parentIds, tagById]
   );
+
+  const parentColors = useMemo(() => getParentTagColors(selectedParents), [selectedParents]);
+  const canCopyParentColor = parentColors.length > 0;
 
   const parentCandidates = useMemo(
     () => scoreTags(parentCandidatesQuery.data ?? [], parentQuery),
@@ -398,6 +405,30 @@ export function useTagEditorWorkflow({
     setColorPickerOpen(false);
   };
 
+  const openColorPicker = () => {
+    setColorPickerMode("all");
+    setColorPickerOpen(true);
+  };
+
+  const copyParentColor = () => {
+    if (parentColors.length === 0) {
+      return;
+    }
+    if (parentColors.length === 1) {
+      setColor(parentColors[0].namespace, parentColors[0].slug);
+      return;
+    }
+    setColorPickerMode("parent");
+    setColorPickerOpen(true);
+  };
+
+  const colorGroups = useMemo(() => {
+    if (colorPickerMode === "parent") {
+      return filterColorGroupsToParentColors(tagColorsQuery.data, parentColors);
+    }
+    return tagColorsQuery.data ?? [];
+  }, [colorPickerMode, parentColors, tagColorsQuery.data]);
+
   const saveTag = async () => {
     if (!canSave) {
       return;
@@ -460,11 +491,14 @@ export function useTagEditorWorkflow({
     tagDisplayContext,
     tagColorLookup,
     colorPickerOpen,
+    colorPickerMode,
+    parentColors,
+    canCopyParentColor,
     savePending,
     canSave,
     parentCandidates,
     parentRows,
-    colorGroups: tagColorsQuery.data ?? [],
+    colorGroups,
     tagEditorDrag,
     parentPickerDrag,
     colorPickerDrag,
@@ -479,6 +513,8 @@ export function useTagEditorWorkflow({
     onParentQueryChange,
     onParentQueryKeyDown,
     setColorPickerOpen,
+    openColorPicker,
+    copyParentColor,
     addAliasRow,
     updateAlias,
     removeAlias,

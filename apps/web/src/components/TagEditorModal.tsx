@@ -176,9 +176,23 @@ export function TagEditorModal({
 
         <div className="settings-row">
           <span>Color</span>
-          <Button variant="secondary" onClick={() => workflow.setColorPickerOpen(true)}>
-            {workflow.colorLabel}
-          </Button>
+          <div className="tag-editor-color-actions">
+            <Button variant="secondary" onClick={workflow.openColorPicker}>
+              {workflow.colorLabel}
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={workflow.copyParentColor}
+              disabled={!workflow.canCopyParentColor}
+              title={
+                workflow.canCopyParentColor
+                  ? "Copy color from parent tag"
+                  : "No parent tag color available"
+              }
+            >
+              Copy Parent
+            </Button>
+          </div>
         </div>
 
         <div className="settings-row">
@@ -296,19 +310,21 @@ export function TagEditorModal({
             className={`overlay-panel panel tag-workflow-panel tag-editor-subpanel modal-draggable-panel ${workflow.colorPickerDrag.isDragging ? "modal-panel-dragging" : ""}`}
             role="dialog"
             aria-modal="true"
-            aria-label="Choose tag color"
+            aria-label={workflow.colorPickerMode === "parent" ? "Choose parent tag color" : "Choose tag color"}
             style={workflow.colorPickerDrag.panelStyle}
           >
             <ModalHeader
-              title="Choose Tag Color"
+              title={workflow.colorPickerMode === "parent" ? "Choose Parent Tag Color" : "Choose Tag Color"}
               dragHandleProps={workflow.colorPickerDrag.dragHandleProps}
               onClose={() => workflow.setColorPickerOpen(false)}
             />
             <div className="tag-editor-color-grid">
-              <button type="button" className="tag-editor-color-row" onClick={workflow.clearColor}>
-                <span className="tag-editor-color-swatch" aria-hidden="true" />
-                <span>No Color</span>
-              </button>
+              {workflow.colorPickerMode === "all" ? (
+                <button type="button" className="tag-editor-color-row" onClick={workflow.clearColor}>
+                  <span className="tag-editor-color-swatch" aria-hidden="true" />
+                  <span>No Color</span>
+                </button>
+              ) : null}
               {workflow.colorGroups.map((group) => (
                 <div key={group.namespace}>
                   <h4 className="tag-editor-color-title">{group.namespace_name}</h4>
