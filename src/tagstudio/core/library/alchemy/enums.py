@@ -1,5 +1,6 @@
 import enum
 import random
+import secrets
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 
@@ -94,6 +95,10 @@ class BrowsingState:
             return None
         return Parser(self.query).parse()
 
+    def __post_init__(self) -> None:
+        if self.sorting_mode == SortingModeEnum.RANDOM and not self.random_seed:
+            self.random_seed = secrets.SystemRandom().uniform(0.1, 100.0)
+
     @classmethod
     def show_all(cls) -> "BrowsingState":
         return BrowsingState()
@@ -141,7 +146,7 @@ class BrowsingState:
     def with_sorting_mode(self, mode: SortingModeEnum) -> "BrowsingState":
         seed = self.random_seed
         if mode == SortingModeEnum.RANDOM:
-            seed = random.random()
+            seed = secrets.SystemRandom().uniform(0.1, 100.0)
         return replace(self, sorting_mode=mode, random_seed=seed)
 
     def with_sorting_direction(self, ascending: bool) -> "BrowsingState":

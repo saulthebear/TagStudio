@@ -8,6 +8,7 @@
 
 
 import re
+import secrets
 import shutil
 import time
 import unicodedata
@@ -1207,7 +1208,12 @@ class Library:
                 case SortingModeEnum.PATH:
                     sort_columns = [func.lower(Entry.path), Entry.id]
                 case SortingModeEnum.RANDOM:
-                    sort_columns = [func.sin(Entry.id * search.random_seed), Entry.id]
+                    seed = (
+                        search.random_seed
+                        if search.random_seed
+                        else secrets.SystemRandom().uniform(0.1, 100.0)
+                    )
+                    sort_columns = [func.sin(Entry.id * seed), Entry.id]
 
             statement = statement.order_by(
                 *(
