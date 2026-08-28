@@ -1826,6 +1826,15 @@ test("supports add-tags modal create-and-add workflow", async ({ page }) => {
   await expect(parentPickerDialog).toHaveCount(0);
   await expect(editTagDialog).toBeVisible();
 
+  const disambigChip = editTagDialog.locator(".tag-editor-disambig-chip", { hasText: "Review" });
+  await expect(disambigChip).toBeVisible();
+  await expect(disambigChip).toHaveClass(/disambig-chip-unselected/);
+  await disambigChip.click();
+  await expect(disambigChip).toHaveClass(/disambig-chip-selected/);
+  await expect(editTagDialog.locator(".tag-editor-preview")).toBeVisible();
+  await disambigChip.click();
+  await expect(disambigChip).toHaveClass(/disambig-chip-unselected/);
+
   await editTagDialog
     .locator(".settings-row")
     .filter({ hasText: "Color" })

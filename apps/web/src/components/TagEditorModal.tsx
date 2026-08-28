@@ -108,14 +108,32 @@ export function TagEditorModal({
             {workflow.selectedParents.length === 0 ? (
               <p className="tag-editor-empty">No parent tags selected.</p>
             ) : (
-              workflow.selectedParents.map((parent) => (
-                <div key={parent.id} className="tag-editor-parent-pill">
-                  <span>{parent.name}</span>
-                  <Button variant="secondary" size="sm" onClick={() => workflow.removeParent(parent.id)}>
-                    Remove
-                  </Button>
-                </div>
-              ))
+              workflow.selectedParents.map((parent) => {
+                const tagStyle = resolveTagChipStyle(parent, workflow.tagColorLookup);
+                const tagLabel = getTagDisplayLabel(parent, workflow.tagDisplayContext);
+
+                return (
+                  <div
+                    key={parent.id}
+                    className="metadata-tag-chip tag-editor-parent-pill"
+                    style={tagStyle}
+                  >
+                    <span className="metadata-tag-chip-main">
+                      <span className="metadata-tag-chip-label">{tagLabel}</span>
+                    </span>
+                    <div className="metadata-tag-chip-remove-slot">
+                      <button
+                        type="button"
+                        className="metadata-tag-chip-remove"
+                        aria-label={`Remove parent ${tagLabel}`}
+                        onClick={() => workflow.removeParent(parent.id)}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  </div>
+                );
+              })
             )}
           </div>
           <Button variant="secondary" size="sm" onClick={() => workflow.setParentPickerOpen(true)}>
@@ -125,21 +143,31 @@ export function TagEditorModal({
 
         <div className="settings-row">
           <span>Disambiguation Parent</span>
-          <select
-            className="input-base"
-            value={workflow.disambiguationId ? String(workflow.disambiguationId) : ""}
-            onChange={(event) => {
-              const nextValue = event.target.value;
-              workflow.setDisambiguationId(nextValue ? Number(nextValue) : null);
-            }}
-          >
-            <option value="">None</option>
-            {workflow.selectedParents.map((parent) => (
-              <option key={parent.id} value={String(parent.id)}>
-                {parent.name}
-              </option>
-            ))}
-          </select>
+          {workflow.selectedParents.length === 0 ? (
+            <p className="tag-editor-empty">No parent tags selected.</p>
+          ) : (
+            <div className="tag-editor-disambig-chips">
+              {workflow.selectedParents.map((parent) => {
+                const isSelected = workflow.disambiguationId === parent.id;
+                const tagStyle = resolveTagChipStyle(parent, workflow.tagColorLookup);
+                const tagLabel = getTagDisplayLabel(parent, workflow.tagDisplayContext);
+
+                return (
+                  <button
+                    key={parent.id}
+                    type="button"
+                    className={`metadata-tag-chip tag-editor-disambig-chip ${isSelected ? "disambig-chip-selected" : "disambig-chip-unselected"}`}
+                    style={isSelected ? tagStyle : undefined}
+                    onClick={() => workflow.setDisambiguationId(isSelected ? null : parent.id)}
+                    aria-pressed={isSelected}
+                    aria-label={`Disambiguate with ${tagLabel}`}
+                  >
+                    <span className="metadata-tag-chip-label">{tagLabel}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
           <p className="tag-editor-hint">
             This parent name is shown in the UI as <strong>TagName (ParentName)</strong>.
           </p>
