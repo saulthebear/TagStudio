@@ -315,6 +315,46 @@ class TagUpdateRequest(BaseModel):
     tag_type: str | None = None
 
 
+class TagMergeRequest(BaseModel):
+    source_tag_ids: list[int]
+    target_tag_id: int
+    updated_tag: TagUpdateRequest | None = None
+
+
+class TagMergeResponse(BaseModel):
+    success: bool
+    target_tag: TagResponse
+    merged_count: int
+    affected_entries_count: int
+    undo_data: dict[str, Any] = Field(default_factory=dict)
+
+
+class TagMergeUndoRequest(BaseModel):
+    undo_data: dict[str, Any]
+
+
+class TagBatchUpdateRequest(BaseModel):
+    tag_ids: list[int]
+    tag_type: str | None = None
+    is_hidden: bool | None = None
+    is_category: bool | None = None
+    add_parent_ids: list[int] | None = None
+
+
+class TagBatchDeleteRequest(BaseModel):
+    tag_ids: list[int]
+
+
+class TagBatchDeleteResponse(BaseModel):
+    success: bool
+    deleted_count: int
+    undo_data: dict[str, Any] = Field(default_factory=dict)
+
+
+class TagBatchDeleteUndoRequest(BaseModel):
+    undo_data: dict[str, Any]
+
+
 class JobStatusResponse(BaseModel):
     job_id: str
     operation: str

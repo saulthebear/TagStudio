@@ -1078,3 +1078,136 @@ def test_tags_suggested_endpoint() -> None:
             assert tag_c_id in with_sys_ids
 
 
+def test_tag_merge_and_undo_endpoints() -> None:
+    with TemporaryDirectory() as tmp:
+        library_path = Path(tmp)
+        seed_library(library_path)
+
+        app = create_app(require_token=False)
+        with TestClient(app) as client:
+            open_res = client.post("/api/v1/libraries/open", json={"path": str(library_path)})
+            assert open_res.status_code == 200
+
+            # Create tag1 and tag2
+            tag1_res = client.post("/api/v1/tags", json={"name": "tag1", "aliases": ["t1"]})
+            assert tag1_res.status_code == 200
+            tag1_id = tag1_res.json()["id"]
+
+            tag2_res = client.post("/api/v1/tags", json={"name": "tag2", "aliases": ["t2"]})
+            assert tag2_res.status_code == 200
+            tag2_id = tag2_res.json()["id"]
+
+            # Create child tag of tag2
+            tag3_res = client.post("/api/v1/tags", json={"name": "tag3", "parent_ids": [tag2_id]})
+            assert tag3_res.status_code == 200
+            tag3_id = tag3_res.json()["id"]
+
+            entry_ids = list(get_entry_ids_by_filename(client).values())
+            # Tag entry 0 with tag1, entry 1 with tag2
+            client.post("/api/v1/entries/tags:add", json={"entry_ids": [entry_ids[0]], "tag_ids": [tag1_id]})
+            client.post("/api/v1/entries/tags:add", json={"entry_ids": [entry_ids[1]], "tag_ids": [tag2_id]})
+
+            # Merge tag2 into tag1
+            merge_res = client.post("/api/v1/tags/merge", json={
+                "source_tag_ids": [tag2_id],
+                "target_tag_id": tag1_id,
+                "updated_tag": {
+                    "name": "tag1_merged",
+                    "aliases": ["t1", "t2", "tag2"]
+                }
+            })
+            assert merge_res.status_code == 200
+            merge_data = merge_res.json()
+            assert merge_data["success"] is True
+            assert merge_data["target_tag"]["name"] == "tag1_merged"
+            assert "tag2" in merge_data["target_tag"]["aliases"]
+            undo_data = merge_data["undo_data"]
+
+            # tag2 should be gone
+            tags_res = client.get("/api/v1/tags")
+            remaining_ids = [t["id"] for t in tags_res.json()]
+            assert tag1_id in remaining_ids
+            assert tag2_id not in remaining_ids
+
+            # Entry 1 should now have tag1
+            entry1_res = client.get(f"/api/v1/entries/{entry_ids[1]}")
+            assert entry1_res.status_code == 200
+            entry1_tag_ids = [t["id"] for t in entry1_res.json()["tags"]]
+            assert tag1_id in entry1_tag_ids
+
+            # Child tag3 should now have tag1 as parent
+            tag3_check = client.get("/api/v1/tags")
+            t3_item = next(t for t in tag3_check.json() if t["id"] == tag3_id)
+            assert tag1_id in t3_item["parent_ids"]
+
+            # Now test Undo
+            undo_res = client.post("/api/v1/tags/merge:undo", json={"undo_data": undo_data})
+            assert undo_res.status_code == 200
+            assert undo_res.json()["name"] == "tag1"
+
+            # tag2 should be restored with its original id
+            tags_restored = client.get("/api/v1/tags").json()
+            restored_ids = [t["id"] for t in tags_restored]
+            assert tag2_id in restored_ids
+            t2_item = next(t for t in tags_restored if t["id"] == tag2_id)
+            assert t2_item["name"] == "tag2"
+
+            # Entry 1 should now have tag2 again and not tag1
+            entry1_restored = client.get(f"/api/v1/entries/{entry_ids[1]}").json()
+            entry1_restored_tag_ids = [t["id"] for t in entry1_restored["tags"]]
+            assert tag2_id in entry1_restored_tag_ids
+            assert tag1_id not in entry1_restored_tag_ids
+
+
+def test_tag_batch_update_and_delete_endpoints() -> None:
+    with TemporaryDirectory() as tmp:
+        library_path = Path(tmp)
+        seed_library(library_path)
+
+        app = create_app(require_token=False)
+        with TestClient(app) as client:
+            open_res = client.post("/api/v1/libraries/open", json={"path": str(library_path)})
+            assert open_res.status_code == 200
+
+            tag_a = client.post("/api/v1/tags", json={"name": "batch_a"}).json()["id"]
+            tag_b = client.post("/api/v1/tags", json={"name": "batch_b"}).json()["id"]
+            tag_parent = client.post("/api/v1/tags", json={"name": "batch_parent"}).json()["id"]
+
+            # Batch update properties
+            batch_update_res = client.post("/api/v1/tags/batch:update", json={
+                "tag_ids": [tag_a, tag_b],
+                "tag_type": "meta",
+                "is_hidden": True,
+                "is_category": True,
+                "add_parent_ids": [tag_parent]
+            })
+            assert batch_update_res.status_code == 200
+            updated_list = batch_update_res.json()
+            assert len(updated_list) == 2
+            for t in updated_list:
+                assert t["tag_type"] == "meta"
+                assert t["is_hidden"] is True
+                assert t["is_category"] is True
+                assert tag_parent in t["parent_ids"]
+
+            # Batch delete
+            del_res = client.post("/api/v1/tags/batch:delete", json={"tag_ids": [tag_a, tag_b]})
+            assert del_res.status_code == 200
+            del_data = del_res.json()
+            assert del_data["success"] is True
+            assert del_data["deleted_count"] == 2
+            undo_data = del_data["undo_data"]
+
+            tags_after_del = [t["id"] for t in client.get("/api/v1/tags").json()]
+            assert tag_a not in tags_after_del
+            assert tag_b not in tags_after_del
+
+            # Undo batch delete
+            undo_del_res = client.post("/api/v1/tags/batch:delete:undo", json={"undo_data": undo_data})
+            assert undo_del_res.status_code == 200
+            tags_after_undo = [t["id"] for t in client.get("/api/v1/tags").json()]
+            assert tag_a in tags_after_undo
+            assert tag_b in tags_after_undo
+
+
+

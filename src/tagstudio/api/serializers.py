@@ -26,6 +26,7 @@ def serialize_tag(tag: Tag) -> dict[str, Any]:
         "disambiguation_id": tag.disambiguation_id,
         "is_category": tag.is_category,
         "is_hidden": tag.is_hidden,
+        "tag_type": tag.tag_type or "content",
     }
 
 
@@ -41,6 +42,7 @@ def serialize_tag_stat(tag: Tag, entry_count: int) -> dict[str, Any]:
         "disambiguation_id": tag.disambiguation_id,
         "is_category": tag.is_category,
         "is_hidden": tag.is_hidden,
+        "tag_type": tag.tag_type or "content",
         "entry_count": entry_count,
     }
 

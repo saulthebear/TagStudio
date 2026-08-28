@@ -39,9 +39,16 @@ from tagstudio.api.schemas import (
     SettingsUpdateRequest,
     SuccessResponse,
     SystemTagsSyncResponse,
+    TagBatchDeleteRequest,
+    TagBatchDeleteResponse,
+    TagBatchDeleteUndoRequest,
+    TagBatchUpdateRequest,
     TagColorNamespaceResponse,
     TagColorResponse,
     TagCreateRequest,
+    TagMergeRequest,
+    TagMergeResponse,
+    TagMergeUndoRequest,
     TagMutationRequest,
     TagMutationResponse,
     TagResponse,
@@ -79,12 +86,13 @@ from tagstudio.api.services.entry_service import (
     trash_entries as trash_entries_service,
 )
 from tagstudio.api.services.tag_service import (
+    batch_delete_tags as batch_delete_tags_service,
+    batch_update_tags as batch_update_tags_service,
     create_tag as create_tag_service,
-)
-from tagstudio.api.services.tag_service import (
     get_descendant_tag_ids,
-)
-from tagstudio.api.services.tag_service import (
+    merge_tags as merge_tags_service,
+    undo_batch_delete_tags as undo_batch_delete_tags_service,
+    undo_merge_tags as undo_merge_tags_service,
     update_tag as update_tag_service,
 )
 from tagstudio.api.state import ApiState
@@ -769,6 +777,86 @@ def create_router(*, state: ApiState, jobs: JobManager) -> APIRouter:
         if tag is None:
             raise HTTPException(status_code=404, detail="Tag not found.")
         lib.remove_tag(tag_id)
+        return SuccessResponse(success=True)
+
+    @router.post("/tags/merge", response_model=TagMergeResponse)
+    def merge_tags(request: TagMergeRequest) -> TagMergeResponse:
+        lib = get_library_or_error()
+        start = time.perf_counter()
+        target_tag, affected_count, undo_data = merge_tags_service(lib, request)
+        duration_ms = round((time.perf_counter() - start) * 1000, 2)
+        logger.info(
+            "api.tags.merge",
+            target_tag_id=request.target_tag_id,
+            source_tag_ids=request.source_tag_ids,
+            affected_entries_count=affected_count,
+            duration_ms=duration_ms,
+        )
+        return TagMergeResponse(
+            success=True,
+            target_tag=TagResponse.model_validate(serialize_tag(target_tag)),
+            merged_count=len(request.source_tag_ids),
+            affected_entries_count=affected_count,
+            undo_data=undo_data,
+        )
+
+    @router.post("/tags/merge:undo", response_model=TagResponse)
+    def undo_merge_tags(request: TagMergeUndoRequest) -> TagResponse:
+        lib = get_library_or_error()
+        start = time.perf_counter()
+        restored = undo_merge_tags_service(lib, request.undo_data)
+        duration_ms = round((time.perf_counter() - start) * 1000, 2)
+        logger.info(
+            "api.tags.merge_undo",
+            target_tag_id=request.undo_data.get("target_tag_id"),
+            restored_name=restored.name,
+            duration_ms=duration_ms,
+        )
+        return TagResponse.model_validate(serialize_tag(restored))
+
+    @router.post("/tags/batch:update", response_model=list[TagResponse])
+    def batch_update_tags(request: TagBatchUpdateRequest) -> list[TagResponse]:
+        lib = get_library_or_error()
+        start = time.perf_counter()
+        updated_tags = batch_update_tags_service(lib, request)
+        duration_ms = round((time.perf_counter() - start) * 1000, 2)
+        logger.info(
+            "api.tags.batch_update",
+            tag_ids=request.tag_ids,
+            updated_count=len(updated_tags),
+            duration_ms=duration_ms,
+        )
+        return [TagResponse.model_validate(serialize_tag(tag)) for tag in updated_tags]
+
+    @router.post("/tags/batch:delete", response_model=TagBatchDeleteResponse)
+    def batch_delete_tags(request: TagBatchDeleteRequest) -> TagBatchDeleteResponse:
+        lib = get_library_or_error()
+        start = time.perf_counter()
+        deleted_count, undo_data = batch_delete_tags_service(lib, request)
+        duration_ms = round((time.perf_counter() - start) * 1000, 2)
+        logger.info(
+            "api.tags.batch_delete",
+            tag_ids=request.tag_ids,
+            deleted_count=deleted_count,
+            duration_ms=duration_ms,
+        )
+        return TagBatchDeleteResponse(
+            success=True,
+            deleted_count=deleted_count,
+            undo_data=undo_data,
+        )
+
+    @router.post("/tags/batch:delete:undo", response_model=SuccessResponse)
+    def undo_batch_delete_tags(request: TagBatchDeleteUndoRequest) -> SuccessResponse:
+        lib = get_library_or_error()
+        start = time.perf_counter()
+        undo_batch_delete_tags_service(lib, request.undo_data)
+        duration_ms = round((time.perf_counter() - start) * 1000, 2)
+        logger.info(
+            "api.tags.batch_delete_undo",
+            restored_count=len(request.undo_data.get("deleted_tags", [])),
+            duration_ms=duration_ms,
+        )
         return SuccessResponse(success=True)
 
     @router.post("/jobs/refresh", response_model=JobCreateResponse)

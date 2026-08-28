@@ -752,3 +752,508 @@
   border-color: #3b82f6;
   font-weight: 600;
 }
+
+/* Interaction Mode Switcher (Browse vs Edit Mode) */
+.tag-interaction-mode-toggle {
+  display: inline-flex;
+  border-radius: var(--ui-control-radius);
+  background: rgba(0, 0, 0, 0.06);
+  padding: 0.2rem;
+  gap: 0.15rem;
+}
+
+.dark .tag-interaction-mode-toggle {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.tag-interaction-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  padding: 0.3rem 0.55rem;
+  border-radius: calc(var(--ui-control-radius) - 0.2rem);
+  border: none;
+  background: transparent;
+  color: var(--color-muted);
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+}
+
+.tag-interaction-btn:hover {
+  color: var(--ui-control-text);
+}
+
+.tag-interaction-btn-active {
+  background: var(--color-surface);
+  color: var(--ui-control-text);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  font-weight: 600;
+}
+
+.tag-interaction-btn-edit {
+  background: rgba(245, 158, 11, 0.15) !important;
+  color: #d97706 !important;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.dark .tag-interaction-btn-edit {
+  background: rgba(245, 158, 11, 0.2) !important;
+  color: #fbbf24 !important;
+  border-color: rgba(245, 158, 11, 0.4);
+}
+
+/* Hidden Tags Toggle Button */
+.tag-hidden-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  padding: 0.35rem 0.55rem;
+  border-radius: var(--ui-control-radius);
+  border: 1px solid var(--color-border-soft);
+  background: var(--ui-control-bg);
+  color: var(--color-muted);
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+  height: 36px;
+  flex-shrink: 0;
+}
+
+.tag-hidden-toggle-btn:hover {
+  color: var(--ui-control-text);
+  border-color: var(--color-border);
+}
+
+.tag-hidden-toggle-btn-active {
+  background: rgba(59, 130, 246, 0.1) !important;
+  border-color: rgba(59, 130, 246, 0.4) !important;
+  color: #3b82f6 !important;
+  font-weight: 600;
+}
+
+/* Edit Mode Action Bar */
+.tag-edit-mode-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 0.55rem;
+  border-radius: 0.5rem;
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px dashed rgba(245, 158, 11, 0.35);
+}
+
+.dark .tag-edit-mode-bar {
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.45);
+}
+
+.tag-edit-bar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.tag-edit-action-btn {
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: #3b82f6;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0.15rem 0.4rem;
+  border-radius: 0.25rem;
+  transition: background 0.15s;
+}
+
+.tag-edit-action-btn:hover {
+  background: rgba(59, 130, 246, 0.12);
+}
+
+.tag-edit-actions-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.tag-edit-btn-tool {
+  font-size: 0.75rem !important;
+  padding: 0.25rem 0.5rem !important;
+  height: 28px !important;
+}
+
+.tag-edit-btn-merge {
+  font-size: 0.75rem !important;
+  padding: 0.25rem 0.6rem !important;
+  height: 28px !important;
+  background: #3b82f6 !important;
+  color: #ffffff !important;
+  font-weight: 600 !important;
+}
+
+.tag-edit-btn-delete {
+  font-size: 0.75rem !important;
+  padding: 0.25rem 0.5rem !important;
+  height: 28px !important;
+}
+
+/* Edit Mode Checkbox & Row Overrides */
+.tag-edit-checkbox {
+  accent-color: #f59e0b;
+}
+
+.tag-tree-row-edit-selected,
+.tag-list-item-edit-selected {
+  background: rgba(245, 158, 11, 0.12) !important;
+  border-left: 3px solid #f59e0b;
+}
+
+.tag-cloud-item-edit-selected {
+  border: 2px solid #f59e0b !important;
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.25) !important;
+  font-weight: 600 !important;
+}
+
+.tag-row-edit-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 0.25rem;
+  border: none;
+  background: transparent;
+  color: var(--color-muted);
+  cursor: pointer;
+  opacity: 0.7;
+  transition: all 0.15s;
+  margin-left: auto;
+}
+
+.tag-row-edit-icon-btn:hover {
+  opacity: 1;
+  background: rgba(0, 0, 0, 0.08);
+  color: var(--ui-control-text);
+}
+
+.dark .tag-row-edit-icon-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.tag-cloud-edit-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0, 0, 0, 0.06);
+  color: inherit;
+  cursor: pointer;
+  margin-left: 0.2rem;
+  padding: 0;
+  opacity: 0.7;
+}
+
+.tag-cloud-edit-btn:hover {
+  opacity: 1;
+  background: rgba(0, 0, 0, 0.15);
+}
+
+/* Tag Type Badges */
+.tag-type-badge {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  padding: 0.05rem 0.3rem;
+  border-radius: 0.2rem;
+  background: rgba(0, 0, 0, 0.08);
+  color: var(--color-muted);
+}
+
+.dark .tag-type-badge {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+/* Tag Directory Component */
+.tag-directory-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.tag-directory-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--color-border-soft);
+  margin-bottom: 0.5rem;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.tag-submode-group {
+  display: inline-flex;
+  border-radius: var(--ui-control-radius);
+  background: rgba(0, 0, 0, 0.06);
+  padding: 0.15rem;
+  gap: 0.15rem;
+}
+
+.dark .tag-submode-group {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.tag-submode-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  padding: 0.25rem 0.5rem;
+  border-radius: calc(var(--ui-control-radius) - 0.2rem);
+  border: none;
+  background: transparent;
+  color: var(--color-muted);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.tag-submode-btn:hover {
+  color: var(--ui-control-text);
+}
+
+.tag-submode-btn-active {
+  background: var(--color-surface);
+  color: var(--ui-control-text);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  font-weight: 600;
+}
+
+.tag-directory-content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* Tag Cloud Wrapper and Toolbar */
+.tag-cloud-wrapper {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.tag-cloud-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--color-border-soft);
+  margin-bottom: 0.5rem;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+/* Tag Merge Modal */
+.tag-merge-modal {
+  display: flex;
+  flex-direction: column;
+  max-height: 85vh;
+  overflow-y: auto;
+}
+
+.tag-merge-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.tag-merge-surviving-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.25rem;
+}
+
+.tag-merge-surviving-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.55rem;
+  border-radius: 0.375rem;
+  border: 1px solid var(--color-border-soft);
+  background: var(--color-surface);
+  color: var(--ui-control-text);
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.tag-merge-surviving-chip:hover {
+  border-color: #3b82f6;
+}
+
+.tag-merge-surviving-active {
+  border-color: #3b82f6 !important;
+  background: rgba(59, 130, 246, 0.12) !important;
+  font-weight: 600;
+  box-shadow: 0 0 0 1px #3b82f6;
+}
+
+.tag-merge-option-chips {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex-wrap: wrap;
+  margin-top: 0.25rem;
+}
+
+.tag-merge-pick-chip {
+  font-size: 0.75rem;
+  padding: 0.15rem 0.4rem;
+  border-radius: 0.25rem;
+  border: 1px solid var(--color-border-soft);
+  background: var(--ui-control-bg);
+  color: var(--ui-control-text);
+  cursor: pointer;
+}
+
+.tag-merge-pick-chip:hover {
+  border-color: #3b82f6;
+}
+
+.tag-merge-pick-chip-selected {
+  background: #3b82f6;
+  color: #ffffff;
+  border-color: #3b82f6;
+}
+
+.tag-merge-alias-box {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.tag-merge-chips-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.tag-merge-color-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.tag-merge-color-chip {
+  font-size: 0.75rem;
+  padding: 0.2rem 0.45rem;
+  border-radius: 0.25rem;
+  cursor: pointer;
+  border: 1px solid var(--color-border-soft);
+}
+
+.tag-merge-color-chip-active {
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 0 2px #3b82f6 !important;
+  font-weight: 600;
+}
+
+.tag-merge-impact-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.65rem;
+  border-radius: 0.375rem;
+  background: rgba(59, 130, 246, 0.08);
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  margin-top: 0.25rem;
+}
+
+/* Duplicate Scanner Modal */
+.tag-duplicate-scanner-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.tag-duplicate-scanner-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem;
+  border-radius: 0.375rem;
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+}
+
+.tag-duplicate-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2.5rem 1rem;
+  text-align: center;
+}
+
+.tag-duplicate-cluster-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.tag-duplicate-cluster-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.6rem;
+  border-radius: 0.375rem;
+  border: 1px solid var(--color-border-soft);
+  background: var(--color-surface);
+  gap: 0.75rem;
+}
+
+.tag-duplicate-cluster-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  flex: 1;
+}
+
+.tag-duplicate-reason-badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #d97706;
+  background: rgba(245, 158, 11, 0.12);
+  padding: 0.1rem 0.4rem;
+  border-radius: 9999px;
+}
+
+.dark .tag-duplicate-reason-badge {
+  color: #fbbf24;
+  background: rgba(245, 158, 11, 0.2);
+}
+
+.tag-duplicate-chips-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.tag-duplicate-merge-btn {
+  flex-shrink: 0;
+}
+

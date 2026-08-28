@@ -345,6 +345,7 @@ export function App() {
     clearTrashFailureHighlights,
     isActionBusy,
     undoState,
+    queueUndo,
     runUndo,
     getContextMenuState,
     handleContextMenuOpenTarget,
@@ -683,6 +684,11 @@ export function App() {
                 workflow={tagExplorerWorkflow}
                 gridPane={gridPane}
                 isMobile={isMobile}
+                allTags={allTags}
+                createTag={createTag}
+                updateTag={updateTag}
+                queueUndo={queueUndo}
+                refreshVisibleEntries={refreshVisibleEntries}
               />
             ) : (
               <>

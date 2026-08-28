@@ -68,6 +68,7 @@ type UseAppInteractionsResult = {
   clearTrashFailureHighlights: () => void;
   isActionBusy: boolean;
   undoState: UndoState | null;
+  queueUndo: (message: string, undo: () => Promise<void>) => void;
   runUndo: () => void;
   getContextMenuState: (entryId: number) => ThumbnailContextMenuState;
   handleContextMenuOpenTarget: (entryId: number, targetEntryIds: number[]) => void;
@@ -678,6 +679,7 @@ export function useAppInteractions({
     clearTrashFailureHighlights,
     isActionBusy,
     undoState,
+    queueUndo,
     runUndo,
     getContextMenuState,
     handleContextMenuOpenTarget,

@@ -126,6 +126,31 @@ describe("tag-explorer", () => {
       expect(filtered[0].tag.name).toBe("Nature");
       expect(filtered[0].children[0].tag.name).toBe("Animals");
     });
+
+    it("respects showHidden parameter in buildTagTree", () => {
+      const tagsWithHidden: TagStatResponse[] = [
+        ...sampleTags,
+        {
+          id: 5,
+          name: "HiddenTag",
+          shorthand: null,
+          aliases: [],
+          parent_ids: [],
+          color_namespace: null,
+          color_slug: null,
+          disambiguation_id: null,
+          is_category: false,
+          is_hidden: true,
+          entry_count: 3
+        }
+      ];
+
+      const treeWithoutHidden = buildTagTree(tagsWithHidden, "", false);
+      expect(treeWithoutHidden.some((n) => n.tag.id === 5)).toBe(false);
+
+      const treeWithHidden = buildTagTree(tagsWithHidden, "", true);
+      expect(treeWithHidden.some((n) => n.tag.id === 5)).toBe(true);
+    });
   });
 
   describe("buildTagAncestryMap", () => {

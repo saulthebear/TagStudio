@@ -114,6 +114,46 @@ export type TagUpdatePayload = {
   tag_type?: TagType | null;
 };
 
+export type TagMergeRequest = {
+  source_tag_ids: number[];
+  target_tag_id: number;
+  updated_tag?: TagUpdatePayload | null;
+};
+
+export type TagMergeResponse = {
+  success: boolean;
+  target_tag: TagResponse;
+  merged_count: number;
+  affected_entries_count: number;
+  undo_data: Record<string, unknown>;
+};
+
+export type TagMergeUndoRequest = {
+  undo_data: Record<string, unknown>;
+};
+
+export type TagBatchUpdateRequest = {
+  tag_ids: number[];
+  tag_type?: TagType | null;
+  is_hidden?: boolean | null;
+  is_category?: boolean | null;
+  add_parent_ids?: number[] | null;
+};
+
+export type TagBatchDeleteRequest = {
+  tag_ids: number[];
+};
+
+export type TagBatchDeleteResponse = {
+  success: boolean;
+  deleted_count: number;
+  undo_data: Record<string, unknown>;
+};
+
+export type TagBatchDeleteUndoRequest = {
+  undo_data: Record<string, unknown>;
+};
+
 export type FieldResponse = {
   id: number;
   type_key: string;
@@ -665,6 +705,41 @@ export class TagStudioApiClient {
   async updateTag(tagId: number, payload: TagUpdatePayload): Promise<TagResponse> {
     return this.request(`/api/v1/tags/${tagId}`, {
       method: "PATCH",
+      body: JSON.stringify(payload)
+    });
+  }
+
+  async mergeTags(payload: TagMergeRequest): Promise<TagMergeResponse> {
+    return this.request("/api/v1/tags/merge", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  }
+
+  async undoMergeTags(payload: TagMergeUndoRequest): Promise<TagResponse> {
+    return this.request("/api/v1/tags/merge:undo", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  }
+
+  async batchUpdateTags(payload: TagBatchUpdateRequest): Promise<TagResponse[]> {
+    return this.request("/api/v1/tags/batch:update", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  }
+
+  async batchDeleteTags(payload: TagBatchDeleteRequest): Promise<TagBatchDeleteResponse> {
+    return this.request("/api/v1/tags/batch:delete", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  }
+
+  async undoBatchDeleteTags(payload: TagBatchDeleteUndoRequest): Promise<{ success: boolean }> {
+    return this.request("/api/v1/tags/batch:delete:undo", {
+      method: "POST",
       body: JSON.stringify(payload)
     });
   }

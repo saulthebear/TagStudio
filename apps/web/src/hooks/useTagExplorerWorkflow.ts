@@ -7,9 +7,11 @@ import {
 
 import { api } from "@/api/client";
 import { type SearchRequest } from "@/hooks/useSearchWorkflow";
+import { type TagDirectorySubMode } from "@/components/TagDirectoryView";
 
-export type TagExplorerViewMode = "cloud" | "tree" | "list" | "graph";
+export type TagExplorerViewMode = "cloud" | "directory" | "graph" | "tree" | "list";
 export type TagSelectionMode = "AND" | "OR";
+export type TagInteractionMode = "browse" | "edit";
 
 export type TagTreeNode = {
   tag: TagStatResponse;
@@ -30,18 +32,39 @@ export type UseTagExplorerWorkflowResult = {
   tags: TagStatResponse[];
   coOccurrences: TagCoOccurrence[];
   loading: boolean;
+  interactionMode: TagInteractionMode;
   selectedTagIds: Set<number>;
+  editSelectedTagIds: Set<number>;
   selectedTagsList: TagStatResponse[];
+  editSelectedTagsList: TagStatResponse[];
   selectionMode: TagSelectionMode;
   viewMode: TagExplorerViewMode;
+  tagDirectorySubMode: TagDirectorySubMode;
   tagSearchFilter: string;
+  showHiddenTags: boolean;
   coOccurringTagIds: Set<number>;
   tagTree: TagTreeNode[];
   filteredTags: TagStatResponse[];
+  editingTag: TagStatResponse | null;
+  isMergeModalOpen: boolean;
+  isBatchParentModalOpen: boolean;
+  isBatchPropertiesModalOpen: boolean;
+  isDuplicateScannerOpen: boolean;
+  setInteractionMode: (mode: TagInteractionMode) => void;
+  setTagDirectorySubMode: (subMode: TagDirectorySubMode) => void;
+  setShowHiddenTags: (show: boolean) => void;
   toggleTag: (tagId: number) => void;
   selectTag: (tagId: number) => void;
   deselectTag: (tagId: number) => void;
   clearSelectedTags: () => void;
+  toggleEditSelectTag: (tagId: number) => void;
+  selectAllVisibleEditTags: () => void;
+  clearEditSelectedTags: () => void;
+  setEditingTag: (tag: TagStatResponse | null) => void;
+  setIsMergeModalOpen: (open: boolean) => void;
+  setIsBatchParentModalOpen: (open: boolean) => void;
+  setIsBatchPropertiesModalOpen: (open: boolean) => void;
+  setIsDuplicateScannerOpen: (open: boolean) => void;
   setSelectionMode: (mode: TagSelectionMode) => void;
   setViewMode: (mode: TagExplorerViewMode) => void;
   setTagSearchFilter: (filter: string) => void;
@@ -70,11 +93,13 @@ export { buildTagAncestryMap };
 
 export function buildTagTree(
   tags: TagStatResponse[],
-  searchFilter: string = ""
+  searchFilter: string = "",
+  showHidden: boolean = true
 ): TagTreeNode[] {
   const normalizedFilter = searchFilter.trim().toLowerCase();
   const tagMap = new Map<number, TagStatResponse>();
   for (const tag of tags) {
+    if (!showHidden && tag.is_hidden) continue;
     tagMap.set(tag.id, tag);
   }
 
@@ -82,7 +107,7 @@ export function buildTagTree(
   const childrenMap = new Map<number, TagStatResponse[]>();
   const isChildSet = new Set<number>();
 
-  for (const tag of tags) {
+  for (const tag of tagMap.values()) {
     for (const parentId of tag.parent_ids) {
       if (tagMap.has(parentId)) {
         isChildSet.add(tag.id);
@@ -133,8 +158,7 @@ export function buildTagTree(
   }
 
   const rootNodes: TagTreeNode[] = [];
-  for (const tag of tags) {
-    // Root if no valid parent in library
+  for (const tag of tagMap.values()) {
     if (!isChildSet.has(tag.id)) {
       const node = buildNode(tag, 0, new Set());
       if (node) {
@@ -159,12 +183,41 @@ export function useTagExplorerWorkflow({
     co_occurrences: []
   });
   const [loading, setLoading] = useState(false);
+  const [interactionMode, setInteractionMode] = useState<TagInteractionMode>("browse");
   const [selectedTagIds, setSelectedTagIds] = useState<Set<number>>(new Set());
+  const [editSelectedTagIds, setEditSelectedTagIds] = useState<Set<number>>(new Set());
   const [selectionMode, setSelectionMode] = useState<TagSelectionMode>("AND");
-  const [viewMode, setViewMode] = useState<TagExplorerViewMode>("cloud");
+  const [viewMode, setViewModeState] = useState<TagExplorerViewMode>("cloud");
+  const [tagDirectorySubMode, setTagDirectorySubMode] = useState<TagDirectorySubMode>("flat");
   const [tagSearchFilter, setTagSearchFilter] = useState("");
+  const [showHiddenTags, setShowHiddenTags] = useState(false);
+
+  // Modals state
+  const [editingTag, setEditingTag] = useState<TagStatResponse | null>(null);
+  const [isMergeModalOpen, setIsMergeModalOpen] = useState(false);
+  const [isBatchParentModalOpen, setIsBatchParentModalOpen] = useState(false);
+  const [isBatchPropertiesModalOpen, setIsBatchPropertiesModalOpen] = useState(false);
+  const [isDuplicateScannerOpen, setIsDuplicateScannerOpen] = useState(false);
 
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Normalize viewMode: if legacy "tree" or "list" passed, adapt to directory with corresponding subMode
+  const setViewMode = useCallback((mode: TagExplorerViewMode) => {
+    if (mode === "tree") {
+      setViewModeState("directory");
+      setTagDirectorySubMode("tree");
+    } else if (mode === "list") {
+      setViewModeState("directory");
+      setTagDirectorySubMode("flat");
+    } else {
+      setViewModeState(mode);
+    }
+  }, []);
+
+  const normalizedViewMode: TagExplorerViewMode = useMemo(() => {
+    if (viewMode === "tree" || viewMode === "list") return "directory";
+    return viewMode;
+  }, [viewMode]);
 
   const fetchTagStats = useCallback(async () => {
     if (!isLibraryOpen) {
@@ -185,7 +238,10 @@ export function useTagExplorerWorkflow({
 
   useEffect(() => {
     setSelectedTagIds(new Set());
+    setEditSelectedTagIds(new Set());
     setTagSearchFilter("");
+    setEditingTag(null);
+    setIsMergeModalOpen(false);
     void fetchTagStats();
   }, [activeLibraryPath, fetchTagStats]);
 
@@ -210,7 +266,7 @@ export function useTagExplorerWorkflow({
     return buildTagAncestryMap(statsData.tags);
   }, [statsData.tags]);
 
-  // Set of tag IDs that co-occur or have ancestor/descendant relationships with currently selected tags
+  // Co-occurring tags for current search selection
   const coOccurringTagIds = useMemo(() => {
     if (selectedTagIds.size === 0) {
       return new Set<number>();
@@ -255,7 +311,7 @@ export function useTagExplorerWorkflow({
     return result;
   }, [coOccurrenceMap, selectedTagIds, statsData.tags, selectionMode, ancestorMap, descendantMap]);
 
-  // List of selected tag objects
+  // List of selected tag objects in browse mode
   const selectedTagsList = useMemo(() => {
     const tagMap = new Map(statsData.tags.map((t) => [t.id, t]));
     return Array.from(selectedTagIds)
@@ -263,24 +319,31 @@ export function useTagExplorerWorkflow({
       .filter((t): t is TagStatResponse => t !== undefined);
   }, [selectedTagIds, statsData.tags]);
 
-  // Filtered tags for cloud & list views
+  // List of selected tag objects in edit mode
+  const editSelectedTagsList = useMemo(() => {
+    const tagMap = new Map(statsData.tags.map((t) => [t.id, t]));
+    return Array.from(editSelectedTagIds)
+      .map((id) => tagMap.get(id))
+      .filter((t): t is TagStatResponse => t !== undefined);
+  }, [editSelectedTagIds, statsData.tags]);
+
+  // Filtered tags for cloud & directory views (taking search filter and showHidden into account)
   const filteredTags = useMemo(() => {
     const normalizedFilter = tagSearchFilter.trim().toLowerCase();
-    if (!normalizedFilter) {
-      return statsData.tags;
-    }
     return statsData.tags.filter((tag) => {
+      if (!showHiddenTags && tag.is_hidden) return false;
+      if (!normalizedFilter) return true;
       if (tag.name.toLowerCase().includes(normalizedFilter)) return true;
       if (tag.shorthand?.toLowerCase().includes(normalizedFilter)) return true;
       if (tag.aliases.some((alias) => alias.toLowerCase().includes(normalizedFilter))) return true;
       return false;
     });
-  }, [statsData.tags, tagSearchFilter]);
+  }, [statsData.tags, tagSearchFilter, showHiddenTags]);
 
   // Hierarchical tag tree
   const tagTree = useMemo(() => {
-    return buildTagTree(statsData.tags, tagSearchFilter);
-  }, [statsData.tags, tagSearchFilter]);
+    return buildTagTree(statsData.tags, tagSearchFilter, showHiddenTags);
+  }, [statsData.tags, tagSearchFilter, showHiddenTags]);
 
   const executeSearchRef = useRef(executeSearch);
   useEffect(() => {
@@ -294,11 +357,10 @@ export function useTagExplorerWorkflow({
 
   const prevQueryRef = useRef<string | null>(null);
 
-  // Auto-update query and trigger search ONLY when selectedTagIds or selectionMode actually changes
+  // Auto-update query and trigger search in browse mode
   useEffect(() => {
     const query = buildSearchQueryFromTags(selectedTagIds, selectionMode);
     if (prevQueryRef.current === null) {
-      // First mount — track initial query without triggering extra search
       prevQueryRef.current = query;
       return;
     }
@@ -331,11 +393,8 @@ export function useTagExplorerWorkflow({
   const toggleTag = useCallback((tagId: number) => {
     setSelectedTagIds((prev) => {
       const next = new Set(prev);
-      if (next.has(tagId)) {
-        next.delete(tagId);
-      } else {
-        next.add(tagId);
-      }
+      if (next.has(tagId)) next.delete(tagId);
+      else next.add(tagId);
       return next;
     });
   }, []);
@@ -362,22 +421,60 @@ export function useTagExplorerWorkflow({
     setSelectedTagIds(new Set());
   }, []);
 
+  const toggleEditSelectTag = useCallback((tagId: number) => {
+    setEditSelectedTagIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(tagId)) next.delete(tagId);
+      else next.add(tagId);
+      return next;
+    });
+  }, []);
+
+  const selectAllVisibleEditTags = useCallback(() => {
+    setEditSelectedTagIds(new Set(filteredTags.map((t) => t.id)));
+  }, [filteredTags]);
+
+  const clearEditSelectedTags = useCallback(() => {
+    setEditSelectedTagIds(new Set());
+  }, []);
+
   return {
     tags: statsData.tags,
     coOccurrences: statsData.co_occurrences,
     loading,
+    interactionMode,
     selectedTagIds,
+    editSelectedTagIds,
     selectedTagsList,
+    editSelectedTagsList,
     selectionMode,
-    viewMode,
+    viewMode: normalizedViewMode,
+    tagDirectorySubMode,
     tagSearchFilter,
+    showHiddenTags,
     coOccurringTagIds,
     tagTree,
     filteredTags,
+    editingTag,
+    isMergeModalOpen,
+    isBatchParentModalOpen,
+    isBatchPropertiesModalOpen,
+    isDuplicateScannerOpen,
+    setInteractionMode,
+    setTagDirectorySubMode,
+    setShowHiddenTags,
     toggleTag,
     selectTag,
     deselectTag,
     clearSelectedTags,
+    toggleEditSelectTag,
+    selectAllVisibleEditTags,
+    clearEditSelectedTags,
+    setEditingTag,
+    setIsMergeModalOpen,
+    setIsBatchParentModalOpen,
+    setIsBatchPropertiesModalOpen,
+    setIsDuplicateScannerOpen,
     setSelectionMode,
     setViewMode,
     setTagSearchFilter,
