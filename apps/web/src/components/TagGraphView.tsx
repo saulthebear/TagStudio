@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 
 import { createTagColorLookup } from "@/lib/tag-styles";
+import { getTagDisplayLabel, type TagDisplayContext } from "@/lib/tag-workflows";
 import { buildTagAncestryMap } from "@/hooks/useTagExplorerWorkflow";
 
 type TagGraphViewProps = {
@@ -25,8 +26,9 @@ type TagGraphViewProps = {
   coOccurrences: TagCoOccurrence[];
   selectedTagIds: Set<number>;
   selectionMode?: "AND" | "OR";
-  coOccurringTagIds: Set<number>;
+  coOccurringTagIds?: Set<number>;
   tagColors: TagColorNamespaceResponse[] | undefined;
+  tagDisplayContext?: TagDisplayContext;
   onToggleTag: (tagId: number) => void;
 };
 
@@ -60,6 +62,7 @@ export function TagGraphView({
   selectedTagIds,
   selectionMode = "AND",
   tagColors,
+  tagDisplayContext,
   onToggleTag
 }: TagGraphViewProps) {
   const svgRef = useRef<SVGSVGElement | null>(null);
@@ -244,6 +247,7 @@ export function TagGraphView({
       const accent = colorDef?.secondary ?? colorDef?.primary ?? "#3b82f6";
 
       const displayCount = getContextCount(tag);
+      const displayLabel = getTagDisplayLabel(tag, tagDisplayContext);
 
       // Log-scale ratio: spreads values evenly across the dynamic range
       const logRatio = logMax > 0 ? Math.log(displayCount + 1) / logMax : 0.5;
@@ -252,7 +256,7 @@ export function TagGraphView({
 
       return {
         id: tag.id,
-        name: tag.name,
+        name: displayLabel,
         entry_count: displayCount,
         total_entry_count: tag.entry_count,
         color_primary: primary,
@@ -331,6 +335,7 @@ export function TagGraphView({
   }, [
     renderedTags,
     colorLookup,
+    tagDisplayContext,
     coOccurrences,
     renderedTagIdSet,
     minSharedCount,

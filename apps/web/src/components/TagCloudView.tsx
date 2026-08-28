@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { type TagColorNamespaceResponse, type TagStatResponse } from "@tagstudio/api-client";
 import {
   ArrowDown01,
@@ -13,16 +13,20 @@ import {
 } from "lucide-react";
 
 import { createTagColorLookup, resolveTagChipStyle } from "@/lib/tag-styles";
+import { getTagDisplayLabel, type TagDisplayContext } from "@/lib/tag-workflows";
 
 export type TagCloudSortOption = "count-desc" | "count-asc" | "name-asc" | "name-desc";
 
 type TagCloudViewProps = {
   tags: TagStatResponse[];
+  sortOption?: TagCloudSortOption;
+  onSortOptionChange?: (option: TagCloudSortOption) => void;
   interactionMode?: "browse" | "edit";
   selectedTagIds: Set<number>;
   editSelectedTagIds?: Set<number>;
   coOccurringTagIds: Set<number>;
   tagColors: TagColorNamespaceResponse[] | undefined;
+  tagDisplayContext?: TagDisplayContext;
   onToggleTag: (tagId: number) => void;
   onToggleEditSelectTag?: (tagId: number) => void;
   onOpenEditModal?: (tag: TagStatResponse) => void;
@@ -30,16 +34,18 @@ type TagCloudViewProps = {
 
 export function TagCloudView({
   tags,
+  sortOption = "count-desc",
+  onSortOptionChange,
   interactionMode = "browse",
   selectedTagIds,
   editSelectedTagIds = new Set(),
   coOccurringTagIds,
   tagColors,
+  tagDisplayContext,
   onToggleTag,
   onToggleEditSelectTag,
   onOpenEditModal
 }: TagCloudViewProps) {
-  const [sortOption, setSortOption] = useState<TagCloudSortOption>("count-desc");
   const colorLookup = useMemo(() => createTagColorLookup(tagColors), [tagColors]);
 
   const sortedTags = useMemo(() => {
@@ -95,7 +101,7 @@ export function TagCloudView({
           <button
             type="button"
             className={`tag-list-sort-btn ${sortOption === "count-desc" ? "tag-list-sort-btn-active" : ""}`}
-            onClick={() => setSortOption("count-desc")}
+            onClick={() => onSortOptionChange?.("count-desc")}
             title="Sort by most used"
           >
             <ArrowDown01 size={13} className="inline mr-1" />
@@ -104,7 +110,7 @@ export function TagCloudView({
           <button
             type="button"
             className={`tag-list-sort-btn ${sortOption === "count-asc" ? "tag-list-sort-btn-active" : ""}`}
-            onClick={() => setSortOption("count-asc")}
+            onClick={() => onSortOptionChange?.("count-asc")}
             title="Sort by least used"
           >
             <ArrowUp01 size={13} className="inline mr-1" />
@@ -113,7 +119,7 @@ export function TagCloudView({
           <button
             type="button"
             className={`tag-list-sort-btn ${sortOption === "name-asc" ? "tag-list-sort-btn-active" : ""}`}
-            onClick={() => setSortOption("name-asc")}
+            onClick={() => onSortOptionChange?.("name-asc")}
             title="Sort alphabetical A-Z"
           >
             <ArrowDownAZ size={13} className="inline mr-1" />
@@ -122,7 +128,7 @@ export function TagCloudView({
           <button
             type="button"
             className={`tag-list-sort-btn ${sortOption === "name-desc" ? "tag-list-sort-btn-active" : ""}`}
-            onClick={() => setSortOption("name-desc")}
+            onClick={() => onSortOptionChange?.("name-desc")}
             title="Sort alphabetical Z-A"
           >
             <ArrowUpAZ size={13} className="inline mr-1" />
@@ -139,6 +145,7 @@ export function TagCloudView({
           const isCoOccurring = coOccurringTagIds.has(tag.id);
           const customStyle = resolveTagChipStyle(tag, colorLookup);
           const fontSizeRem = calculateFontSize(tag.entry_count);
+          const displayLabel = getTagDisplayLabel(tag, tagDisplayContext);
 
           const handleClick = () => {
             if (interactionMode === "edit") {
@@ -157,7 +164,7 @@ export function TagCloudView({
                 ...customStyle
               }}
               onClick={handleClick}
-              title={`${tag.name} (${tag.entry_count} entries)${tag.aliases.length ? ` • Aliases: ${tag.aliases.join(", ")}` : ""}${isCoOccurring ? " • Frequently co-occurs with current selection" : ""}`}
+              title={`${displayLabel} (${tag.entry_count} entries)${tag.aliases.length ? ` • Aliases: ${tag.aliases.join(", ")}` : ""}${isCoOccurring ? " • Frequently co-occurs with current selection" : ""}`}
               role="button"
               tabIndex={0}
               onKeyDown={(e) => {
@@ -191,7 +198,7 @@ export function TagCloudView({
                 <Folder size={12} className="inline-block mr-1 opacity-70" />
               ) : null}
 
-              <span className="tag-cloud-name">{tag.name}</span>
+              <span className="tag-cloud-name">{displayLabel}</span>
               {tag.is_hidden ? (
                 <span title="Hidden tag" className="inline-flex items-center">
                   <EyeOff size={11} className="ml-1 opacity-75" />
@@ -211,9 +218,10 @@ export function TagCloudView({
                     e.stopPropagation();
                     onOpenEditModal?.(tag);
                   }}
-                  title={`Edit tag "${tag.name}"`}
+                  title={`Edit tag "${displayLabel}"`}
+                  aria-label={`Edit tag "${displayLabel}"`}
                 >
-                  <Pencil size={10} />
+                  <Pencil size={11} />
                 </button>
               ) : null}
             </div>

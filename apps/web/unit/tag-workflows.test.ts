@@ -301,6 +301,12 @@ describe("tag-workflows", () => {
     expect(getTagDisplayLabel(explicit, context)).toBe("Color (Design)");
     expect(getTagDisplayLabel(inferred, context)).toBe("Color (Paint)");
     expect(getTagDisplayLabel(fallback, context)).toBe("Color (#43)");
+
+    const statTag = {
+      ...explicit,
+      entry_count: 15
+    };
+    expect(getTagDisplayLabel(statTag, context)).toBe("Color (Design)");
   });
 
   test("builds recursive ancestor and descendant maps across multi-level hierarchies", () => {

@@ -1,4 +1,4 @@
-import { type TagResponse } from "@tagstudio/api-client";
+import { type TagResponse, type TagStatResponse } from "@tagstudio/api-client";
 
 export function normalizeTagQuery(value: string): string {
   return value.trim().toLowerCase();
@@ -137,17 +137,17 @@ export function scoreTags(tags: TagResponse[], query: string): TagResponse[] {
 }
 
 export type TagDisplayContext = {
-  tagById: ReadonlyMap<number, TagResponse>;
+  tagById: ReadonlyMap<number, TagResponse | TagStatResponse>;
   duplicateNames: ReadonlySet<string>;
 };
 
 const EMPTY_TAG_DISPLAY_CONTEXT: TagDisplayContext = {
-  tagById: new Map<number, TagResponse>(),
+  tagById: new Map<number, TagResponse | TagStatResponse>(),
   duplicateNames: new Set<string>()
 };
 
-export function createTagDisplayContext(tags: TagResponse[]): TagDisplayContext {
-  const tagById = new Map<number, TagResponse>();
+export function createTagDisplayContext(tags: (TagResponse | TagStatResponse)[]): TagDisplayContext {
+  const tagById = new Map<number, TagResponse | TagStatResponse>();
   const nameCounts = new Map<string, number>();
 
   for (const tag of tags) {
@@ -169,19 +169,22 @@ export function createTagDisplayContext(tags: TagResponse[]): TagDisplayContext 
   return { tagById, duplicateNames };
 }
 
-function resolveParentDisplayLabel(parentId: number, tagById: ReadonlyMap<number, TagResponse>): string {
+function resolveParentDisplayLabel(
+  parentId: number,
+  tagById: ReadonlyMap<number, TagResponse | TagStatResponse>
+): string {
   const parent = tagById.get(parentId);
   const label = parent?.shorthand?.trim() || parent?.name.trim();
   return label ? label : `#${parentId}`;
 }
 
 export function getTagDisplayLabel(
-  tag: TagResponse,
+  tag: TagResponse | TagStatResponse,
   context: TagDisplayContext = EMPTY_TAG_DISPLAY_CONTEXT
 ): string {
   const normalizedName = normalizeTagQuery(tag.name);
 
-  if (tag.disambiguation_id !== null) {
+  if (tag.disambiguation_id !== null && tag.disambiguation_id !== undefined) {
     const disambiguationLabel = resolveParentDisplayLabel(tag.disambiguation_id, context.tagById);
     return `${tag.name} (${disambiguationLabel})`;
   }

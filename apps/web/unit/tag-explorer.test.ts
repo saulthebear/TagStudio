@@ -151,6 +151,20 @@ describe("tag-explorer", () => {
       const treeWithHidden = buildTagTree(tagsWithHidden, "", true);
       expect(treeWithHidden.some((n) => n.tag.id === 5)).toBe(true);
     });
+
+    it("sorts tree root nodes and children by count and name sort options", () => {
+      const treeCountDesc = buildTagTree(sampleTags, "", true, "count-desc");
+      expect(treeCountDesc.map((n) => n.tag.name)).toEqual(["Nature", "Urban"]);
+
+      const treeCountAsc = buildTagTree(sampleTags, "", true, "count-asc");
+      expect(treeCountAsc.map((n) => n.tag.name)).toEqual(["Urban", "Nature"]);
+
+      const treeNameAsc = buildTagTree(sampleTags, "", true, "name-asc");
+      expect(treeNameAsc.map((n) => n.tag.name)).toEqual(["Nature", "Urban"]);
+
+      const treeNameDesc = buildTagTree(sampleTags, "", true, "name-desc");
+      expect(treeNameDesc.map((n) => n.tag.name)).toEqual(["Urban", "Nature"]);
+    });
   });
 
   describe("buildTagAncestryMap", () => {

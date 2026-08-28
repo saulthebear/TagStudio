@@ -12,6 +12,7 @@ import { type TagDirectorySubMode } from "@/components/TagDirectoryView";
 export type TagExplorerViewMode = "cloud" | "directory" | "graph" | "tree" | "list";
 export type TagSelectionMode = "AND" | "OR";
 export type TagInteractionMode = "browse" | "edit";
+export type TagSortOption = "count-desc" | "count-asc" | "name-asc" | "name-desc";
 
 export type TagTreeNode = {
   tag: TagStatResponse;
@@ -42,6 +43,7 @@ export type UseTagExplorerWorkflowResult = {
   tagDirectorySubMode: TagDirectorySubMode;
   tagSearchFilter: string;
   showHiddenTags: boolean;
+  sortOption: TagSortOption;
   coOccurringTagIds: Set<number>;
   tagTree: TagTreeNode[];
   filteredTags: TagStatResponse[];
@@ -53,6 +55,7 @@ export type UseTagExplorerWorkflowResult = {
   setInteractionMode: (mode: TagInteractionMode) => void;
   setTagDirectorySubMode: (subMode: TagDirectorySubMode) => void;
   setShowHiddenTags: (show: boolean) => void;
+  setSortOption: (option: TagSortOption) => void;
   toggleTag: (tagId: number) => void;
   selectTag: (tagId: number) => void;
   deselectTag: (tagId: number) => void;
@@ -71,9 +74,27 @@ export type UseTagExplorerWorkflowResult = {
   reloadTagStats: () => Promise<void>;
 };
 
+export function compareTagStats(
+  a: TagStatResponse,
+  b: TagStatResponse,
+  sortOption: TagSortOption = "count-desc"
+): number {
+  switch (sortOption) {
+    case "name-asc":
+      return a.name.localeCompare(b.name);
+    case "name-desc":
+      return b.name.localeCompare(a.name);
+    case "count-asc":
+      return a.entry_count - b.entry_count || a.name.localeCompare(b.name);
+    case "count-desc":
+    default:
+      return b.entry_count - a.entry_count || a.name.localeCompare(b.name);
+  }
+}
+
 export function buildSearchQueryFromTags(
   selectedTagIds: Set<number>,
-  mode: TagSelectionMode
+  mode: TagSelectionMode = "AND"
 ): string {
   if (selectedTagIds.size === 0) {
     return "";
@@ -94,7 +115,8 @@ export { buildTagAncestryMap };
 export function buildTagTree(
   tags: TagStatResponse[],
   searchFilter: string = "",
-  showHidden: boolean = true
+  showHidden: boolean = true,
+  sortOption: TagSortOption = "count-desc"
 ): TagTreeNode[] {
   const normalizedFilter = searchFilter.trim().toLowerCase();
   const tagMap = new Map<number, TagStatResponse>();
@@ -134,7 +156,7 @@ export function buildTagTree(
     const nextVisited = new Set(visited);
     nextVisited.add(tag.id);
 
-    const childTags = childrenMap.get(tag.id) ?? [];
+    const childTags = (childrenMap.get(tag.id) ?? []).slice().sort((a, b) => compareTagStats(a, b, sortOption));
     const childNodes: TagTreeNode[] = [];
     for (const child of childTags) {
       const built = buildNode(child, depth + 1, nextVisited);
@@ -158,12 +180,14 @@ export function buildTagTree(
   }
 
   const rootNodes: TagTreeNode[] = [];
-  for (const tag of tagMap.values()) {
-    if (!isChildSet.has(tag.id)) {
-      const node = buildNode(tag, 0, new Set());
-      if (node) {
-        rootNodes.push(node);
-      }
+  const rootTags = Array.from(tagMap.values())
+    .filter((tag) => !isChildSet.has(tag.id))
+    .sort((a, b) => compareTagStats(a, b, sortOption));
+
+  for (const tag of rootTags) {
+    const node = buildNode(tag, 0, new Set());
+    if (node) {
+      rootNodes.push(node);
     }
   }
 
@@ -191,6 +215,7 @@ export function useTagExplorerWorkflow({
   const [tagDirectorySubMode, setTagDirectorySubMode] = useState<TagDirectorySubMode>("flat");
   const [tagSearchFilter, setTagSearchFilter] = useState("");
   const [showHiddenTags, setShowHiddenTags] = useState(false);
+  const [sortOption, setSortOption] = useState<TagSortOption>("count-desc");
 
   // Modals state
   const [editingTag, setEditingTag] = useState<TagStatResponse | null>(null);
@@ -342,8 +367,8 @@ export function useTagExplorerWorkflow({
 
   // Hierarchical tag tree
   const tagTree = useMemo(() => {
-    return buildTagTree(statsData.tags, tagSearchFilter, showHiddenTags);
-  }, [statsData.tags, tagSearchFilter, showHiddenTags]);
+    return buildTagTree(statsData.tags, tagSearchFilter, showHiddenTags, sortOption);
+  }, [statsData.tags, tagSearchFilter, showHiddenTags, sortOption]);
 
   const executeSearchRef = useRef(executeSearch);
   useEffect(() => {
@@ -452,6 +477,7 @@ export function useTagExplorerWorkflow({
     tagDirectorySubMode,
     tagSearchFilter,
     showHiddenTags,
+    sortOption,
     coOccurringTagIds,
     tagTree,
     filteredTags,
@@ -463,6 +489,7 @@ export function useTagExplorerWorkflow({
     setInteractionMode,
     setTagDirectorySubMode,
     setShowHiddenTags,
+    setSortOption,
     toggleTag,
     selectTag,
     deselectTag,

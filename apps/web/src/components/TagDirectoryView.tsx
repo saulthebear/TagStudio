@@ -23,6 +23,7 @@ import {
 
 import { type TagTreeNode } from "@/hooks/useTagExplorerWorkflow";
 import { createTagColorLookup, resolveTagChipStyle } from "@/lib/tag-styles";
+import { getTagDisplayLabel, type TagDisplayContext } from "@/lib/tag-workflows";
 
 export type TagDirectorySubMode = "flat" | "tree";
 export type TagSortOption = "count-desc" | "count-asc" | "name-asc" | "name-desc";
@@ -37,6 +38,9 @@ type TagDirectoryViewProps = {
   editSelectedTagIds: Set<number>;
   coOccurringTagIds: Set<number>;
   tagColors: TagColorNamespaceResponse[] | undefined;
+  tagDisplayContext?: TagDisplayContext;
+  sortOption?: TagSortOption;
+  onSortOptionChange?: (option: TagSortOption) => void;
   onToggleSearchTag: (tagId: number) => void;
   onToggleEditSelectTag: (tagId: number) => void;
   onOpenEditModal: (tag: TagStatResponse) => void;
@@ -50,6 +54,7 @@ type TreeNodeRowProps = {
   coOccurringTagIds: Set<number>;
   expandedIds: Set<number>;
   colorLookup: ReturnType<typeof createTagColorLookup>;
+  tagDisplayContext?: TagDisplayContext;
   onToggleExpand: (tagId: number) => void;
   onToggleSearchTag: (tagId: number) => void;
   onToggleEditSelectTag: (tagId: number) => void;
@@ -64,6 +69,7 @@ function TreeNodeRow({
   coOccurringTagIds,
   expandedIds,
   colorLookup,
+  tagDisplayContext,
   onToggleExpand,
   onToggleSearchTag,
   onToggleEditSelectTag,
@@ -76,6 +82,7 @@ function TreeNodeRow({
   const isEditSelected = editSelectedTagIds.has(tag.id);
   const isCoOccurring = coOccurringTagIds.has(tag.id);
   const customChipStyle = resolveTagChipStyle(tag, colorLookup);
+  const displayLabel = getTagDisplayLabel(tag, tagDisplayContext);
 
   const handleClick = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -139,7 +146,7 @@ function TreeNodeRow({
             ) : (
               <TagIcon size={12} className="opacity-70 flex-shrink-0" />
             )}
-            <span className="tag-tree-name">{tag.name}</span>
+            <span className="tag-tree-name">{displayLabel}</span>
             {tag.shorthand ? (
               <span className="text-[11px] opacity-75">({tag.shorthand})</span>
             ) : null}
@@ -173,8 +180,8 @@ function TreeNodeRow({
                 e.stopPropagation();
                 onOpenEditModal(tag);
               }}
-              title={`Edit tag "${tag.name}"`}
-              aria-label={`Edit tag "${tag.name}"`}
+              title={`Edit tag "${displayLabel}"`}
+              aria-label={`Edit tag "${displayLabel}"`}
             >
               <Pencil size={12} />
             </button>
@@ -194,6 +201,7 @@ function TreeNodeRow({
               coOccurringTagIds={coOccurringTagIds}
               expandedIds={expandedIds}
               colorLookup={colorLookup}
+              tagDisplayContext={tagDisplayContext}
               onToggleExpand={onToggleExpand}
               onToggleSearchTag={onToggleSearchTag}
               onToggleEditSelectTag={onToggleEditSelectTag}
@@ -216,11 +224,13 @@ export function TagDirectoryView({
   editSelectedTagIds,
   coOccurringTagIds,
   tagColors,
+  tagDisplayContext,
+  sortOption = "count-desc",
+  onSortOptionChange,
   onToggleSearchTag,
   onToggleEditSelectTag,
   onOpenEditModal
 }: TagDirectoryViewProps) {
-  const [sortOption, setSortOption] = useState<TagSortOption>("count-desc");
   const colorLookup = useMemo(() => createTagColorLookup(tagColors), [tagColors]);
 
   // Tree expanded ids logic
@@ -306,13 +316,13 @@ export function TagDirectoryView({
           </button>
         </div>
 
-        {/* Flat Mode Sort Controls */}
-        {subMode === "flat" ? (
+        {/* Sort Controls (shared for both Flat and Tree modes) */}
+        <div className="flex items-center gap-2 flex-wrap">
           <div className="tag-list-sort-group">
             <button
               type="button"
               className={`tag-list-sort-btn ${sortOption === "count-desc" ? "tag-list-sort-btn-active" : ""}`}
-              onClick={() => setSortOption("count-desc")}
+              onClick={() => onSortOptionChange?.("count-desc")}
               title="Sort by most used"
             >
               <ArrowDown01 size={13} className="inline mr-1" />
@@ -321,7 +331,7 @@ export function TagDirectoryView({
             <button
               type="button"
               className={`tag-list-sort-btn ${sortOption === "count-asc" ? "tag-list-sort-btn-active" : ""}`}
-              onClick={() => setSortOption("count-asc")}
+              onClick={() => onSortOptionChange?.("count-asc")}
               title="Sort by least used"
             >
               <ArrowUp01 size={13} className="inline mr-1" />
@@ -330,7 +340,7 @@ export function TagDirectoryView({
             <button
               type="button"
               className={`tag-list-sort-btn ${sortOption === "name-asc" ? "tag-list-sort-btn-active" : ""}`}
-              onClick={() => setSortOption("name-asc")}
+              onClick={() => onSortOptionChange?.("name-asc")}
               title="Sort alphabetical A-Z"
             >
               <ArrowDownAZ size={13} className="inline mr-1" />
@@ -339,33 +349,35 @@ export function TagDirectoryView({
             <button
               type="button"
               className={`tag-list-sort-btn ${sortOption === "name-desc" ? "tag-list-sort-btn-active" : ""}`}
-              onClick={() => setSortOption("name-desc")}
+              onClick={() => onSortOptionChange?.("name-desc")}
               title="Sort alphabetical Z-A"
             >
               <ArrowUpAZ size={13} className="inline mr-1" />
               Z–A
             </button>
           </div>
-        ) : (
-          /* Tree Mode Expand/Collapse Controls */
-          <div className="tag-tree-actions flex items-center gap-1 text-xs">
-            <button
-              type="button"
-              className="tag-tree-action-btn"
-              onClick={expandAll}
-            >
-              Expand All
-            </button>
-            <span className="text-slate-400">•</span>
-            <button
-              type="button"
-              className="tag-tree-action-btn"
-              onClick={collapseAll}
-            >
-              Collapse All
-            </button>
-          </div>
-        )}
+
+          {/* Tree Mode Expand/Collapse Controls */}
+          {subMode === "tree" && (
+            <div className="tag-tree-actions flex items-center gap-1 text-xs ml-auto">
+              <button
+                type="button"
+                className="tag-tree-action-btn"
+                onClick={expandAll}
+              >
+                Expand All
+              </button>
+              <span className="text-slate-400">•</span>
+              <button
+                type="button"
+                className="tag-tree-action-btn"
+                onClick={collapseAll}
+              >
+                Collapse All
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Main View Area */}
@@ -380,6 +392,7 @@ export function TagDirectoryView({
               const isEditSelected = editSelectedTagIds.has(tag.id);
               const isCoOccurring = coOccurringTagIds.has(tag.id);
               const customStyle = resolveTagChipStyle(tag, colorLookup);
+              const displayLabel = getTagDisplayLabel(tag, tagDisplayContext);
 
               const handleRowClick = () => {
                 if (interactionMode === "edit") {
@@ -417,7 +430,7 @@ export function TagDirectoryView({
 
                   <div className="tag-list-chip" style={customStyle}>
                     <TagIcon size={12} className="opacity-70 flex-shrink-0" />
-                    <span className="tag-list-name">{tag.name}</span>
+                    <span className="tag-list-name">{displayLabel}</span>
                     {tag.shorthand ? (
                       <span className="text-[11px] opacity-75">({tag.shorthand})</span>
                     ) : null}
@@ -455,8 +468,8 @@ export function TagDirectoryView({
                         e.stopPropagation();
                         onOpenEditModal(tag);
                       }}
-                      title={`Edit tag "${tag.name}"`}
-                      aria-label={`Edit tag "${tag.name}"`}
+                      title={`Edit tag "${displayLabel}"`}
+                      aria-label={`Edit tag "${displayLabel}"`}
                     >
                       <Pencil size={12} />
                     </button>

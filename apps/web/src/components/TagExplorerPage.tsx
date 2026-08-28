@@ -41,6 +41,7 @@ import { type UseTagExplorerWorkflowResult } from "@/hooks/useTagExplorerWorkflo
 import { useTagColors } from "@/hooks/useTagColors";
 import { type DuplicateCluster } from "@/lib/tag-duplicates";
 import { createTagColorLookup, resolveTagChipStyle } from "@/lib/tag-styles";
+import { createTagDisplayContext } from "@/lib/tag-workflows";
 import { clientLog } from "@/observability/logger";
 
 type TagExplorerPageProps = {
@@ -78,6 +79,7 @@ export function TagExplorerPage({
     tagDirectorySubMode,
     tagSearchFilter,
     showHiddenTags,
+    sortOption,
     coOccurringTagIds,
     tagTree,
     filteredTags,
@@ -89,6 +91,7 @@ export function TagExplorerPage({
     setInteractionMode,
     setTagDirectorySubMode,
     setShowHiddenTags,
+    setSortOption,
     toggleTag,
     clearSelectedTags,
     toggleEditSelectTag,
@@ -107,6 +110,10 @@ export function TagExplorerPage({
 
   const tagColorsQuery = useTagColors(true);
   const colorLookup = useMemo(() => createTagColorLookup(tagColorsQuery.data), [tagColorsQuery.data]);
+  const tagDisplayContext = useMemo(
+    () => createTagDisplayContext(allTags.length > 0 ? allTags : tags),
+    [allTags, tags]
+  );
 
   // Left pane is matching entries (~58%), right pane is tag browser (~42%)
   const [splitState, setSplitState] = useState<SplitPaneState>({
@@ -527,11 +534,14 @@ export function TagExplorerPage({
         {viewMode === "cloud" && (
           <TagCloudView
             tags={filteredTags}
+            sortOption={sortOption}
+            onSortOptionChange={setSortOption}
             interactionMode={interactionMode}
             selectedTagIds={selectedTagIds}
             editSelectedTagIds={editSelectedTagIds}
             coOccurringTagIds={coOccurringTagIds}
             tagColors={tagColorsQuery.data}
+            tagDisplayContext={tagDisplayContext}
             onToggleTag={toggleTag}
             onToggleEditSelectTag={toggleEditSelectTag}
             onOpenEditModal={(tag) => setEditingTag(tag)}
@@ -543,11 +553,14 @@ export function TagExplorerPage({
             tree={tagTree}
             subMode={tagDirectorySubMode}
             onSubModeChange={setTagDirectorySubMode}
+            sortOption={sortOption}
+            onSortOptionChange={setSortOption}
             interactionMode={interactionMode}
             selectedTagIds={selectedTagIds}
             editSelectedTagIds={editSelectedTagIds}
             coOccurringTagIds={coOccurringTagIds}
             tagColors={tagColorsQuery.data}
+            tagDisplayContext={tagDisplayContext}
             onToggleSearchTag={toggleTag}
             onToggleEditSelectTag={toggleEditSelectTag}
             onOpenEditModal={(tag) => setEditingTag(tag)}
@@ -561,6 +574,7 @@ export function TagExplorerPage({
             selectionMode={selectionMode}
             coOccurringTagIds={coOccurringTagIds}
             tagColors={tagColorsQuery.data}
+            tagDisplayContext={tagDisplayContext}
             onToggleTag={toggleTag}
           />
         )}
