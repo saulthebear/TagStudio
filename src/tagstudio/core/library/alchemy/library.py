@@ -1181,7 +1181,11 @@ class Library:
             ast = search.ast
 
             if not search.show_hidden_entries:
-                statement = statement.where(~Entry.tags.any(Tag.is_hidden))
+                hidden_tag_ids = select(Tag.id).where(Tag.is_hidden)
+                hidden_entry_ids = select(TagEntry.entry_id).where(
+                    TagEntry.tag_id.in_(hidden_tag_ids)
+                )
+                statement = statement.where(Entry.id.not_in(hidden_entry_ids))
 
             if ast:
                 start_time = time.time()
@@ -1886,7 +1890,7 @@ class Library:
                 return None
 
     def add_tags_to_entries(
-        self, entry_ids: int | list[int] | set[int], tag_ids: int | list[int] | set[int]
+        self, entry_ids: int | Iterable[int], tag_ids: int | Iterable[int]
     ) -> int:
         """Add one or more tags to one or more entries.
 
@@ -1939,7 +1943,7 @@ class Library:
         return total_added
 
     def remove_tags_from_entries(
-        self, entry_ids: int | list[int] | set[int], tag_ids: int | list[int] | set[int]
+        self, entry_ids: int | Iterable[int], tag_ids: int | Iterable[int]
     ) -> int:
         """Remove one or more tags from one or more entries."""
         entry_ids_ = sorted(set([entry_ids] if isinstance(entry_ids, int) else entry_ids))
@@ -2233,15 +2237,17 @@ class Library:
         session: Session,
     ):
         prev_aliases = session.scalars(select(TagAlias).where(TagAlias.tag_id == tag.id)).all()
+        target_ids = set(alias_ids)
+        target_names = {n.strip() for n in alias_names if n and n.strip()}
 
         for alias in prev_aliases:
-            if alias.id not in alias_ids or alias.name not in alias_names:
+            if alias.id not in target_ids or alias.name not in target_names:
                 session.delete(alias)
             else:
-                alias_ids.remove(alias.id)
-                alias_names.remove(alias.name)
+                target_ids.discard(alias.id)
+                target_names.discard(alias.name)
 
-        for alias_name in alias_names:
+        for alias_name in target_names:
             alias = TagAlias(alias_name, tag.id)
             session.add(alias)
 

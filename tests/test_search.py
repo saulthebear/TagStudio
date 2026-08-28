@@ -153,3 +153,18 @@ def test_parent_tags(search_library: Library, query: str, count: int):
 def test_syntax(search_library: Library, invalid_query: str):
     with pytest.raises(ParsingError) as e_info:  # noqa: F841  # pyright: ignore[reportUnusedVariable]
         search_library.search_library(BrowsingState.from_search_query(invalid_query), page_size=500)
+
+
+def test_escaped_single_quotes_tokenizer():
+    from tagstudio.core.query_lang.tokenizer import Tokenizer, TokenType
+
+    token = Tokenizer(r"'O\'Brien'").get_next_token()
+    assert token.type == TokenType.QLITERAL
+    assert token.value == "O'Brien"
+
+
+def test_empty_or_list_query(search_library: Library):
+    # Non-existent tag alongside an existing tag in OR expression evaluates non-existent as false
+    verify_count(search_library, "nonexistent_tag_xyz or green", 5)
+    verify_count(search_library, "nonexistent_tag_xyz or non_existent_tag_abc", 0)
+

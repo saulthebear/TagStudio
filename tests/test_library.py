@@ -593,4 +593,85 @@ def test_get_suggested_tags(library: Library, generate_tag: Callable[..., Tag]):
     assert [t.id for t, _, _, _ in with_sys] == [t.id for t, _, _, _ in clean_suggestions]
 
 
+def test_unlinked_registry_glob_escaping(library: Library, tmp_path: Path):
+    from tagstudio.core.library.alchemy.registries.unlinked_registry import UnlinkedRegistry
+
+    library_dir = tmp_path / "lib"
+    library_dir.mkdir()
+    sub_dir = library_dir / "sub"
+    sub_dir.mkdir()
+
+    filename = "[sample] [tag].png"
+    file_on_disk = sub_dir / filename
+    file_on_disk.write_text("dummy")
+
+    library.library_dir = library_dir
+    folder = unwrap(library.folder)
+    entry = Entry(folder=folder, path=Path("lost") / filename, fields=library.default_fields)
+
+    registry = UnlinkedRegistry(lib=library)
+    matches = registry.match_unlinked_file_entry(entry)
+    assert len(matches) == 1
+    assert matches[0] == Path("sub") / filename
+
+
+def test_ignored_registry_path_matching(library: Library, tmp_path: Path):
+    import wcmatch.fnmatch as fnmatch
+
+    from tagstudio.core.library.alchemy.registries.ignored_registry import IgnoredRegistry
+    from tagstudio.core.library.ignore import PATH_GLOB_FLAGS, Ignore, ignore_to_glob
+
+    library_dir = tmp_path / "lib_ignore"
+    library_dir.mkdir()
+    library.library_dir = library_dir
+
+    # Compile ignore rule for *.tmp
+    Ignore.compiled_patterns = fnmatch.compile(
+        ignore_to_glob(["*.tmp"]),
+        PATH_GLOB_FLAGS,
+    )
+
+    folder = unwrap(library.folder)
+    e1 = Entry(folder=folder, path=Path("keep.png"), fields=library.default_fields)
+    e2 = Entry(folder=folder, path=Path("sub") / "scratch.tmp", fields=library.default_fields)
+    library.add_entries([e1, e2])
+
+    registry = IgnoredRegistry(lib=library)
+    list(registry.refresh_ignored_entries())
+
+    ignored_ids = [e.id for e in registry.ignored_entries]
+    assert e2.id in ignored_ids
+    assert e1.id not in ignored_ids
+
+
+def test_search_non_hidden_entries_optimization(library: Library, generate_tag: Callable[..., Tag]):
+    from tagstudio.core.library.alchemy.enums import BrowsingState
+
+    visible_tag = unwrap(library.add_tag(generate_tag("visible_tag", id=301, is_hidden=False)))
+    hidden_tag = unwrap(library.add_tag(generate_tag("hidden_tag", id=302, is_hidden=True)))
+
+    folder = unwrap(library.folder)
+    e_visible = Entry(folder=folder, path=Path("visible.png"), fields=library.default_fields)
+    e_hidden = Entry(folder=folder, path=Path("hidden.png"), fields=library.default_fields)
+    library.add_entries([e_visible, e_hidden])
+
+    library.add_tags_to_entries(e_visible.id, [visible_tag.id])
+    library.add_tags_to_entries(e_hidden.id, [hidden_tag.id])
+
+    # With show_hidden_entries = False
+    state = BrowsingState.from_search_query("")
+    state.show_hidden_entries = False
+    results = library.search_library(state, page_size=100)
+    assert e_visible.id in results.ids
+    assert e_hidden.id not in results.ids
+
+
+def test_media_types_ai_and_pxd():
+    from tagstudio.core.media_types import MediaCategories, MediaType
+
+    assert MediaType.PDF in MediaCategories.get_types(".ai")
+    assert MediaCategories.DOCUMENT_TYPES.contains(".pxd")
+
+
+
 
