@@ -2,50 +2,79 @@ name: Web Checks
 
 on:
   pull_request:
-    paths:
-      - "apps/**"
-      - "packages/**"
-      - "package.json"
-      - "tsconfig.base.json"
-      - "bunfig.toml"
+    branches:
+      - main
   push:
     branches:
       - main
-    paths:
-      - "apps/**"
-      - "packages/**"
-      - "package.json"
-      - "tsconfig.base.json"
-      - "bunfig.toml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  web-checks:
-    name: Web Workspace Checks
+  quality:
+    name: Typecheck, Lint, Unit, Build
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+
     steps:
-      - name: Checkout repo
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Bun
+      - name: Set up Bun
         uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.2.5"
 
       - name: Install dependencies
-        run: bun install
+        run: bun install --frozen-lockfile
 
-      - name: Typecheck web app
+      - name: Typecheck
         run: bun run --cwd apps/web typecheck
 
-      - name: Lint web app
+      - name: Lint
         run: bun run --cwd apps/web lint
 
       - name: Unit tests
         run: bun run --cwd apps/web test
 
-      - name: Build web app
+      - name: Production build
         run: bun run build:web
 
-      - name: Install Playwright Chromium
+  e2e:
+    name: Playwright
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.2.5"
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Install Chromium
         run: bunx playwright install --with-deps chromium
 
-      - name: E2E smoke
-        run: bun run --cwd apps/web e2e:smoke
+      - name: Run full browser suite
+        run: bun run --cwd apps/web e2e
+
+      - name: Upload failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-failure-${{ github.run_attempt }}
+          path: |
+            apps/web/playwright-report
+            apps/web/test-results
+          if-no-files-found: ignore
+          retention-days: 7

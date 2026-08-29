@@ -59,10 +59,7 @@ from typing_extensions import deprecated
 from tagstudio.core.constants import (
     BACKUP_FOLDER_NAME,
     IGNORE_NAME,
-    LEGACY_TAG_FIELD_IDS,
     RESERVED_NAMESPACE_PREFIX,
-    RESERVED_TAG_END,
-    RESERVED_TAG_START,
     TAG_ARCHIVED,
     TAG_FAVORITE,
     TAG_META,
@@ -107,7 +104,6 @@ from tagstudio.core.library.alchemy.models import (
     Version,
 )
 from tagstudio.core.library.alchemy.visitors import SQLBoolExpressionBuilder
-from tagstudio.core.library.json.library import Library as JsonLibrary
 from tagstudio.core.utils.types import unwrap
 from tagstudio.observability.metrics import get_metrics_store
 
@@ -177,10 +173,6 @@ def get_default_tags() -> tuple[Tag, ...]:
     return archive_tag, favorite_tag, meta_tag
 
 
-# The difference in the number of default JSON tags vs default tags in the current version.
-DEFAULT_TAG_DIFF: int = len(get_default_tags()) - len([TAG_ARCHIVED, TAG_FAVORITE])
-
-
 @dataclass(frozen=True)
 class SearchResult:
     """Wrapper for search results.
@@ -217,7 +209,6 @@ class LibraryStatus:
     library_path: Path | None = None
     message: str | None = None
     msg_description: str | None = None
-    json_migration_req: bool = False
 
 
 class Library:
@@ -247,97 +238,6 @@ class Library:
         self.dupe_files_count = -1
         self.ignored_entries_count = -1
         self.unlinked_entries_count = -1
-
-    def migrate_json_to_sqlite(self, json_lib: JsonLibrary):
-        """Migrate JSON library data to the SQLite database."""
-        logger.info("Starting Library Conversion...")
-        start_time = time.time()
-        folder: Folder = Folder(path=self.library_dir, uuid=str(uuid4()))
-
-        # Tags
-        for tag in json_lib.tags:
-            color_namespace, color_slug = default_color_groups.json_to_sql_color(tag.color)
-            disambiguation_id: int | None = None
-            if tag.subtag_ids and tag.subtag_ids[0] != tag.id:
-                disambiguation_id = tag.subtag_ids[0]
-            self.add_tag(
-                Tag(
-                    id=tag.id,
-                    name=tag.name,
-                    shorthand=tag.shorthand,
-                    color_namespace=color_namespace,
-                    color_slug=color_slug,
-                    disambiguation_id=disambiguation_id,
-                )
-            )
-            # Apply user edits to built-in JSON tags.
-            if tag.id in range(RESERVED_TAG_START, RESERVED_TAG_END + 1):
-                updated_tag = self.get_tag(tag.id)
-                if not updated_tag:
-                    continue
-                updated_tag.name = tag.name
-                updated_tag.shorthand = tag.shorthand
-                updated_tag.color_namespace = color_namespace
-                updated_tag.color_slug = color_slug
-                self.update_tag(updated_tag)  # NOTE: This just calls add_tag?
-
-        # Tag Aliases
-        for tag in json_lib.tags:
-            for alias in tag.aliases:
-                if not alias:
-                    break
-                # Only add new (user-created) aliases to the default tags.
-                # This prevents pre-existing built-in aliases from being added as duplicates.
-                if tag.id in range(RESERVED_TAG_START, RESERVED_TAG_END + 1):
-                    for dt in get_default_tags():
-                        if dt.id == tag.id and alias not in dt.alias_strings:
-                            self.add_alias(name=alias, tag_id=tag.id)
-                else:
-                    self.add_alias(name=alias, tag_id=tag.id)
-
-        # Parent Tags (Previously known as "Subtags" in JSON)
-        for tag in json_lib.tags:
-            for parent_id in tag.subtag_ids:
-                self.add_parent_tag(parent_id=parent_id, child_id=tag.id)
-
-        # Entries
-        self.add_entries(
-            [
-                Entry(
-                    path=entry.path / entry.filename,
-                    folder=folder,
-                    fields=[],
-                    id=entry.id + 1,  # JSON IDs start at 0 instead of 1
-                    date_added=datetime.now(),
-                )
-                for entry in json_lib.entries
-            ]
-        )
-        for entry in json_lib.entries:
-            for field in entry.fields:  # pyright: ignore[reportUnknownVariableType]
-                for k, v in field.items():  # pyright: ignore[reportUnknownVariableType]
-                    # Old tag fields get added as tags
-                    if k in LEGACY_TAG_FIELD_IDS:
-                        self.add_tags_to_entries(entry_ids=entry.id + 1, tag_ids=v)
-                    else:
-                        self.add_field_to_entry(
-                            entry_id=(entry.id + 1),  # JSON IDs start at 0 instead of 1
-                            field_id=self.get_field_name_from_id(k),
-                            value=v,
-                        )
-
-        # Preferences
-        self.set_prefs(LibraryPrefs.EXTENSION_LIST, [x.strip(".") for x in json_lib.ext_list])
-        self.set_prefs(LibraryPrefs.IS_EXCLUDE_LIST, json_lib.is_exclude_list)
-
-        end_time = time.time()
-        logger.info(f"Library Converted! ({format_timespan(end_time - start_time)})")
-
-    def get_field_name_from_id(self, field_id: int) -> FieldID | None:
-        for f in FieldID:
-            if field_id == f.value.id:
-                return f
-        return None
 
     def tag_display_name(self, tag: Tag | None) -> str:
         if not tag:
@@ -372,8 +272,10 @@ class Library:
                     return LibraryStatus(
                         success=False,
                         library_path=library_dir,
-                        message="[JSON] Legacy v9.4 library requires conversion to v9.5+",
-                        json_migration_req=True,
+                        message=(
+                            "Legacy JSON libraries are not supported by this web-first fork. "
+                            "Convert this library to SQLite with TagStudio 9.5 or newer first."
+                        ),
                     )
 
         return self.open_sqlite_library(library_dir, is_new)
@@ -1377,7 +1279,10 @@ class Library:
                 INNER JOIN tag_entries te ON te.tag_id = td.descendant_id
                 GROUP BY td.ancestor_id;
             """)
-            counts_map = dict(session.execute(descendant_counts_query).all())
+            counts_map: dict[int, int] = {
+                int(row.tag_id): int(row.entry_count)
+                for row in session.execute(descendant_counts_query)
+            }
 
             tags_query = (
                 select(Tag)

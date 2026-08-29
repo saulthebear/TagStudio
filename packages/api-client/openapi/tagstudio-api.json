@@ -1470,7 +1470,7 @@
           "telemetry"
         ],
         "summary": "Get Summary",
-        "description": "Return aggregated latency percentiles, slow queries, error rates, and thumbnail cache stats.",
+        "description": "Return aggregated latency percentiles, slow queries, and cache stats.",
         "operationId": "get_summary_api_v1_telemetry_summary_get",
         "parameters": [
           {

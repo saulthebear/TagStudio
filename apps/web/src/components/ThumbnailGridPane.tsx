@@ -156,6 +156,7 @@ export function ThumbnailGridPane({
 }: ThumbnailGridPaneProps) {
   const paneRef = useRef<HTMLElement | null>(null);
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
+  const deferredLoadMoreRef = useRef(false);
   const [failedMediaIds, setFailedMediaIds] = useState<Set<number>>(() => new Set());
   const [contextMenu, setContextMenu] = useState<ContextMenuRenderState | null>(null);
 
@@ -180,6 +181,39 @@ export function ThumbnailGridPane({
   const closeContextMenu = useCallback(() => {
     setContextMenu(null);
   }, []);
+
+  const handleEndReached = useCallback(() => {
+    if (!hasMore) {
+      deferredLoadMoreRef.current = false;
+      return;
+    }
+    if (searchPending || loadingMore) {
+      deferredLoadMoreRef.current = true;
+      return;
+    }
+    onLoadMore();
+  }, [hasMore, loadingMore, onLoadMore, searchPending]);
+
+  const handleBottomStateChange = useCallback(
+    (atBottom: boolean) => {
+      if (atBottom) {
+        handleEndReached();
+      }
+    },
+    [handleEndReached]
+  );
+
+  useEffect(() => {
+    if (!hasMore) {
+      deferredLoadMoreRef.current = false;
+      return;
+    }
+    if (searchPending || loadingMore || !deferredLoadMoreRef.current) {
+      return;
+    }
+    deferredLoadMoreRef.current = false;
+    onLoadMore();
+  }, [hasMore, loadingMore, onLoadMore, searchPending]);
 
   const getMenuBounds = useCallback(() => {
     const pane = paneRef.current;
@@ -397,12 +431,7 @@ export function ThumbnailGridPane({
           itemClassName="thumb-grid-item"
           data={entries}
           overscan={480}
-          endReached={() => {
-            if (!hasMore || searchPending || loadingMore) {
-              return;
-            }
-            onLoadMore();
-          }}
+          atBottomStateChange={handleBottomStateChange}
           itemContent={(_, entry) => {
             const selected = selectedEntryIdSet.has(entry.id);
             const mediaKind = getMediaKind(entry.suffix);

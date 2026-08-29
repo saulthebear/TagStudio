@@ -1,58 +1,41 @@
----
-name: Bug Report
-description: File a bug or issue report.
-title: '[Bug]: '
-labels: ['Type: Bug']
+name: Bug report
+description: Report a reproducible problem in the Web UI or local API.
+title: "[Bug]: "
+labels: ["Type: Bug"]
 body:
   - type: markdown
     attributes:
       value: |
-        *Please add an appropriate title for this issue.*
-
-        Before reporting, read the [documentation](https://github.com/TagStudioDev/TagStudio/blob/main/docs/index.md) and search existing [issues](https://github.com/TagStudioDev/TagStudio/issues).
-        Validate that you are using an up-to-date version[^1], your issue might already be fixed!
-        Questions, guidance, and usage goes in [discussions](https://github.com/TagStudioDev/TagStudio/discussions). Invalid issues will be closed.
-
-        [^1]: This can mean latest release, pre-release, or git commit.
+        This fork supports the Web UI and local API only. Search existing issues before filing a new report.
   - type: checkboxes
     attributes:
       label: Checklist
-      description: Make sure you've checked (and actually did) all of the below.
       options:
-        - label: I am using an up-to-date version.
+        - label: I reproduced this on the latest commit from this repository.
           required: true
-        - label: I have read the [documentation](https://github.com/TagStudioDev/TagStudio/blob/main/docs/index.md).
-          required: true
-        - label: I have searched existing [issues](https://github.com/TagStudioDev/TagStudio/issues).
+        - label: I searched existing issues for the same problem.
           required: true
   - type: input
     attributes:
-      label: TagStudio Version
-      placeholder: Alpha 9.1.0
+      label: Commit
+      description: The commit SHA or date of the checkout you tested.
     validations:
       required: true
   - type: input
     attributes:
-      label: Operating System & Version
-      placeholder: TagOS 3.14
+      label: Browser and operating system
+      placeholder: Firefox 141 on macOS 15.6
     validations:
       required: true
   - type: textarea
     attributes:
       label: Description
-      description: Clear and concise description of the problem. Attach screenshots if needed, and include any errors you see.
+      description: Explain the problem and attach screenshots when useful.
     validations:
       required: true
   - type: textarea
     attributes:
-      label: Expected Behavior
-      description: Clear and concise description of what you think should happen.
-    validations:
-      required: true
-  - type: textarea
-    attributes:
-      label: Steps to Reproduce
-      description: Minimal steps needed for the problem to occur.
+      label: Steps to reproduce
       placeholder: |
         1.
         2.
@@ -61,5 +44,10 @@ body:
       required: true
   - type: textarea
     attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    attributes:
       label: Logs
-      description: Provide any logs, if applicable.
+      description: Include relevant browser-console or API logs after removing private paths and tokens.

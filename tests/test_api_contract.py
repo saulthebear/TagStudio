@@ -4,7 +4,7 @@ from pathlib import Path
 from tagstudio.api.app import create_app
 
 
-def test_openapi_paths_match_generated_client_contract(cwd: Path):
+def test_openapi_schema_matches_committed_contract(cwd: Path):
     schema_path = cwd.parent / "packages" / "api-client" / "openapi" / "tagstudio-api.json"
     assert schema_path.exists(), f"Missing OpenAPI contract file: {schema_path}"
 
@@ -13,11 +13,7 @@ def test_openapi_paths_match_generated_client_contract(cwd: Path):
 
     runtime_schema = create_app(require_token=False).openapi()
 
-    contract_paths = set(contract_schema["paths"].keys())
-    runtime_paths = set(runtime_schema["paths"].keys())
-    assert contract_paths == runtime_paths
-
-    for path in contract_paths:
-        assert set(contract_schema["paths"][path].keys()) == set(
-            runtime_schema["paths"][path].keys()
-        )
+    assert contract_schema == runtime_schema, (
+        "The committed OpenAPI contract is stale. Run `bun run generate:openapi` "
+        "and commit the result."
+    )

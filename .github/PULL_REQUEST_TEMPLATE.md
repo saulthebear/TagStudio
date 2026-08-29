@@ -1,31 +1,15 @@
-### Summary
+## Summary
 
-<!--
-^^^ Summarize the changes done and why they were done above.
+Describe the user-visible or architectural change and why it is needed.
 
-By submitting this pull request, you certify that you have read the
-[Contributing](https://docs.tagstud.io/contributing) page on our documentation site,
-or in the project's [CONTRIBUTING.md](https://github.com/TagStudioDev/TagStudio/blob/main/docs/contributing.md) file.
+## Validation
 
-IMPORTANT FOR FEATURES: Please verify that a feature request or some other form
-of communication with maintainers was already conducted in terms of approving.
+- [ ] Python lint and format checks pass
+- [ ] Python typing and relevant API/core tests pass
+- [ ] Web typecheck, lint, unit tests, and build pass
+- [ ] Relevant Playwright scenarios pass
+- [ ] OpenAPI snapshot regenerated if the API contract changed
 
-Thank you for your eagerness to contribute!
--->
+## Compatibility
 
-### Tasks Completed
-
-<!-- No requirements, just context for reviewers. -->
-
--   Platforms Tested:
-    -   [ ] Windows x86
-    -   [ ] Windows ARM
-    -   [ ] macOS x86
-    -   [ ] macOS ARM
-    -   [ ] Linux x86
-    -   [ ] Linux ARM
-    <!-- If an unspecified platform was tested, please add it here -->
--   Tested For:
-    -   [ ] Basic functionality
-    -   [ ] PyInstaller executable <!-- Not necessarily required, but appreciated! -->
-    <!-- If other important criteria was tested for, please add it here -->
+Call out SQLite migration, persisted settings, API contract, or browser compatibility effects.

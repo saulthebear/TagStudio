@@ -55,7 +55,9 @@ export function ModalLayerPortal({
 
   return createPortal(
     <div className="modal-layer" style={{ zIndex: zIndexBase + resolvedDepth * 20 }}>
-      {dimBackdrop && depth === 0 ? <div className="modal-layer-backdrop modal-layer-backdrop-dim" /> : null}
+      {dimBackdrop && resolvedTopmost ? (
+        <div className="modal-layer-backdrop modal-layer-backdrop-dim" />
+      ) : null}
       {resolvedTopmost ? (
         <div
           className="modal-layer-backdrop modal-layer-backdrop-clear"

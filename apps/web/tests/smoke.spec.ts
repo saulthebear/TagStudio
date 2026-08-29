@@ -543,7 +543,7 @@ test("applies top-bar filter menu toggles with live query sync and request flags
   await expect.poll(() => searchRequests.at(-1)?.show_hidden_entries).toBe(true);
 
   await searchInput.fill("(special:untagged OR tag:foo)");
-  await searchButton.click();
+  await searchInput.press("Enter");
   await expect.poll(() => searchRequests.at(-1)?.query).toBe("(special:untagged OR tag:foo)");
   await filterButton.click();
   await expect(
@@ -661,6 +661,7 @@ test("random sorting reshuffles on search and reuses seed for pagination", async
   await page.getByRole("button", { name: "Filter options" }).click();
   await page.getByRole("menuitemcheckbox", { name: "Random" }).click();
   await expect.poll(() => randomResponses.filter((response) => response.pageIndex === 0).length).toBe(1);
+  await expect(page.getByText("Loading results...")).toHaveCount(0);
   const initialRandomRequest = randomRequests.find((request) => request.pageIndex === 0);
   const initialRandomPage = randomResponses.find((response) => response.pageIndex === 0);
   expect(initialRandomRequest?.randomSeed).toBeUndefined();
@@ -668,17 +669,17 @@ test("random sorting reshuffles on search and reuses seed for pagination", async
   const firstRandomSeed = initialRandomPage!.randomSeed;
   const firstRandomIds = initialRandomPage!.ids;
 
-  await page.locator(".thumb-grid-scroll").evaluate((element) => {
-    element.scrollTo({ top: element.scrollHeight });
-  });
+  await page.getByRole("slider", { name: "Grid tile size" }).fill("360");
+  const gridScroller = page.locator(".thumb-grid-virtuoso[data-testid='virtuoso-scroller']");
+  await expect.poll(() => gridScroller.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
+  await gridScroller.focus();
+  await gridScroller.press("End");
   await expect.poll(() => randomResponses.some((response) => response.pageIndex === 1)).toBe(true);
   const appendRandomRequest = randomRequests.find((request) => request.pageIndex === 1);
   expect(appendRandomRequest?.randomSeed).toBe(firstRandomSeed);
 
   const pageZeroCountBeforeSearch = randomResponses.filter((response) => response.pageIndex === 0).length;
-  await page.locator(".thumb-grid-scroll").evaluate((element) => {
-    element.scrollTo({ top: 0 });
-  });
+  await gridScroller.press("Home");
   const searchInput = page.getByPlaceholder("Search entries (e.g. tag:\"favorite\" or path:\"*.png\")");
   await searchInput.press("Enter");
   await expect
@@ -878,7 +879,7 @@ test("defers special:untagged result refresh until explicit search", async ({ pa
   await expect.poll(() => searchRequests.length).toBe(searchCountBeforeEnter + 1);
   await expect(page.getByText("No entries match this filter.")).toBeVisible();
   await expect(page.locator(".top-filter-stale-pill")).toHaveCount(0);
-  await expect(searchButton).not.toHaveClass(/btn-search-stale/);
+  await expect(searchInput).not.toHaveAttribute("aria-describedby");
 });
 
 test("marks results stale for non-untagged tag changes until explicit search", async ({ page }) => {
@@ -1008,6 +1009,7 @@ test("marks results stale for non-untagged tag changes until explicit search", a
 
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Files" })).toBeVisible();
+  const searchInput = page.getByPlaceholder("Search entries (e.g. tag:\"favorite\" or path:\"*.png\")");
   await page.locator(".thumb-card").filter({ hasText: "steady.png" }).click();
   await page.getByRole("button", { name: "Add Tag" }).click();
   await page.getByRole("button", { name: /Reviewed/ }).first().click();
@@ -1018,7 +1020,7 @@ test("marks results stale for non-untagged tag changes until explicit search", a
   await expect(page.locator(".top-filter-stale-pill")).toBeVisible();
 
   await page.getByRole("button", { name: "Close" }).click();
-  await page.locator(".top-filter-search-action").click();
+  await searchInput.press("Enter");
   await expect.poll(() => searchRequests.length).toBe(searchCountAfterMutation + 1);
   await expect(page.locator(".top-filter-stale-pill")).toHaveCount(0);
 });
@@ -1162,7 +1164,7 @@ test("keeps stale hint visible when a manual search fails", async ({ page }) => 
 
   const searchInput = page.getByPlaceholder("Search entries (e.g. tag:\"favorite\" or path:\"*.png\")");
   await searchInput.fill("special:untagged");
-  await page.getByRole("button", { name: "Search" }).click();
+  await searchInput.press("Enter");
 
   await page.locator(".thumb-card").filter({ hasText: "error-case.png" }).click();
   await page.getByRole("button", { name: "Add Tag" }).click();
@@ -1174,7 +1176,8 @@ test("keeps stale hint visible when a manual search fails", async ({ page }) => 
   await page.locator(".top-filter-stale-pill").click();
   await expect(page.getByText("Simulated search failure")).toBeVisible();
   await expect(page.locator(".top-filter-stale-pill")).toBeVisible();
-  await expect(page.locator(".top-filter-search-action")).toHaveClass(/btn-search-stale/);
+  await expect(searchInput).toHaveAttribute("aria-describedby");
+  await expect(page.getByText("Results are stale. Press Enter to refresh them.")).toBeAttached();
 });
 
 test("refresh completion clears stale state via non-append search", async ({ page }) => {
@@ -1349,7 +1352,7 @@ test("refresh completion clears stale state via non-append search", async ({ pag
 
   const searchInput = page.getByPlaceholder("Search entries (e.g. tag:\"favorite\" or path:\"*.png\")");
   await searchInput.fill("special:untagged");
-  await page.getByRole("button", { name: "Search" }).click();
+  await searchInput.press("Enter");
 
   await page.locator(".thumb-card").filter({ hasText: "refresh-case.png" }).click();
   await page.getByRole("button", { name: "Add Tag" }).click();
@@ -1358,11 +1361,11 @@ test("refresh completion clears stale state via non-append search", async ({ pag
   await expect(page.locator(".top-filter-stale-pill")).toBeVisible();
 
   const searchCountBeforeRefresh = searchRequests.length;
-  await page.locator(".top-filter-refresh-action").click();
+  await page.getByRole("button", { name: "Refresh", exact: true }).click();
   await expect.poll(() => refreshJobRequests.length).toBe(1);
   await expect.poll(() => searchRequests.length).toBe(searchCountBeforeRefresh + 1);
   await expect(page.locator(".top-filter-stale-pill")).toHaveCount(0);
-  await expect(page.locator(".top-filter-search-action")).not.toHaveClass(/btn-search-stale/);
+  await expect(searchInput).not.toHaveAttribute("aria-describedby");
 });
 
 test("supports add-tags modal create-and-add workflow", async ({ page }) => {
@@ -1816,7 +1819,9 @@ test("supports add-tags modal create-and-add workflow", async ({ page }) => {
   await expect(parentCandidateRows.nth(2).locator("span").first()).toHaveText("Needs Review");
 
   await parentSearch.press("Enter");
-  await expect(editTagDialog.locator(".tag-editor-parent-pill", { hasText: "Review" })).toBeVisible();
+  await expect(
+    editTagDialog.locator(".tag-editor-parent-pill .metadata-tag-chip-label").getByText("Review", { exact: true })
+  ).toBeVisible();
   await expect(parentSearch).toHaveValue("");
   await expect(parentPickerDialog).toBeVisible();
 
@@ -1826,7 +1831,10 @@ test("supports add-tags modal create-and-add workflow", async ({ page }) => {
   await expect(parentPickerDialog).toHaveCount(0);
   await expect(editTagDialog).toBeVisible();
 
-  const disambigChip = editTagDialog.locator(".tag-editor-disambig-chip", { hasText: "Review" });
+  const disambigChip = editTagDialog.getByRole("button", {
+    name: "Disambiguate with Review",
+    exact: true
+  });
   await expect(disambigChip).toBeVisible();
   await expect(disambigChip).toHaveClass(/disambig-chip-unselected/);
   await disambigChip.click();
@@ -1859,12 +1867,12 @@ test("supports add-tags modal create-and-add workflow", async ({ page }) => {
 
   const chipRemoveSlot = colorMetadataChip.locator(".metadata-tag-chip-remove-slot");
   const chipRemoveButton = colorMetadataChip.locator(".metadata-tag-chip-remove");
-  await expect(chipRemoveButton).toHaveCSS("opacity", "0");
+  await expect(chipRemoveButton).toHaveCSS("opacity", "0.65");
   await expect
     .poll(async () => (await chipRemoveSlot.boundingBox())?.width ?? 0, {
-      message: "remove slot should be collapsed before hover"
+      message: "remove slot should remain available before hover"
     })
-    .toBeLessThan(2);
+    .toBeGreaterThan(16);
   await colorMetadataChip.hover();
   await expect(chipRemoveButton).toHaveCSS("opacity", "1");
   await expect
@@ -2304,7 +2312,7 @@ test("displays inherited tags and highlights descendant tags on hover", async ({
   await thumbnail.click();
 
   // Direct tags: "Landscape" and "Pixel Art" should be in the direct tags list
-  const directTagChips = page.locator(".metadata-tag-actions > .metadata-tag-list .metadata-tag-chip");
+  const directTagChips = page.getByRole("list", { name: "Direct tags" }).locator(".metadata-tag-chip");
   await expect(directTagChips).toHaveCount(2);
 
   const pixelArtChip = directTagChips.filter({ hasText: "Pixel Art" }).first();
@@ -2315,12 +2323,11 @@ test("displays inherited tags and highlights descendant tags on hover", async ({
   await expect(pixelArtChip.locator(".metadata-tag-chip-remove")).toBeVisible();
 
   // Inherited tags: "Digital" and "Medium" should appear in the Inherited Tags section
-  const inheritedSection = page.locator(".metadata-inherited-tags-section");
-  await expect(inheritedSection).toBeVisible();
-  await expect(inheritedSection.locator(".metadata-inherited-tags-title")).toHaveText("Inherited Tags");
-  await expect(inheritedSection.locator(".metadata-inherited-tags-count")).toHaveText("(2)");
-
-  const inheritedChips = inheritedSection.locator(".metadata-tag-chip-inherited");
+  const inheritedTagsToggle = page.getByRole("button", { name: /^Inherited tags/ });
+  await expect(inheritedTagsToggle).toContainText("(2)");
+  const inheritedChips = page
+    .getByRole("list", { name: "Inherited tags" })
+    .locator(".metadata-tag-chip-inherited");
   await expect(inheritedChips).toHaveCount(2);
 
   const digitalChip = inheritedChips.filter({ hasText: "Digital" }).first();
@@ -2552,12 +2559,12 @@ test("renders suggested tags section and adds suggested tag with one click", asy
   await thumbnail.click();
 
   // Verify Suggested Tags section is visible with "Ocean" chip
-  const suggestedSection = page.locator(".metadata-suggested-tags-section");
-  await expect(suggestedSection).toBeVisible();
-  await expect(suggestedSection.locator(".metadata-suggested-tags-title")).toHaveText("Suggested Tags");
-  await expect(suggestedSection.locator(".metadata-suggested-tags-count")).toHaveText("(1)");
-
-  const suggestedChip = suggestedSection.locator(".metadata-tag-chip-suggested").first();
+  const suggestedTagsToggle = page.getByRole("button", { name: /^Suggested tags/ });
+  await expect(suggestedTagsToggle).toContainText("(1)");
+  const suggestedChip = page
+    .getByRole("list", { name: "Suggested tags" })
+    .locator(".metadata-tag-chip-suggested")
+    .first();
   await expect(suggestedChip).toBeVisible();
   await expect(suggestedChip.locator(".metadata-tag-chip-label")).toHaveText("Ocean");
 
@@ -2573,9 +2580,6 @@ test("renders suggested tags section and adds suggested tag with one click", asy
   expect(addedTagId).toBe(3);
 
   // Suggested tag moves to direct tags list
-  const directTagChips = page.locator(".metadata-tag-actions > .metadata-tag-list .metadata-tag-chip");
+  const directTagChips = page.getByRole("list", { name: "Direct tags" }).locator(".metadata-tag-chip");
   await expect(directTagChips.filter({ hasText: "Ocean" })).toBeVisible();
 });
-
-
-

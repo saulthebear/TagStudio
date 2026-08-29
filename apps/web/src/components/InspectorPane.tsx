@@ -630,7 +630,7 @@ export function MetadataContent({
         </div>
 
         {tagsOpen ? (
-          <div className="metadata-tag-list">
+          <div className="metadata-tag-list" role="list" aria-label="Direct tags">
             {aggregateTagRows.length === 0 ? (
               <p className="tag-editor-empty">No tags applied.</p>
             ) : (
@@ -703,7 +703,7 @@ export function MetadataContent({
           inheritedTagRows.length === 0 ? (
             <p className="tag-editor-empty">No inherited tags.</p>
           ) : (
-            <div className="metadata-tag-list">
+            <div className="metadata-tag-list" role="list" aria-label="Inherited tags">
               {inheritedTagRows.map((row) => {
                 const isHighlighted = highlightedTagIds.has(row.tagId);
                 const descendantNames = row.descendantTagIds
@@ -766,7 +766,7 @@ export function MetadataContent({
           </div>
 
           {suggestedTagsOpen ? (
-            <div className="metadata-tag-list">
+            <div className="metadata-tag-list" role="list" aria-label="Suggested tags">
               {suggestedTags.map((suggestion) => {
                 const isHighlighted = highlightedTagIds.has(suggestion.tag.id);
                 const label = getTagDisplayLabel(suggestion.tag, tagDisplayContext);

@@ -9,7 +9,10 @@ from tagstudio.core.constants import TS_FOLDER_NAME
 
 def get_default_app_data_dir() -> Path:
     """Return the platform-appropriate application data directory for TagStudio."""
-    if sys.platform == "darwin":
+    override = os.environ.get("TAGSTUDIO_APP_DATA_DIR")
+    if override:
+        base = Path(override).expanduser().resolve()
+    elif sys.platform == "darwin":
         base = Path.home() / "Library" / "Application Support" / "TagStudio"
     elif sys.platform == "win32":
         appdata = os.environ.get("APPDATA")

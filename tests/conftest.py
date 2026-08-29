@@ -3,11 +3,12 @@
 # Created for TagStudio: https://github.com/CyanVoxel/TagStudio
 
 
+import logging
+import os
 import sys
 from collections.abc import Callable, Generator
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from unittest.mock import Mock, patch
 
 import pytest
 
@@ -19,6 +20,26 @@ from tagstudio.core.constants import THUMB_CACHE_NAME, TS_FOLDER_NAME
 from tagstudio.core.library.alchemy.library import Library
 from tagstudio.core.library.alchemy.models import Entry, Tag
 from tagstudio.core.utils.types import unwrap
+
+
+@pytest.fixture(scope="session", autouse=True)
+def isolated_app_data():
+    """Keep test telemetry out of the user's application-data directory."""
+    previous = os.environ.get("TAGSTUDIO_APP_DATA_DIR")
+    with TemporaryDirectory() as tmp_dir_name:
+        os.environ["TAGSTUDIO_APP_DATA_DIR"] = tmp_dir_name
+        yield Path(tmp_dir_name)
+
+        root_logger = logging.getLogger()
+        for handler in list(root_logger.handlers):
+            if getattr(handler, "_tagstudio_telemetry", False):
+                root_logger.removeHandler(handler)
+                handler.close()
+
+    if previous is None:
+        os.environ.pop("TAGSTUDIO_APP_DATA_DIR", None)
+    else:
+        os.environ["TAGSTUDIO_APP_DATA_DIR"] = previous
 
 
 @pytest.fixture
@@ -55,7 +76,8 @@ def file_mediatypes_library():
     assert lib.add_entries([entry1, entry2, entry3])
     assert len(lib.tags) == 3
 
-    return lib
+    yield lib
+    lib.close()
 
 
 @pytest.fixture(scope="session")
@@ -130,14 +152,16 @@ def library(request, library_dir: Path):  # pyright: ignore
     assert len(lib.tags) == 6
 
     yield lib
+    lib.close()
 
 
 @pytest.fixture
-def search_library() -> Library:
+def search_library() -> Generator[Library]:
     lib = Library()
     status = lib.open_library(Path(CWD / "fixtures" / "search_library"))
     assert status.success
-    return lib
+    yield lib
+    lib.close()
 
 
 @pytest.fixture
@@ -148,37 +172,6 @@ def entry_min(library: Library):
 @pytest.fixture
 def entry_full(library: Library):
     yield next(library.all_entries(with_joins=True))
-
-
-@pytest.fixture
-def qt_driver(library: Library, library_dir: Path):
-    from PySide6.QtWidgets import QScrollArea
-
-    from tagstudio.qt.thumb_grid_layout import ThumbGridLayout
-    from tagstudio.qt.ts_qt import QtDriver
-
-    class Args:
-        settings_file = library_dir / "settings.toml"
-        cache_file = library_dir / "tagstudio.ini"
-        open = library_dir
-        ci = True
-
-    with patch("tagstudio.qt.ts_qt.Consumer"), patch("tagstudio.qt.ts_qt.CustomRunnable"):
-        driver = QtDriver(Args())  # pyright: ignore[reportArgumentType]
-
-        driver.app = Mock()
-        driver.main_window = Mock()
-        driver.main_window.thumb_size = 128
-        driver.main_window.thumb_layout = ThumbGridLayout(driver, QScrollArea())
-        driver.main_window.menu_bar.autofill_action = Mock()
-
-        driver.copy_buffer = {"fields": [], "tags": []}
-
-        driver.lib = library
-        # TODO - downsize this method and use it
-        # driver.start()
-        driver.frame_content = [e.id for e in library.all_entries()]
-        yield driver
 
 
 @pytest.fixture

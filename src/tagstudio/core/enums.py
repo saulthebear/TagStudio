@@ -7,13 +7,6 @@ from typing import Any
 from uuid import uuid4
 
 
-class SettingItems(str, enum.Enum):
-    """List of setting item names."""
-
-    LAST_LIBRARY = "last_library"
-    LIBS_LIST = "libs_list"
-
-
 class ShowFilepathOption(int, enum.Enum):
     """Values representing the options for the "show_filenames" setting."""
 

@@ -5,9 +5,9 @@ import logging
 import re
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from typing import Any
 
 import structlog
+from structlog.typing import EventDict, WrappedLogger
 
 from tagstudio.observability.context import get_current_trace_id
 from tagstudio.observability.paths import get_telemetry_dirs
@@ -17,8 +17,8 @@ _TOKEN_QUERY_PATTERN = re.compile(r"([?&]token=)([^&]+)", re.IGNORECASE)
 
 
 def redact_sensitive_data(
-    logger: Any, method_name: str, event_dict: dict[str, Any]
-) -> dict[str, Any]:
+    logger: WrappedLogger, method_name: str, event_dict: EventDict
+) -> EventDict:
     """Redact sensitive fields such as tokens, secrets, and auth headers from log events."""
     for key in list(event_dict.keys()):
         lower_key = key.lower()
@@ -36,7 +36,7 @@ def redact_sensitive_data(
     return event_dict
 
 
-def inject_trace_id(logger: Any, method_name: str, event_dict: dict[str, Any]) -> dict[str, Any]:
+def inject_trace_id(logger: WrappedLogger, method_name: str, event_dict: EventDict) -> EventDict:
     """Inject active trace_id from context if not already present."""
     if "trace_id" not in event_dict:
         trace_id = get_current_trace_id()
@@ -62,6 +62,12 @@ class JsonlFormatter(logging.Formatter):
                 payload["exception"] = self.formatException(record.exc_info)
 
         return json.dumps(payload, ensure_ascii=False)
+
+
+class TelemetryRotatingFileHandler(RotatingFileHandler):
+    """Rotating handler that can be identified and replaced during reconfiguration."""
+
+    _tagstudio_telemetry = True
 
 
 _logging_configured = False
@@ -92,7 +98,7 @@ def configure_logging(
             handler.close()
 
     # 1. Text file handler (human-readable)
-    text_handler = RotatingFileHandler(
+    text_handler = TelemetryRotatingFileHandler(
         text_log_path,
         maxBytes=10 * 1024 * 1024,
         backupCount=5,
@@ -104,11 +110,10 @@ def configure_logging(
             "%(asctime)s [%(levelname)s] %(name)s: %(message)s", datefmt="%Y-%m-%dT%H:%M:%SZ"
         )
     )
-    text_handler._tagstudio_telemetry = True
     root_logger.addHandler(text_handler)
 
     # 2. JSONL file handler (structured)
-    jsonl_handler = RotatingFileHandler(
+    jsonl_handler = TelemetryRotatingFileHandler(
         jsonl_log_path,
         maxBytes=10 * 1024 * 1024,
         backupCount=5,
@@ -116,7 +121,6 @@ def configure_logging(
     )
     jsonl_handler.setLevel(numeric_level)
     jsonl_handler.setFormatter(JsonlFormatter())
-    jsonl_handler._tagstudio_telemetry = True
     root_logger.addHandler(jsonl_handler)
 
     # 3. Console handler (if not already present)

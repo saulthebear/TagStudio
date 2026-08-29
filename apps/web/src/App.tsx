@@ -643,6 +643,7 @@ export function App() {
               showHiddenEntries={showHiddenEntries}
               activeFilterCount={activeFilterCount}
               searchPending={searchPending}
+              searchResultsStale={searchResultsStale}
               refreshPending={refreshPending}
               videoMuted={videoPreviewStartsMuted}
               activePage={activePage}

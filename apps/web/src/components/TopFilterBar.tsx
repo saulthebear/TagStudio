@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { type SortingMode } from "@tagstudio/api-client";
 import {
   Activity,
@@ -35,6 +35,7 @@ type TopFilterBarProps = {
   showHiddenEntries: boolean;
   activeFilterCount: number;
   searchPending: boolean;
+  searchResultsStale: boolean;
   refreshPending: boolean;
   videoMuted: boolean;
   theme?: ThemeMode;
@@ -71,6 +72,8 @@ export function TopFilterBar({
   showConservativeHint,
   showHiddenEntries,
   activeFilterCount,
+  searchPending,
+  searchResultsStale,
   refreshPending,
   videoMuted,
   theme,
@@ -91,6 +94,7 @@ export function TopFilterBar({
   onThemeChange
 }: TopFilterBarProps) {
   const [isVaultExpanded, setIsVaultExpanded] = useState(false);
+  const staleSearchHintId = useId();
   const vaultContainerRef = useRef<HTMLDivElement>(null);
   const vaultInputRef = useRef<HTMLInputElement>(null);
 
@@ -172,9 +176,11 @@ export function TopFilterBar({
       </div>
 
       <input
-        className="input-base top-filter-search"
+        className={`input-base top-filter-search ${searchResultsStale ? "top-filter-search-stale" : ""}`}
         placeholder='Search entries (e.g. tag:"favorite" or path:"*.png")'
         value={searchInput}
+        aria-busy={searchPending}
+        aria-describedby={searchResultsStale ? staleSearchHintId : undefined}
         onChange={(event) => onSearchInputChange(event.target.value)}
         onKeyDown={(event) => {
           if (event.key === "Enter") {
@@ -182,6 +188,11 @@ export function TopFilterBar({
           }
         }}
       />
+      {searchResultsStale ? (
+        <span id={staleSearchHintId} className="sr-only">
+          Results are stale. Press Enter to refresh them.
+        </span>
+      ) : null}
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -211,7 +222,6 @@ export function TopFilterBar({
               key={option.value}
               checked={sortingMode === option.value}
               onCheckedChange={() => onSortingModeChange(option.value)}
-              onSelect={(e) => e.preventDefault()}
             >
               {option.label}
             </DropdownMenuCheckboxItem>
@@ -220,7 +230,6 @@ export function TopFilterBar({
           <DropdownMenuCheckboxItem
             checked={ascending}
             onCheckedChange={() => onAscendingChange(!ascending)}
-            onSelect={(e) => e.preventDefault()}
           >
             Ascending Order
           </DropdownMenuCheckboxItem>
@@ -234,14 +243,12 @@ export function TopFilterBar({
           <DropdownMenuCheckboxItem
             checked={untaggedChecked}
             onCheckedChange={(value) => onUntaggedChange(value === true)}
-            onSelect={(e) => e.preventDefault()}
           >
             Untagged
           </DropdownMenuCheckboxItem>
           <DropdownMenuCheckboxItem
             checked={showHiddenEntries}
             onCheckedChange={(value) => onShowHiddenChange(value === true)}
-            onSelect={(e) => e.preventDefault()}
           >
             Show hidden entries
           </DropdownMenuCheckboxItem>
@@ -266,21 +273,18 @@ export function TopFilterBar({
               <DropdownMenuCheckboxItem
                 checked={theme === "system"}
                 onCheckedChange={() => onThemeChange("system")}
-                onSelect={(e) => e.preventDefault()}
               >
                 System (Auto)
               </DropdownMenuCheckboxItem>
               <DropdownMenuCheckboxItem
                 checked={theme === "light"}
                 onCheckedChange={() => onThemeChange("light")}
-                onSelect={(e) => e.preventDefault()}
               >
                 Light
               </DropdownMenuCheckboxItem>
               <DropdownMenuCheckboxItem
                 checked={theme === "dark"}
                 onCheckedChange={() => onThemeChange("dark")}
-                onSelect={(e) => e.preventDefault()}
               >
                 Dark
               </DropdownMenuCheckboxItem>

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import sqlite3
 import threading
+from contextlib import closing
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -30,7 +31,7 @@ class MetricsStore:
         return conn
 
     def _init_db(self) -> None:
-        with self._lock, self._get_connection() as conn:
+        with self._lock, closing(self._get_connection()) as conn, conn:
             conn.executescript("""
                 CREATE TABLE IF NOT EXISTS api_requests (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -88,7 +89,7 @@ class MetricsStore:
     ) -> None:
         timestamp = datetime.now(UTC).isoformat()
         effective_trace_id = trace_id or get_current_trace_id()
-        with self._lock, self._get_connection() as conn:
+        with self._lock, closing(self._get_connection()) as conn, conn:
             conn.execute(
                 """
                 INSERT INTO api_requests (
@@ -119,7 +120,7 @@ class MetricsStore:
         timestamp = datetime.now(UTC).isoformat()
         effective_trace_id = trace_id or get_current_trace_id()
         meta_json = json.dumps(metadata, ensure_ascii=False) if metadata else None
-        with self._lock, self._get_connection() as conn:
+        with self._lock, closing(self._get_connection()) as conn, conn:
             conn.execute(
                 """
                 INSERT INTO operation_timers (
@@ -143,7 +144,7 @@ class MetricsStore:
         timestamp = datetime.now(UTC).isoformat()
         effective_trace_id = trace_id or get_current_trace_id()
         ctx_json = json.dumps(context, ensure_ascii=False) if context else None
-        with self._lock, self._get_connection() as conn:
+        with self._lock, closing(self._get_connection()) as conn, conn:
             conn.execute(
                 """
                 INSERT INTO error_records (
@@ -157,7 +158,7 @@ class MetricsStore:
     def get_summary(self, window_seconds: int = 3600) -> dict[str, Any]:
         """Compute aggregated latency percentiles, error rates, and slow operations."""
         cutoff = (datetime.now(UTC) - timedelta(seconds=window_seconds)).isoformat()
-        with self._lock, self._get_connection() as conn:
+        with self._lock, closing(self._get_connection()) as conn, conn:
             # 1. API request latency percentiles & status distribution
             req_rows = conn.execute(
                 """
@@ -349,7 +350,7 @@ class MetricsStore:
             }
 
     def get_recent_errors(self, limit: int = 50) -> list[dict[str, Any]]:
-        with self._lock, self._get_connection() as conn:
+        with self._lock, closing(self._get_connection()) as conn, conn:
             rows = conn.execute(
                 """
                 SELECT
@@ -377,7 +378,7 @@ class MetricsStore:
 
     def prune_old_records(self, retention_days: int = 30) -> None:
         cutoff = (datetime.now(UTC) - timedelta(days=retention_days)).isoformat()
-        with self._lock, self._get_connection() as conn:
+        with self._lock, closing(self._get_connection()) as conn, conn:
             conn.execute("DELETE FROM api_requests WHERE timestamp < ?", (cutoff,))
             conn.execute("DELETE FROM operation_timers WHERE timestamp < ?", (cutoff,))
             conn.execute("DELETE FROM error_records WHERE timestamp < ?", (cutoff,))

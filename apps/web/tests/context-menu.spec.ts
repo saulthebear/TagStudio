@@ -325,7 +325,7 @@ test("supports context-menu copy/paste, favorite/archive toggles, and trash-conf
   await expect(betaCard).toHaveClass(/thumb-card-archived/);
 
   await alphaCard.click();
-  await betaCard.click({ modifiers: ["Control"] });
+  await betaCard.click({ modifiers: ["ControlOrMeta"] });
 
   await betaCard.click({ button: "right", force: true });
   await expect(page.locator(".thumb-context-menu")).toBeVisible();
@@ -392,7 +392,7 @@ test("supports context-menu copy/paste, favorite/archive toggles, and trash-conf
   await page.getByLabel("Don't ask again this session").check();
   await page.getByLabel("Also remember for this library").check();
   const searchCallsBeforeDelete = searchCalls;
-  await page.getByRole("button", { name: "Move to Trash" }).click();
+  await page.getByRole("button", { name: "Move to Trash", exact: true }).click();
 
   await expect.poll(() => trashCalls.length).toBe(1);
   expect(trashCalls[0].entry_ids).toEqual([101]);

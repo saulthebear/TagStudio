@@ -9,7 +9,6 @@ to track files processed by background operations (e.g. remuxing) or flagged
 during probing (e.g. corrupted container headers).
 """
 
-
 import structlog
 
 from tagstudio.core.constants import TS_FOLDER_NAME
