@@ -14,8 +14,8 @@ dependencies = [
     "fastapi~=0.116",
     "humanfriendly==10.*",
     "opencv_python~=4.11",
-    "Pillow>=10.2,<12",
-    "pillow-heif~=0.22",
+    "Pillow>=12.3,<13",
+    "pillow-heif>=1.3,<2",
     "pillow-jxl-plugin~=1.3",
     "pydantic~=2.10",
     "pydub~=0.25",
@@ -27,7 +27,7 @@ dependencies = [
     "ujson~=5.10",
     "uvicorn~=0.35",
     "wcmatch==10.*",
-    "requests~=2.31.0",
+    "requests>=2.33,<3",
     "semver~=3.0.4",
 ]
 
@@ -37,7 +37,7 @@ mypy = ["mypy==1.15.0", "mypy-extensions==1.*", "types-ujson~=5.10"]
 pre-commit = ["pre-commit~=4.2"]
 pytest = [
     "httpx~=0.28",
-    "pytest==8.3.5",
+    "pytest>=9.0.3,<10",
     "pytest-cov==6.1.1",
 ]
 ruff = ["ruff==0.11.8"]
