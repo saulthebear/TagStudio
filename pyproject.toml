@@ -26,7 +26,7 @@ dependencies = [
     "typing_extensions~=4.13",
     "ujson~=5.10",
     "uvicorn~=0.35",
-    "wcmatch==10.*",
+    "wcmatch==11.*",
     "requests>=2.33,<3",
     "semver~=3.0.4",
 ]
